@@ -1,0 +1,284 @@
+.recording-manager {
+  background: #2a2a2a;
+  border-radius: 8px;
+  padding: 20px;
+  margin: 20px 0;
+  color: #fff;
+}
+
+.recording-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #444;
+}
+
+.recording-header h3 {
+  margin: 0;
+  color: #fff;
+  font-size: 1.2rem;
+}
+
+.recording-controls {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.active-recording {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.recording-indicator {
+  color: #f44336;
+  font-weight: bold;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+.start-recording-btn, .stop-recording-btn {
+  background: #4CAF50;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.2s ease;
+}
+
+.stop-recording-btn {
+  background: #f44336;
+}
+
+.start-recording-btn:hover {
+  background: #45a049;
+}
+
+.stop-recording-btn:hover {
+  background: #da190b;
+}
+
+.start-recording-btn:disabled, .stop-recording-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.error-message {
+  background: #f44336;
+  color: white;
+  padding: 10px 15px;
+  border-radius: 4px;
+  margin-bottom: 15px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.error-message button {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0 5px;
+}
+
+.recording-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.recording-dialog {
+  background: #2a2a2a;
+  border-radius: 8px;
+  padding: 25px;
+  min-width: 400px;
+  max-width: 500px;
+}
+
+.recording-dialog h4 {
+  margin: 0 0 20px 0;
+  color: #fff;
+  font-size: 1.1rem;
+}
+
+.dialog-content {
+  margin-bottom: 25px;
+}
+
+.dialog-content label {
+  display: block;
+  color: #ccc;
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+}
+
+.dialog-content input {
+  width: 100%;
+  background: #333;
+  color: #fff;
+  border: 1px solid #555;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  margin-bottom: 5px;
+}
+
+.dialog-content small {
+  color: #888;
+  font-size: 0.8rem;
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.dialog-actions button {
+  background: #333;
+  color: #fff;
+  border: 1px solid #555;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+}
+
+.dialog-actions button:first-child {
+  background: #4CAF50;
+  border-color: #4CAF50;
+}
+
+.dialog-actions button:hover {
+  background: #444;
+  border-color: #666;
+}
+
+.dialog-actions button:first-child:hover {
+  background: #45a049;
+}
+
+.recordings-list {
+  margin-top: 20px;
+}
+
+.loading {
+  text-align: center;
+  color: #888;
+  padding: 40px 0;
+}
+
+.no-recordings {
+  text-align: center;
+  color: #888;
+  padding: 40px 0;
+}
+
+.recordings-grid {
+  display: grid;
+  gap: 15px;
+}
+
+.recording-item {
+  background: #333;
+  border-radius: 6px;
+  padding: 15px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background 0.2s ease;
+}
+
+.recording-item:hover {
+  background: #3a3a3a;
+}
+
+.recording-info h4 {
+  margin: 0 0 8px 0;
+  color: #fff;
+  font-size: 1rem;
+}
+
+.recording-details {
+  display: flex;
+  gap: 15px;
+  color: #ccc;
+  font-size: 0.85rem;
+}
+
+.recording-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.download-btn, .play-btn {
+  background: #555;
+  color: #fff;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: background 0.2s ease;
+}
+
+.download-btn:hover {
+  background: #666;
+}
+
+.play-btn {
+  background: #2196F3;
+}
+
+.play-btn:hover {
+  background: #1976D2;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .recording-header {
+    flex-direction: column;
+    gap: 15px;
+    align-items: stretch;
+  }
+  
+  .recording-item {
+    flex-direction: column;
+    gap: 15px;
+    align-items: stretch;
+  }
+  
+  .recording-details {
+    flex-direction: column;
+    gap: 5px;
+  }
+  
+  .recording-actions {
+    justify-content: center;
+  }
+  
+  .recording-dialog {
+    margin: 20px;
+    min-width: auto;
+  }
+}

@@ -1,0 +1,295 @@
+.video-widget {
+  background-color: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.video-header {
+  text-align: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.video-header h2 {
+  margin: 0 0 8px 0;
+  color: #2d3748;
+}
+
+.video-header p {
+  margin: 0;
+  color: #4a5568;
+}
+
+.video-upload-section {
+  margin-bottom: 24px;
+}
+
+.file-selection {
+  margin-bottom: 20px;
+}
+
+.upload-area {
+  position: relative;
+  border: 2px dashed #cbd5e0;
+  border-radius: 8px;
+  padding: 40px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background-color: #f7fafc;
+}
+
+.upload-area:hover {
+  border-color: #3182ce;
+  background-color: #ebf8ff;
+}
+
+.upload-area {
+  position: relative;
+  width: 100%;
+  min-height: 150px;
+  border: 2px dashed #cbd5e0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.upload-area:hover {
+  border-color: #3182ce;
+}
+
+.upload-placeholder {
+  text-align: center;
+  color: #a0aec0;
+}
+
+.upload-icon {
+  font-size: 2.5rem;
+  margin-bottom: 12px;
+}
+
+.file-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+}
+
+.file-icon {
+  font-size: 3rem;
+}
+
+.file-details h3 {
+  margin: 0 0 8px 0;
+  color: #2d3748;
+}
+
+.file-details p {
+  margin: 4px 0;
+  color: #4a5568;
+  font-size: 0.9rem;
+}
+
+.video-controls {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.btn-primary,
+.btn-secondary {
+  padding: 12px 24px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.btn-primary {
+  background-color: #3182ce;
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: #2c5aa0;
+}
+
+.btn-primary:disabled {
+  background-color: #a0aec0;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background-color: #f7fafc;
+  color: #4a5568;
+  border: 1px solid #e2e8f0;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: #edf2f7;
+}
+
+.processing-section {
+  background-color: #f7fafc;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 24px;
+}
+
+.status-message h3 {
+  margin: 0 0 8px 0;
+  color: #2d3748;
+}
+
+.status-message p {
+  margin: 0;
+  color: #4a5568;
+}
+
+.progress-section {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.progress-bar {
+  flex-grow: 1;
+  height: 8px;
+  background-color: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background-color: #3182ce;
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  font-weight: 600;
+  color: #2d3748;
+  min-width: 50px;
+  text-align: right;
+}
+
+.results-section {
+  background-color: #f0fff4;
+  padding: 20px;
+  border-radius: 8px;
+  border-left: 4px solid #38a169;
+}
+
+.results-section h3 {
+  margin: 0 0 16px 0;
+  color: #22543d;
+}
+
+.results-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.result-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background-color: white;
+  border-radius: 6px;
+  border: 1px solid #c6f6d5;
+}
+
+.result-item .label {
+  font-weight: 500;
+  color: #2d3748;
+}
+
+.result-item .value {
+  font-weight: 600;
+  color: #22543d;
+}
+
+.detected-persons {
+  margin-bottom: 20px;
+}
+
+.detected-persons h4 {
+  margin: 0 0 12px 0;
+  color: #22543d;
+}
+
+.persons-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.person-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background-color: white;
+  border-radius: 20px;
+  border: 1px solid #c6f6d5;
+  font-size: 0.85rem;
+}
+
+.person-name {
+  font-weight: 500;
+  color: #2d3748;
+}
+
+.person-count {
+  color: #4a5568;
+  font-size: 0.8rem;
+}
+
+.results-actions {
+  text-align: center;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .video-widget {
+    padding: 16px;
+  }
+  
+  .video-controls {
+    flex-direction: column;
+  }
+  
+  .btn-primary,
+  .btn-secondary {
+    width: 100%;
+  }
+  
+  .results-summary {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .result-item {
+    flex-direction: column;
+    text-align: center;
+    gap: 4px;
+  }
+  
+  .file-info {
+    flex-direction: column;
+    text-align: center;
+  }
+}

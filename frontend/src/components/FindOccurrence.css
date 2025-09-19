@@ -1,0 +1,150 @@
+.find-occurrence {
+  width: 100%;
+}
+
+.image-selection {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 24px;
+  padding: 20px;
+  background-color: #f7fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.selected-image-container {
+  flex-shrink: 0;
+  width: 200px;
+  height: 200px;
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: white;
+  border: 2px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.selected-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.no-image-placeholder {
+  color: #a0aec0;
+  text-align: center;
+  font-size: 0.9rem;
+  font-weight: 500;
+  padding: 20px;
+}
+
+.controls {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 16px;
+}
+
+.file-input {
+  display: none;
+}
+
+.select-btn {
+  display: inline-block;
+  text-align: center;
+  cursor: pointer;
+  background-color: #4a5568;
+  color: white;
+  padding: 12px 24px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.select-btn:hover {
+  background-color: #2d3748;
+  transform: translateY(-1px);
+}
+
+.find-btn {
+  padding: 12px 24px;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.results-container {
+  margin-top: 24px;
+}
+
+.results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 20px;
+}
+
+.results-container .loading {
+  text-align: center;
+  padding: 40px;
+  font-size: 1.1rem;
+  color: #666;
+}
+
+.results-container .empty-state {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+  font-size: 1.1rem;
+  background-color: #f7fafc;
+  border-radius: 8px;
+  border: 2px dashed #e2e8f0;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .image-selection {
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 16px;
+  }
+  
+  .selected-image-container {
+    width: 150px;
+    height: 150px;
+  }
+  
+  .controls {
+    width: 100%;
+    align-items: center;
+  }
+  
+  .select-btn,
+  .find-btn {
+    width: 200px;
+  }
+  
+  .results-grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 15px;
+  }
+}
+
+@media (max-width: 480px) {
+  .selected-image-container {
+    width: 120px;
+    height: 120px;
+  }
+  
+  .select-btn,
+  .find-btn {
+    width: 100%;
+  }
+  
+  .results-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,764 @@
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from typing import Dict, List, Optional
+import os
+import json
+import cv2
+import pandas as pd
+from pydantic import BaseModel
+import shutil
+from datetime import datetime
+import face_recognition
+from .aug import detect_face, augment_face
+import numpy as np
+import io
+import re
+
+# Configure paths and constants
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+DATA_DIR = os.path.join(BASE_DIR, "backend_face", "data")
+GALLERY_DIR = os.path.join(DATA_DIR, "gallery")
+METADATA_FILE = os.path.join(DATA_DIR, "metadata.json")
+
+# Standard sizes for face images
+FACE_WIDTH = 224
+FACE_HEIGHT = 224
+
+# Create necessary directories
+os.makedirs(DATA_DIR, exist_ok=True)
+os.makedirs(GALLERY_DIR, exist_ok=True)
+
+# Initialize FastAPI app
+app = FastAPI()
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+class PersonDetails(BaseModel):
+    name: str  # Only name is required
+    age: str | None = None  # Optional
+    gender: str | None = None  # Optional
+    category: str | None = "Unknown"  # Optional with default value
+
+class RegistrationResponse(BaseModel):
+    status: str
+    message: str
+    person_dir: Optional[str] = None
+    error: Optional[str] = None
+
+class MetadataManager:
+    @staticmethod
+    def load_metadata():
+        """Load metadata from file"""
+        try:
+            if os.path.exists(METADATA_FILE):
+                with open(METADATA_FILE, 'r') as f:
+                    return json.load(f)
+            return {
+                "persons": {},
+                "last_updated": datetime.now().isoformat(),
+                "total_registered": 0
+            }
+        except Exception as e:
+            print(f"Error loading metadata: {e}")
+            return {
+                "persons": {},
+                "last_updated": datetime.now().isoformat(),
+                "total_registered": 0
+            }
+
+    @staticmethod
+    def save_metadata(metadata):
+        """Save metadata to file"""
+        try:
+            with open(METADATA_FILE, 'w') as f:
+                json.dump(metadata, f, indent=4)
+            return True
+        except Exception as e:
+            print(f"Error saving metadata: {e}")
+            return False
+
+    @staticmethod
+    def get_statistics():
+        """Get registration statistics"""
+        metadata = MetadataManager.load_metadata()
+        persons = metadata.get("persons", {})
+        
+        # Count by category
+        categories = {}
+        for data in persons.values():
+            category = data.get("category", "Uncategorized")
+            categories[category] = categories.get(category, 0) + 1
+        
+        # Count by gender
+        genders = {}
+        for data in persons.values():
+            gender = data.get("gender", "Unspecified")
+            genders[gender] = genders.get(gender, 0) + 1
+        
+        return {
+            "total_registered": len(persons),
+            "categories": categories,
+            "genders": genders,
+            "last_updated": metadata.get("last_updated", datetime.now().isoformat())
+        }
+
+# Helper functions
+def is_face_already_registered(image_input) -> bool:
+    """
+    Check if the face is already registered
+    Args:
+        image_input: Can be either a file path (str) or a numpy array (RGB image)
+    """
+    try:
+        # Handle input image
+        if isinstance(image_input, str):
+            new_image = face_recognition.load_image_file(image_input)
+        else:
+            new_image = image_input  # Already a numpy array in RGB format
+            
+        new_face_encoding = face_recognition.face_encodings(new_image)
+
+        if not new_face_encoding:
+            return False
+
+        new_face_encoding = new_face_encoding[0]
+
+        # Check each person's directory
+        for person_name in os.listdir(DATA_DIR):
+            person_dir = os.path.join(DATA_DIR, person_name)
+            if not os.path.isdir(person_dir):
+                continue
+
+            for image_name in os.listdir(person_dir):
+                if not image_name.lower().endswith(('.png', '.jpg', '.jpeg')):
+                    continue
+
+                image_path = os.path.join(person_dir, image_name)
+                known_image = face_recognition.load_image_file(image_path)
+                known_face_encoding = face_recognition.face_encodings(known_image)
+
+                if not known_face_encoding:
+                    continue
+
+                matches = face_recognition.compare_faces(
+                    [known_face_encoding[0]], 
+                    new_face_encoding, 
+                    tolerance=0.55
+                )
+
+                if True in matches:
+                    return True
+
+        return False
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error checking face: {str(e)}")
+
+def get_unique_name(name: str) -> str:
+    """Get a unique name for the person"""
+    try:
+        with open(METADATA_FILE, 'r') as f:
+            person_data = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        person_data = {}
+
+    suffix = 1
+    unique_name = name
+    while unique_name in person_data:
+        unique_name = f"{name}_{suffix}"
+        suffix += 1
+
+    return unique_name
+
+def save_gallery_data(person_id: str, data: dict):
+    """Save gallery data to JSON"""
+    try:
+        if os.path.exists(METADATA_FILE):
+            with open(METADATA_FILE, 'r') as f:
+                gallery_data = json.load(f)
+        else:
+            gallery_data = {}
+        
+        gallery_data[person_id] = data
+        
+        with open(METADATA_FILE, 'w') as f:
+            json.dump(gallery_data, f, indent=4)
+    except Exception as e:
+        print(f"Error saving gallery data: {e}")
+
+class FaceProcessor:
+    @staticmethod
+    def standardize_face(image):
+        """Standardize face image to fixed size with proper alignment"""
+        try:
+            # Convert to RGB if needed
+            if len(image.shape) == 3 and image.shape[2] == 3:
+                rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            else:
+                rgb_image = image
+
+            # Detect face locations
+            face_locations = face_recognition.face_locations(rgb_image)
+            if not face_locations:
+                return None
+
+            # Get the largest face
+            face_location = max(face_locations, key=lambda rect: (rect[2] - rect[0]) * (rect[1] - rect[3]))
+            top, right, bottom, left = face_location
+
+            # Calculate padding to maintain aspect ratio
+            face_width = right - left
+            face_height = bottom - top
+            
+            # Add padding to make it square while maintaining the face centered
+            if face_width > face_height:
+                # Width is larger, add padding to height
+                padding_y = (face_width - face_height) // 2
+                top = max(0, top - padding_y)
+                bottom = min(rgb_image.shape[0], bottom + padding_y)
+            else:
+                # Height is larger, add padding to width
+                padding_x = (face_height - face_width) // 2
+                left = max(0, left - padding_x)
+                right = min(rgb_image.shape[1], right + padding_x)
+
+            # Add extra padding around the square
+            padding = int(min(right - left, bottom - top) * 0.3)
+            height, width = image.shape[:2]
+            
+            top = max(0, top - padding)
+            bottom = min(height, bottom + padding)
+            left = max(0, left - padding)
+            right = min(width, right + padding)
+
+            # Crop and resize face
+            face = image[top:bottom, left:right]
+            
+            # Ensure high-quality resizing
+            standardized_face = cv2.resize(face, (FACE_WIDTH, FACE_HEIGHT), 
+                                         interpolation=cv2.INTER_LANCZOS4)
+            
+            return standardized_face
+        except Exception as e:
+            print(f"Error in standardize_face: {e}")
+            return None
+
+    @staticmethod
+    def detect_and_crop_face(image_input):
+        """Detect and crop face from image input (can be path or numpy array)"""
+        try:
+            if isinstance(image_input, str):
+                img = cv2.imread(image_input)
+                if img is None:
+                    return None
+            else:
+                img = image_input
+
+            # Standardize the input image size if it's too large
+            max_dimension = 1200  # Maximum dimension to process
+            height, width = img.shape[:2]
+            if max(height, width) > max_dimension:
+                scale = max_dimension / max(height, width)
+                new_width = int(width * scale)
+                new_height = int(height * scale)
+                img = cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_AREA)
+
+            return FaceProcessor.standardize_face(img)
+        except Exception as e:
+            print(f"Error in detect_and_crop_face: {e}")
+            return None
+
+    @staticmethod
+    def augment_face(face_image, output_dir):
+        """Generate 50 augmented versions of the face image"""
+        try:
+            os.makedirs(output_dir, exist_ok=True)
+            final_paths = []
+            
+            # Ensure face_image is standardized
+            standardized_face = cv2.resize(face_image, (FACE_WIDTH, FACE_HEIGHT))
+            
+            # Save the original face as 1.jpg
+            first_path = os.path.join(output_dir, "1.jpg")
+            cv2.imwrite(first_path, standardized_face)
+            final_paths.append(first_path)
+            
+            # Generate 49 more augmented images
+            orig_img = standardized_face.copy()
+            for i in range(2, 51):
+                # Apply random augmentations
+                # Rotation
+                angle = np.random.randint(-15, 15)
+                M = cv2.getRotationMatrix2D((FACE_WIDTH/2, FACE_HEIGHT/2), angle, 1)
+                rotated = cv2.warpAffine(orig_img, M, (FACE_WIDTH, FACE_HEIGHT))
+                
+                # Scale
+                scale = np.random.uniform(0.9, 1.1)
+                scaled = cv2.resize(rotated, None, fx=scale, fy=scale)
+                scaled = cv2.resize(scaled, (FACE_WIDTH, FACE_HEIGHT))
+                
+                # Brightness and contrast
+                alpha = np.random.uniform(0.7, 1.3)
+                beta = np.random.randint(-30, 30)
+                adjusted = cv2.convertScaleAbs(scaled, alpha=alpha, beta=beta)
+                
+                # Save the augmented image
+                aug_path = os.path.join(output_dir, f"{i}.jpg")
+                cv2.imwrite(aug_path, adjusted)
+                final_paths.append(aug_path)
+
+            return final_paths
+        except Exception as e:
+            print(f"Error in augment_face: {e}")
+            return []
+
+    @staticmethod
+    def process_bulk_registration(excel_path, root_data_dir, output_base_dir):
+        """Process bulk registration using Excel data and folder structure."""
+        VALID_CATEGORIES = [
+            'criminal', 'offender', 'chainsnatching',
+            'eve teasing', 'unknown', 'eagleemployee'
+        ]
+
+        try:
+            # Read Excel file
+            df = pd.read_excel(excel_path)
+            print(f"Read Excel file with columns: {df.columns.tolist()}")  # Debug print
+
+            if 'name' not in df.columns:
+                raise ValueError("Excel MUST have a 'name' column")
+
+            # Clean up the data
+            df['name'] = df['name'].str.strip()
+            df = df.dropna(subset=['name'])
+            
+            # Ensure required columns exist
+            df['age'] = df.get('age', '')
+            df['gender'] = df.get('gender', '')
+            df['category'] = df.get('category', 'unknown')
+
+            # Convert category to lowercase and validate
+            df['category'] = df['category'].str.lower()
+            df['category'] = df['category'].apply(
+                lambda x: x if x in VALID_CATEGORIES else 'unknown'
+            )
+
+            if len(df) == 0:
+                raise ValueError("No valid names found in the Excel file")
+
+            registration_results = {}
+            all_augmented_images = []
+
+            # Process each person
+            for _, row in df.iterrows():
+                person_name = row['name']
+                print(f"Processing person: {person_name}")  # Debug print
+
+                # Look for person's folder
+                person_folder = os.path.join(root_data_dir, person_name)
+                if not os.path.exists(person_folder):
+                    print(f"No folder found for {person_name} at {person_folder}")  # Debug print
+                    registration_results[person_name] = {'status': 'failed', 'reason': 'folder missing'}
+                    continue
+
+                try:
+                    # Prepare person details
+                    person_details = {
+                        'name': person_name,
+                        'age': str(row['age']).strip() if pd.notna(row['age']) else '',
+                        'gender': str(row['gender']).strip() if pd.notna(row['gender']) else '',
+                        'category': str(row['category']).strip() if pd.notna(row['category']) else 'unknown'
+                    }
+
+                    # Get all images from person's folder
+                    image_files = [
+                        f for f in os.listdir(person_folder)
+                        if f.lower().endswith(('.jpg', '.jpeg', '.png'))
+                    ]
+
+                    if not image_files:
+                        registration_results[person_name] = {'status': 'failed', 'reason': 'no images found'}
+                        continue
+
+                    # Process first image to check for duplicates
+                    first_image_path = os.path.join(person_folder, image_files[0])
+                    first_image = face_recognition.load_image_file(first_image_path)
+                    
+                    if is_face_already_registered(first_image):
+                        registration_results[person_name] = {'status': 'failed', 'reason': 'duplicate face'}
+                        continue
+
+                    # Create output directory for this person
+                    safe_name = re.sub(r'[^\w\-_\. ]', '', person_name)
+                    output_dir = os.path.join(output_base_dir, safe_name)
+                    os.makedirs(output_dir, exist_ok=True)
+
+                    # Process all images for the person
+                    person_augmented = []
+                    for img_file in image_files:
+                        img_path = os.path.join(person_folder, img_file)
+                        try:
+                            face = FaceProcessor.detect_and_crop_face(img_path)
+                            if face is not None:
+                                augmented = FaceProcessor.augment_face(face, output_dir)
+                                person_augmented.extend(augmented)
+                        except Exception as e:
+                            print(f"Error processing image {img_path}: {e}")
+
+                    if person_augmented:
+                        registration_results[person_name] = {
+                            'status': 'success',
+                            'images': len(person_augmented),
+                            'details': person_details
+                        }
+                        all_augmented_images.extend(person_augmented)
+
+                        # Create gallery directory and copy first image
+                        gallery_dir = os.path.join(GALLERY_DIR, safe_name)
+                        os.makedirs(gallery_dir, exist_ok=True)
+                        shutil.copy2(
+                            os.path.join(output_dir, "1.jpg"),
+                            os.path.join(gallery_dir, "1.jpg")
+                        )
+                    else:
+                        registration_results[person_name] = {
+                            'status': 'failed',
+                            'reason': 'no valid faces detected'
+                        }
+
+                except Exception as e:
+                    print(f"Error processing person {person_name}: {e}")
+                    registration_results[person_name] = {
+                        'status': 'failed',
+                        'reason': str(e)
+                    }
+
+            return registration_results, all_augmented_images
+
+        except Exception as e:
+            print(f"Error in bulk registration: {e}")
+            return {}, []
+
+# Endpoints
+@app.post("/register/single", response_model=RegistrationResponse)
+async def register_single(
+    image: UploadFile = File(...),
+    name: str = Form(...),
+    age: str | None = Form(None),
+    gender: str | None = Form(None),
+    category: str | None = Form(None)
+):
+    """Register a single person with face image"""
+    try:
+        # Validate image file type
+        if not image.filename.lower().endswith(('.png', '.jpg', '.jpeg')):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid file type. Please upload a PNG or JPEG image."
+            )
+
+        # Read image directly into memory
+        contents = await image.read()
+        nparr = np.frombuffer(contents, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        
+        if img is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Failed to read image file. Please ensure it's a valid image."
+            )
+        
+        # Detect and standardize face
+        face = FaceProcessor.detect_and_crop_face(img)
+        if face is None:
+            raise HTTPException(
+                status_code=400,
+                detail="No face detected in the image. Please ensure the face is clearly visible, well-lit, and looking towards the camera."
+            )
+        
+        # Convert to format needed by face_recognition for duplicate check
+        rgb_face = cv2.cvtColor(face, cv2.COLOR_BGR2RGB)
+        if is_face_already_registered(rgb_face):
+            raise HTTPException(
+                status_code=400,
+                detail="This face is already registered in the system."
+            )
+
+        # Get unique name and create directories
+        unique_name = get_unique_name(name.lower())
+        person_dir = os.path.join(DATA_DIR, unique_name)
+        gallery_dir = os.path.join(GALLERY_DIR, unique_name)
+        os.makedirs(gallery_dir, exist_ok=True)
+
+        # Generate augmented images
+        augmented_images = FaceProcessor.augment_face(face, person_dir)
+        if not augmented_images:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to process face images. Please try again with a different photo."
+            )
+
+        # Save standardized original image to gallery
+        original_path = os.path.join(gallery_dir, "1.jpg")
+        cv2.imwrite(original_path, face)
+
+        # Update JSON data
+        try:
+            with open(METADATA_FILE, 'r') as f:
+                person_data = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            person_data = {}
+
+        registration_time = datetime.now().isoformat()
+        person_data[unique_name] = {
+            "name": name,
+            "age": age if age else "N/A",
+            "gender": gender if gender else "N/A",
+            "category": category.lower() if category else "unknown",
+            "registration_date": registration_time,
+            "gallery_path": gallery_dir,
+            "photo_path": original_path
+        }
+
+        with open(METADATA_FILE, 'w') as f:
+            json.dump(person_data, f, indent=4)
+
+        return RegistrationResponse(
+            status="success",
+            message=f"Successfully registered {name}",
+            person_dir=person_dir
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Registration failed: {str(e)}"
+        )
+
+@app.post("/register/bulk", response_model=List[RegistrationResponse])
+async def register_bulk(
+    excel_file: UploadFile = File(...),
+    data_dir: str = Form(...)
+):
+    """Register multiple people using Excel file and data directory"""
+    try:
+        # Validate data directory exists
+        if not os.path.exists(data_dir):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Data directory not found: {data_dir}"
+            )
+
+        # Create temporary directory for processing
+        temp_dir = os.path.join(DATA_DIR, "temp_bulk")
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        # Save Excel file temporarily
+        excel_path = os.path.join(temp_dir, "data.xlsx")
+        excel_content = await excel_file.read()
+        with open(excel_path, "wb") as f:
+            f.write(excel_content)
+
+        # Process bulk registration using the provided data directory
+        results, augmented_images = FaceProcessor.process_bulk_registration(
+            excel_path=excel_path,
+            root_data_dir=data_dir,
+            output_base_dir=DATA_DIR
+        )
+
+        # Update metadata for successful registrations
+        try:
+            with open(METADATA_FILE, 'r') as f:
+                metadata = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            metadata = {}
+
+        # Convert results to response format
+        response_list = []
+        for person_name, result in results.items():
+            if result['status'] == 'success':
+                # Update metadata
+                safe_name = re.sub(r'[^\w\-_\. ]', '', person_name)
+                metadata[safe_name] = {
+                    'name': person_name,
+                    'age': result['details']['age'],
+                    'gender': result['details']['gender'],
+                    'category': result['details']['category'],
+                    'registration_date': datetime.now().isoformat(),
+                    'gallery_path': os.path.join(GALLERY_DIR, safe_name),
+                    'photo_path': os.path.join(GALLERY_DIR, safe_name, "1.jpg")
+                }
+
+                # Create gallery directory and copy original image
+                gallery_person_dir = os.path.join(GALLERY_DIR, safe_name)
+                os.makedirs(gallery_person_dir, exist_ok=True)
+                
+                # Copy the first augmented image as original.jpg in gallery
+                if augmented_images:
+                    first_image = os.path.join(DATA_DIR, safe_name, "1.jpg")
+                    if os.path.exists(first_image):
+                        shutil.copy2(first_image, os.path.join(gallery_person_dir, "1.jpg"))
+
+                response_list.append(RegistrationResponse(
+                    status='success',
+                    message=f"Successfully registered {person_name}",
+                    person_dir=os.path.join(DATA_DIR, safe_name)
+                ))
+            else:
+                response_list.append(RegistrationResponse(
+                    status='error',
+                    message=f"Failed to register {person_name}: {result['reason']}",
+                    error=result['reason']
+                ))
+
+        # Save updated metadata
+        with open(METADATA_FILE, 'w') as f:
+            json.dump(metadata, f, indent=4)
+
+        # Cleanup temporary files
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+        return response_list
+
+    except Exception as e:
+        # Ensure cleanup on error
+        if 'temp_dir' in locals():
+            shutil.rmtree(temp_dir, ignore_errors=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/registered-faces", response_model=Dict)
+async def get_registered_faces():
+    """Get list of all registered faces"""
+    try:
+        with open(METADATA_FILE, 'r') as f:
+            person_data = json.load(f)
+        return person_data
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/gallery", response_model=Dict)
+async def get_gallery():
+    """Get gallery data with image filenames"""
+    try:
+        if os.path.exists(METADATA_FILE):
+            with open(METADATA_FILE, 'r') as f:
+                metadata = json.load(f)
+
+            # Process metadata to include image filename for frontend
+            processed_data = {}
+            for person_id, person_data in metadata.items():
+                processed_data[person_id] = person_data.copy()
+
+                # Extract image filename from photo_path
+                if 'photo_path' in person_data:
+                    photo_path = person_data['photo_path']
+                    image_filename = os.path.basename(photo_path)
+                    processed_data[person_id]['image_filename'] = image_filename
+                else:
+                    # Default fallback
+                    processed_data[person_id]['image_filename'] = 'original.jpg'
+
+            return processed_data
+        return {}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/metadata")
+async def get_metadata():
+    """Get all metadata"""
+    try:
+        return MetadataManager.load_metadata()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/metadata")
+async def save_metadata(metadata: dict):
+    """Save metadata"""
+    try:
+        if MetadataManager.save_metadata(metadata):
+            return {"status": "success"}
+        raise HTTPException(status_code=500, detail="Failed to save metadata")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/metadata/person/{person_id}")
+async def get_person_metadata(person_id: str):
+    """Get person's metadata"""
+    try:
+        metadata = MetadataManager.load_metadata()
+        if person_id in metadata.get("persons", {}):
+            return metadata["persons"][person_id]
+        raise HTTPException(status_code=404, detail="Person not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/metadata/person/{person_id}")
+async def add_person_metadata(person_id: str, data: dict):
+    """Add a new person to metadata"""
+    try:
+        metadata = MetadataManager.load_metadata()
+        metadata.setdefault("persons", {})[person_id] = {
+            "name": data.get("name", ""),
+            "age": data.get("age", ""),
+            "gender": data.get("gender", ""),
+            "category": data.get("category", ""),
+            "registration_date": datetime.now().isoformat()
+        }
+        if MetadataManager.save_metadata(metadata):
+            return {"status": "success"}
+        raise HTTPException(status_code=500, detail="Failed to save metadata")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/metadata/person/{person_id}")
+async def update_person_metadata(person_id: str, data: dict):
+    """Update a person's metadata"""
+    try:
+        metadata = MetadataManager.load_metadata()
+        if person_id not in metadata.get("persons", {}):
+            raise HTTPException(status_code=404, detail="Person not found")
+        metadata["persons"][person_id].update(data)
+        if MetadataManager.save_metadata(metadata):
+            return {"status": "success"}
+        raise HTTPException(status_code=500, detail="Failed to save metadata")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/metadata/person/{person_id}")
+async def delete_person_metadata(person_id: str):
+    """Delete a person from metadata"""
+    try:
+        metadata = MetadataManager.load_metadata()
+        if person_id not in metadata.get("persons", {}):
+            raise HTTPException(status_code=404, detail="Person not found")
+        del metadata["persons"][person_id]
+        if MetadataManager.save_metadata(metadata):
+            return {"status": "success"}
+        raise HTTPException(status_code=500, detail="Failed to save metadata")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/metadata/statistics")
+async def get_metadata_statistics():
+    """Get registration statistics"""
+    try:
+        return MetadataManager.get_statistics()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# This app can be mounted in the main application
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
