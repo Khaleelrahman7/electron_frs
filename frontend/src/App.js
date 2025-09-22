@@ -6,6 +6,7 @@ import RegistrationWidget from './components/RegistrationWidget';
 import VideoWidget from './components/VideoWidget';
 import { CameraProvider } from './components/camera/CameraManager';
 import SimpleCameraManager from './components/camera/SimpleCameraManager';
+import StreamViewer from './components/StreamViewer';
 import WebRTCTest from './components/camera/WebRTCTest';
 
 function App() {
@@ -17,6 +18,7 @@ function App() {
     { id: 'registration', label: 'Registration', icon: '➕' },
     { id: 'video', label: 'Video Processing', icon: '🎥' },
     { id: 'camera', label: 'Camera Management', icon: '📹' },
+    { id: 'stream-viewer', label: 'Stream Viewer', icon: '📺' },
     { id: 'webrtc-test', label: 'WebRTC Test', icon: '🔴' }
   ];
 
@@ -36,6 +38,8 @@ function App() {
             <SimpleCameraManager />
           </CameraProvider>
         );
+      case 'stream-viewer':
+        return <StreamViewer />;
       case 'webrtc-test':
         return <WebRTCTest />;
       default:

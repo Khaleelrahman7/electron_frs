@@ -27,6 +27,19 @@
   margin-bottom: 60px;
 }
 
+.welcome-header.clickable {
+  cursor: pointer;
+  transition: all 0.3s ease;
+  padding: 20px;
+  border-radius: 12px;
+}
+
+.welcome-header.clickable:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
 .welcome-header svg {
   margin-bottom: 20px;
   opacity: 0.9;

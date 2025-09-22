@@ -80,19 +80,23 @@ class CameraStreamManager:
         return None
     
     def generate_mjpeg_stream(self, stream_id: str):
-        """Generate MJPEG stream for a camera"""
+        """Generate MJPEG stream for a camera with enhanced frame delivery"""
         stream_info = self.get_stream_info(stream_id)
         if not stream_info:
             return
 
         rtsp_url = stream_info['rtsp_url']
+        
+        # Initialize camera capture with optimized settings
         cap = cv2.VideoCapture(rtsp_url)
-
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimize buffering for live feed
+        cap.set(cv2.CAP_PROP_FPS, 30)  # Target FPS
+        
         # Check if camera is accessible
         camera_accessible = False
         if cap.isOpened():
             ret, test_frame = cap.read()
-            if ret and test_frame is not None:
+            if ret and test_frame is not None and test_frame.size > 0:
                 camera_accessible = True
             cap.release()
 
@@ -102,40 +106,83 @@ class CameraStreamManager:
             yield from self._generate_demo_stream(stream_id, stream_info)
             return
 
-        # Real camera streaming
+        # Real camera streaming with enhanced error handling
         cap = cv2.VideoCapture(rtsp_url)
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        cap.set(cv2.CAP_PROP_FPS, 30)
+        
         consecutive_failures = 0
-        max_failures = 30  # Switch to demo after 30 consecutive failures (~1 second)
+        max_failures = 20  # Reduced threshold for faster fallback
+        frame_count = 0
+        last_frame = None
+        
+        # Enhanced JPEG encoding parameters
+        encode_params = [
+            cv2.IMWRITE_JPEG_QUALITY, 80,
+            cv2.IMWRITE_JPEG_PROGRESSIVE, 1,
+            cv2.IMWRITE_JPEG_OPTIMIZE, 1
+        ]
 
         try:
             while stream_info['is_active']:
                 ret, frame = cap.read()
-                if not ret or frame is None:
+                
+                if not ret or frame is None or frame.size == 0:
                     consecutive_failures += 1
+                    logger.debug(f"Frame read failure {consecutive_failures}/{max_failures} for stream {stream_id}")
+                    
                     if consecutive_failures >= max_failures:
                         logger.warning(f"Too many failures for stream {stream_id}, switching to demo")
                         cap.release()
                         yield from self._generate_demo_stream(stream_id, stream_info)
                         return
-                    time.sleep(0.1)
-                    continue
+                    
+                    # Use last good frame if available, otherwise skip
+                    if last_frame is not None:
+                        frame = last_frame.copy()
+                        # Add "connection issue" overlay
+                        cv2.putText(frame, "Connection Issue", (10, 30),
+                                  cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                    else:
+                        time.sleep(0.033)  # Short delay before retry
+                        continue
+                else:
+                    consecutive_failures = 0  # Reset failure counter
+                    last_frame = frame.copy()  # Store good frame
 
-                consecutive_failures = 0  # Reset failure counter on successful read
+                # Validate frame quality
+                if frame is not None and frame.size > 0:
+                    # Quick frame quality check
+                    if np.mean(frame) <= 1:  # Likely a black/corrupted frame
+                        logger.debug(f"Detected low-quality frame for stream {stream_id}")
+                        if last_frame is not None:
+                            frame = last_frame.copy()
+                        else:
+                            continue
 
-                # Encode frame as JPEG
-                ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
-                if not ret:
+                # Encode frame with error handling
+                try:
+                    ret, buffer = cv2.imencode('.jpg', frame, encode_params)
+                    if not ret or buffer is None:
+                        logger.warning(f"Failed to encode frame for stream {stream_id}")
+                        continue
+                except Exception as encode_error:
+                    logger.error(f"Frame encoding error for stream {stream_id}: {encode_error}")
                     continue
 
                 # Update frame count
                 with self.stream_lock:
                     if stream_id in self.active_streams:
-                        self.active_streams[stream_id]['frame_count'] += 1
+                        self.active_streams[stream_id]['frame_count'] = frame_count
+                        self.active_streams[stream_id]['last_frame_time'] = time.time()
 
                 # Yield frame in MJPEG format
                 yield (b'--frame\r\n'
-                       b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+                       b'Content-Type: image/jpeg\r\n'
+                       b'Content-Length: ' + str(len(buffer)).encode() + b'\r\n\r\n' + 
+                       buffer.tobytes() + b'\r\n')
 
+                frame_count += 1
                 time.sleep(0.033)  # ~30 FPS
 
         except Exception as e:

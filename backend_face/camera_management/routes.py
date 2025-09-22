@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from typing import Optional
 import os
 import logging
+import numpy as np
 
 from .models import (
     CameraCreateRequest, CameraUpdateRequest, CameraValidationRequest,
@@ -256,12 +257,13 @@ async def get_camera_frame(
     service: EnhancedCameraService = Depends(get_camera_service),
     stream_service: CameraStreamManager = Depends(get_stream_service)
 ):
-    """Get a single JPEG frame from camera (better browser compatibility)"""
+    """Get a single JPEG frame from camera (optimized for live streaming)"""
     try:
         from fastapi.responses import Response
         import cv2
         import numpy as np
         import datetime
+        import time
 
         # Get camera info
         cameras = service._load_cameras()
@@ -270,60 +272,127 @@ async def get_camera_frame(
         if not camera:
             raise HTTPException(status_code=404, detail="Camera not found")
 
-        # Try to get frame from real camera first
-        cap = cv2.VideoCapture(camera.rtsp_url)
         frame = None
+        is_demo = False
 
-        if cap.isOpened():
-            ret, frame = cap.read()
+        # Try to get frame from real camera with optimized settings
+        try:
+            cap = cv2.VideoCapture(camera.rtsp_url)
+            if cap.isOpened():
+                # Set properties for faster frame capture
+                cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Reduce buffer to get latest frame
+                cap.set(cv2.CAP_PROP_FPS, 30)  # Set target FPS
+                cap.set(cv2.CAP_PROP_FRAME_WIDTH, 960)  # Set reasonable resolution
+                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 540)
+                
+                # Try to get a fresh frame quickly
+                for _ in range(2):  # Flush old frames
+                    ret, frame = cap.read()
+                    if ret and frame is not None and frame.size > 0:
+                        # Quick quality check
+                        if np.mean(frame) > 5:  # Frame has meaningful content
+                            break
+                
             cap.release()
+            
+            # Validate frame
+            if frame is not None and frame.size > 0 and np.mean(frame) > 5:
+                logger.debug(f"✅ Real frame captured from camera {camera_id}")
+            else:
+                frame = None  # Force demo mode
+                logger.debug(f"⚠️ Poor quality frame from camera {camera_id}, using demo")
+                
+        except Exception as e:
+            logger.debug(f"📷 Camera {camera_id} unavailable: {e}")
+            frame = None
 
-        # If real camera failed, generate demo frame
+        # Enhanced demo frame with smoother animation
         if frame is None:
-            # Create demo frame (640x480)
-            frame = np.zeros((480, 640, 3), dtype=np.uint8)
+            is_demo = True
+            
+            # Create demo frame with better resolution
+            frame = np.zeros((540, 960, 3), dtype=np.uint8)
 
-            # Add gradient background
-            for y in range(480):
-                for x in range(640):
+            # Smoother animation based on time
+            current_time = time.time()
+            wave_phase = (current_time * 2) % (2 * np.pi)  # 2 second cycle
+            
+            # Animated gradient background
+            for y in range(540):
+                for x in range(960):
+                    # Smooth wave animation
+                    wave_x = (x + int(100 * np.sin(wave_phase))) % 960
                     frame[y, x] = [
-                        int(50 + (x / 640) * 100),  # Blue gradient
-                        int(30 + (y / 480) * 80),   # Green gradient
-                        int(80 + ((x + y) / 1120) * 100)  # Red gradient
+                        int(40 + (wave_x / 960) * 120 + 20 * np.sin(y / 40 + wave_phase)),  # Blue
+                        int(20 + (y / 540) * 100 + 15 * np.cos(wave_x / 50 + wave_phase)),   # Green
+                        int(60 + ((wave_x + y) / 1500) * 140)  # Red
                     ]
 
-            # Add camera info text
-            current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            # Add dynamic elements
+            timestamp_str = datetime.datetime.now().strftime("%H:%M:%S")
+            
+            # Smooth moving elements
+            circle_x = int(480 + 300 * np.sin(current_time * 0.8))
+            circle_y = int(270 + 150 * np.cos(current_time * 0.6))
+            cv2.circle(frame, (circle_x, circle_y), 25, (0, 255, 255), -1)
+            cv2.circle(frame, (circle_x, circle_y), 30, (255, 255, 255), 2)
+            
+            # Secondary moving element
+            pulse_radius = int(15 + 8 * np.sin(current_time * 3))
+            pulse_x = int(480 + 180 * np.cos(current_time * 0.4))
+            pulse_y = int(270 + 90 * np.sin(current_time * 0.5))
+            cv2.circle(frame, (pulse_x, pulse_y), pulse_radius, (255, 128, 0), -1)
 
-            # Add text overlays
-            cv2.putText(frame, f"DEMO CAMERA {camera_id}", (50, 50),
-                       cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-            cv2.putText(frame, f"Time: {current_time}", (50, 100),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-            cv2.putText(frame, "Camera Offline - Demo Mode", (50, 400),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
+            # Text overlays
+            cv2.putText(frame, f"DEMO CAMERA {camera_id}", (50, 60),
+                       cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 255, 255), 3)
+            cv2.putText(frame, f"DEMO CAMERA {camera_id}", (50, 60),
+                       cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 0), 2)
+            
+            cv2.putText(frame, f"Time: {timestamp_str}", (50, 110),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+            
+            cv2.putText(frame, "STATUS: DEMO MODE - LIVE", (50, 470),
+                       cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 3)
+            cv2.putText(frame, "STATUS: DEMO MODE - LIVE", (50, 470),
+                       cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0), 2)
+            
+            # Frame counter for continuous feedback
+            frame_number = int(current_time * 10) % 99999  # 10 FPS simulation
+            cv2.putText(frame, f"Frame: #{frame_number:05d}", (650, 500),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 2)
 
-            # Add moving circle
-            import time
-            elapsed = time.time() % 10  # 10 second cycle
-            circle_x = int(320 + 200 * np.sin(elapsed))
-            circle_y = int(240 + 100 * np.cos(elapsed * 1.5))
-            cv2.circle(frame, (circle_x, circle_y), 20, (0, 255, 255), -1)
-
-        # Encode frame as JPEG
-        ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+        # Optimized JPEG encoding for fast delivery
+        encode_params = [
+            cv2.IMWRITE_JPEG_QUALITY, 75,  # Balanced quality for speed
+            cv2.IMWRITE_JPEG_PROGRESSIVE, 0,  # Disable progressive for faster decode
+            cv2.IMWRITE_JPEG_OPTIMIZE, 1   # Optimize file size
+        ]
+        
+        ret, buffer = cv2.imencode('.jpg', frame, encode_params)
         if not ret:
             raise HTTPException(status_code=500, detail="Failed to encode frame")
+
+        # Headers optimized for streaming
+        headers = {
+            "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+            "Content-Type": "image/jpeg",
+            "X-Frame-Source": "demo" if is_demo else "camera",
+            "X-Camera-ID": str(camera_id),
+            "X-Timestamp": str(int(time.time() * 1000)),
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET",
+            "Access-Control-Allow-Headers": "*"
+        }
 
         return Response(
             content=buffer.tobytes(),
             media_type="image/jpeg",
-            headers={
-                "Cache-Control": "no-cache, no-store, must-revalidate",
-                "Pragma": "no-cache",
-                "Expires": "0"
-            }
+            headers=headers
         )
+        
     except HTTPException:
         raise
     except Exception as e:
