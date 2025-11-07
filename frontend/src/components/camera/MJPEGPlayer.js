@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import './MJPEGPlayer.css';
 
@@ -11,14 +11,9 @@ const MJPEGPlayer = ({ camera, onPlay, onError }) => {
   const [streamId, setStreamId] = useState(null);
   const imgRef = useRef(null);
   const retryTimeoutRef = useRef(null);
-  const refreshIntervalRef = useRef(null);
-  const frameTimeoutRef = useRef(null);
   const [retryCount, setRetryCount] = useState(0);
-  const [frameCount, setFrameCount] = useState(0);
   const maxRetries = 3;
   const isStartingRef = useRef(false);
-  const lastLoadTimeRef = useRef(null);
-  const isMountedRef = useRef(true);
 
   // Generate stream ID from camera info
   const generateStreamId = (camera) => {
@@ -61,28 +56,84 @@ const MJPEGPlayer = ({ camera, onPlay, onError }) => {
       setHasError(false);
       setStreamId(newStreamId);
 
-      console.log(`Starting MJPEG stream for camera ${camera.name} (ID: ${camera.id})`);
-      console.log('Camera object:', camera);
-      console.log('Camera object:', camera);
-      console.log('Camera object:', camera);
+      // CHECK 1: If camera has an ID, it's from camera management - use enhanced stream
+      if (camera.id) {
+        console.log(`Camera ${camera.id} is from camera management, using enhanced stream endpoint`);
+        const enhancedStreamUrl = `${API_BASE_URL}/api/collections/cameras/${camera.id}/stream`;
+        setStreamUrl(enhancedStreamUrl);
+        setRetryCount(0);
+        console.log(`Using enhanced stream: ${enhancedStreamUrl}`);
+        return;
+      }
 
-      // Start the stream using the camera ID
-      const response = await axios.post(`${API_BASE_URL}/api/collections/cameras/${camera.id}/start-stream`, {}, {
+      // CHECK 2: For non-camera-management cameras, check if legacy stream exists
+      let collectionName = 'default';
+      if (camera.name && camera.name.includes('(')) {
+        collectionName = camera.name.split('(')[0].trim();
+      } else if (camera.collectionId) {
+        collectionName = camera.collectionId;
+      }
+
+      try {
+        const existingStreamResponse = await axios.get(`${API_BASE_URL}/api/get_stream_for_camera`, {
+          params: {
+            camera_ip: camera.ip,
+            collection_name: collectionName
+          },
+          timeout: 5000
+        });
+
+        if (existingStreamResponse.data.success && existingStreamResponse.data.exists && existingStreamResponse.data.is_running) {
+          // Use existing stream
+          const feedUrl = `${API_BASE_URL}${existingStreamResponse.data.feed_url}`;
+          setStreamUrl(feedUrl);
+          setStreamId(existingStreamResponse.data.stream_id);
+          console.log(`Using existing MJPEG stream: ${feedUrl}`);
+          setRetryCount(0);
+          return;
+        }
+      } catch (error) {
+        console.log('Could not check for existing stream, proceeding with new stream creation');
+      }
+
+      // CHECK 3: Only create new legacy stream if camera doesn't have ID
+      // Check if we have an RTSP URL
+      let rtspUrl = camera.streamUrl;
+
+      // If no RTSP URL, try to construct one from IP
+      if (!rtspUrl && camera.ip) {
+        rtspUrl = `rtsp://admin:Admin@123@${camera.ip}:554`;
+      }
+
+      if (!rtspUrl) {
+        throw new Error('No RTSP URL available for camera');
+      }
+
+      console.log(`Starting MJPEG stream for camera ${camera.name} (${newStreamId}) with RTSP URL: ${rtspUrl}`);
+
+      // Start the stream on the backend
+      const response = await axios.post(`${API_BASE_URL}/api/start_stream`, {
+        rtsp_url: rtspUrl,
+        stream_id: newStreamId
+      }, {
         timeout: 10000 // 10 second timeout
       });
 
       if (response.data.success) {
-        const baseUrl = `${API_BASE_URL}/api/collections/cameras/${camera.id}/frame`;
-        const feedUrl = `${baseUrl}?t=${Date.now()}`;
-        
-        console.log('Setting up MJPEG frame from:', feedUrl);
+        const feedUrl = `${API_BASE_URL}${response.data.feed_url}`;
+        console.log(`Setting stream URL to: ${feedUrl}`);
         setStreamUrl(feedUrl);
-        setStreamId(response.data.stream_id);
+
+        if (response.data.reused) {
+          console.log(`MJPEG stream reused: ${feedUrl}`);
+        } else {
+          console.log(`MJPEG stream started: ${feedUrl}`);
+        }
+
+        // Reset retry count on success
         setRetryCount(0);
-        
-        console.log(`MJPEG frame endpoint configured for camera ${camera.id}`);
       } else {
-        throw new Error(response.data.message || 'Failed to start stream');
+        throw new Error(response.data.error || 'Failed to start stream');
       }
 
     } catch (error) {
@@ -91,7 +142,7 @@ const MJPEGPlayer = ({ camera, onPlay, onError }) => {
       setIsLoading(false);
 
       if (onError) {
-        onError(error.response?.data?.detail || error.message);
+        onError(error.message);
       }
 
       // Retry logic with exponential backoff
@@ -108,65 +159,12 @@ const MJPEGPlayer = ({ camera, onPlay, onError }) => {
     }
   };
 
-  // Simplified and reliable frame refresh mechanism
-  const startFrameRefresh = useCallback((baseUrl) => {
-    // Clear any existing refresh mechanisms
-    if (refreshIntervalRef.current) {
-      clearInterval(refreshIntervalRef.current);
-      refreshIntervalRef.current = null;
-    }
-    if (frameTimeoutRef.current) {
-      clearTimeout(frameTimeoutRef.current);
-      frameTimeoutRef.current = null;
-    }
-
-    console.log('🎬 Starting continuous frame refresh for:', baseUrl);
-
-    const refreshFrame = () => {
-      if (!isMountedRef.current || hasError) {
-        return;
-      }
-
-      const timestamp = Date.now();
-      const frameUrl = `${baseUrl}?t=${timestamp}&frame=${frameCount}`;
-      
-      if (imgRef.current) {
-        // Direct update - let browser handle the loading
-        imgRef.current.src = frameUrl;
-        setFrameCount(prev => prev + 1);
-        lastLoadTimeRef.current = timestamp;
-      }
-      
-      // Schedule next frame update
-      frameTimeoutRef.current = setTimeout(refreshFrame, 100); // 10 FPS for smoother streaming
-    };
-    
-    // Start the continuous refresh cycle
-    refreshFrame();
-  }, [camera.name, hasError, frameCount]);
-
-  // Stop frame refresh
-  const stopFrameRefresh = useCallback(() => {
-    if (refreshIntervalRef.current) {
-      clearInterval(refreshIntervalRef.current);
-      refreshIntervalRef.current = null;
-    }
-    if (frameTimeoutRef.current) {
-      clearTimeout(frameTimeoutRef.current);
-      frameTimeoutRef.current = null;
-    }
-    console.log('🛑 Stopped frame refresh for camera:', camera.name);
-  }, [camera.name]);
-
   // Stop stream
   const stopStream = async () => {
-    // Stop frame refresh
-    stopFrameRefresh();
-    
-    if (camera.id) {
+    if (streamId) {
       try {
-        await axios.delete(`${API_BASE_URL}/api/collections/cameras/${camera.id}/stop-stream`);
-        console.log(`Stopped MJPEG stream for camera ${camera.id}`);
+        await axios.delete(`${API_BASE_URL}/api/stop_stream/${streamId}`);
+        console.log(`Stopped MJPEG stream: ${streamId}`);
       } catch (error) {
         console.error('Error stopping stream:', error);
       }
@@ -184,70 +182,46 @@ const MJPEGPlayer = ({ camera, onPlay, onError }) => {
     }
   };
 
-  // Handle initial image load
-  const handleImageLoad = useCallback(() => {
-    if (!isMountedRef.current) return;
-    
-    console.log(`✅ MJPEG frame loaded for camera ${camera.name}`);
+  // Handle image load
+  const handleImageLoad = () => {
+    console.log(`✅ MJPEG stream loaded successfully for camera ${camera.name}`);
     setIsLoading(false);
     setHasError(false);
-    setRetryCount(0);
-    
-    // Start continuous frame refresh immediately after first frame loads
-    if (streamUrl && !frameTimeoutRef.current) {
-      const baseUrl = streamUrl.split('?')[0];
-      console.log('🔄 Starting frame refresh for:', baseUrl);
-      startFrameRefresh(baseUrl);
-    }
 
     if (onPlay) {
       onPlay();
     }
-  }, [camera.name, streamUrl, startFrameRefresh, onPlay]);
+  };
 
-  // Handle image error - simplified approach
-  const handleImageError = useCallback((event) => {
-    if (!isMountedRef.current) return;
-    
-    console.error(`❌ Frame error for camera ${camera.name}:`, event.target?.src);
-    
-    // Don't stop streaming for individual frame errors - let it continue
-    const timeSinceLastLoad = lastLoadTimeRef.current ? Date.now() - lastLoadTimeRef.current : Infinity;
-    
-    // Only stop if we haven't had a successful frame in the last 15 seconds
-    if (timeSinceLastLoad > 15000) {
-      setHasError(true);
-      setIsLoading(false);
-      stopFrameRefresh();
+  // Handle image error
+  const handleImageError = (event) => {
+    console.error(`❌ MJPEG stream error for camera ${camera.name}:`, event.target?.src);
+    setHasError(true);
+    setIsLoading(false);
 
-      if (onError) {
-        onError('Stream connection lost');
-      }
-
-      // Retry the entire stream setup after a delay
-      if (retryCount < maxRetries) {
-        console.log(`🔁 Retrying stream (${retryCount + 1}/${maxRetries}) in 5 seconds...`);
-        retryTimeoutRef.current = setTimeout(() => {
-          setRetryCount(prev => prev + 1);
-          setHasError(false);
-          setIsLoading(true);
-          startStream();
-        }, 5000);
-      }
-    } else {
-      // Recent successful loads, just log the error and continue
-      console.warn(`⚠️ Temporary frame error for camera ${camera.name}, continuing stream...`);
+    if (onError) {
+      onError('Stream connection failed');
     }
-  }, [camera.name, onError, retryCount, maxRetries, stopFrameRefresh, startStream]);
 
-  // Initialize stream when component mounts or camera changes
+    // Retry logic for image errors
+    if (retryCount < maxRetries) {
+      console.log(`Retrying stream connection (${retryCount + 1}/${maxRetries}) in 2 seconds...`);
+      retryTimeoutRef.current = setTimeout(() => {
+        setRetryCount(prev => prev + 1);
+        // Try to reload the image
+        if (imgRef.current) {
+          imgRef.current.src = streamUrl + '?t=' + Date.now();
+        }
+      }, 2000);
+    }
+  };
+
+  // Start stream when component mounts or camera changes
   useEffect(() => {
-    isMountedRef.current = true;
-    setFrameCount(0);
-    lastLoadTimeRef.current = null;
+    let isMounted = true;
 
     const initializeStream = async () => {
-      if (isMountedRef.current) {
+      if (isMounted) {
         await startStream();
       }
     };
@@ -256,40 +230,19 @@ const MJPEGPlayer = ({ camera, onPlay, onError }) => {
 
     // Cleanup function
     return () => {
-      isMountedRef.current = false;
+      isMounted = false;
       stopStream();
     };
-  }, [camera.id]);
+  }, [camera.id]); // Only depend on camera.id to prevent unnecessary restarts
 
-  // Handle streamUrl changes with improved loading
-  useEffect(() => {
-    if (streamUrl && imgRef.current && isMountedRef.current) {
-      console.log('StreamURL changed, initializing frame loading:', streamUrl);
-      
-      // Stop any existing refresh cycle
-      stopFrameRefresh();
-      
-      // Load initial frame
-      const initialFrameUrl = `${streamUrl}?t=${Date.now()}`;
-      imgRef.current.src = initialFrameUrl;
-      setIsLoading(true);
-      setHasError(false);
-    }
-  }, [streamUrl, stopFrameRefresh]);
-
-  // Enhanced cleanup on unmount
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      isMountedRef.current = false;
       if (retryTimeoutRef.current) {
         clearTimeout(retryTimeoutRef.current);
       }
-      if (frameTimeoutRef.current) {
-        clearTimeout(frameTimeoutRef.current);
-      }
-      stopFrameRefresh();
     };
-  }, [stopFrameRefresh]);
+  }, []);
 
   if (hasError && retryCount >= maxRetries) {
     return (
@@ -313,35 +266,41 @@ const MJPEGPlayer = ({ camera, onPlay, onError }) => {
     );
   }
 
+  // Always show the image if we have a stream URL, even if loading
+  // This allows the browser to handle the MJPEG stream loading
+
   return (
     <div className="mjpeg-player">
-      {streamUrl && (
-        <img
-          ref={imgRef}
-          alt={`Camera ${camera.name}`}
-          className="mjpeg-stream"
-          onLoad={handleImageLoad}
-          onError={handleImageError}
-          style={{ 
-            display: isLoading ? 'none' : 'block',
-            maxWidth: '100%',
-            maxHeight: '100%',
-            objectFit: 'contain'
-          }}
-        />
-      )}
-      {isLoading && (
+      {/* Show loading state if no stream URL or still loading */}
+      {(!streamUrl || isLoading) && (
         <div className="mjpeg-loading">
           <div className="loading-spinner"></div>
           <span>Connecting to stream...</span>
-          {frameCount > 0 && (
-            <small>Frames loaded: {frameCount}</small>
-          )}
           {retryCount > 0 && (
             <small>Retry {retryCount}/{maxRetries}</small>
           )}
         </div>
       )}
+
+      {/* Always show image if we have a stream URL */}
+      {streamUrl && (
+        <img
+          ref={imgRef}
+          src={streamUrl}
+          alt={`Camera ${camera.name}`}
+          className="mjpeg-stream"
+          onLoad={handleImageLoad}
+          onError={handleImageError}
+          style={{
+            maxWidth: '100%',
+            maxHeight: '100%',
+            objectFit: 'contain',
+            display: isLoading ? 'none' : 'block'
+          }}
+        />
+      )}
+
+
     </div>
   );
 };

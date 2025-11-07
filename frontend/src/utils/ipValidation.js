@@ -93,10 +93,19 @@ export function validateStreamURL(url) {
 
   const trimmedUrl = url.trim();
   
+  // Allow local camera indices (0, 1, 2, etc.) for testing
+  if (/^\d+$/.test(trimmedUrl)) {
+    return {
+      isValid: true,
+      message: `Valid local camera index: ${trimmedUrl}`,
+      isCameraIndex: true
+    };
+  }
+  
   if (!trimmedUrl.startsWith('rtsp://') && !trimmedUrl.startsWith('http://')) {
     return {
       isValid: false,
-      message: 'Stream URL must start with rtsp:// or http://'
+      message: 'Stream URL must start with rtsp://, http://, or be a camera index (0, 1, 2...)'
     };
   }
 

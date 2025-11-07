@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useCameras } from './CameraManager';
-import { Camera, Plus, Settings, List, X } from 'lucide-react';
+import { Camera, Plus, List } from 'lucide-react';
 import AddCameraForm from './AddCameraForm';
 import CameraCard from './CameraCard';
 import './TabbedCameraManager.css';
@@ -11,6 +11,7 @@ const TabbedCameraManager = ({ onClose }) => {
     cameras,
     createCollection,
     renameCollection,
+    updateCollection,
     deleteCollection,
     addCameraToCollection,
     removeCameraFromCollection,
@@ -20,7 +21,6 @@ const TabbedCameraManager = ({ onClose }) => {
     activateCamera,
     deactivateCamera,
     initialize,
-    loading,
     error
   } = useCameras();
 
@@ -47,6 +47,10 @@ const TabbedCameraManager = ({ onClose }) => {
   const [editingCamera, setEditingCamera] = useState(null);
   const [showCreateCollection, setShowCreateCollection] = useState(false);
   const [newCollectionName, setNewCollectionName] = useState('');
+  const [showEditCollection, setShowEditCollection] = useState(false);
+  const [editingCollection, setEditingCollection] = useState(null);
+  const [editCollectionName, setEditCollectionName] = useState('');
+  const [editCollectionDescription, setEditCollectionDescription] = useState('');
 
   useEffect(() => {
     initialize();
@@ -54,8 +58,7 @@ const TabbedCameraManager = ({ onClose }) => {
 
   const tabs = [
     { id: 'cameras', label: 'Camera List', icon: List },
-    { id: 'add', label: 'Add Camera', icon: Plus },
-    { id: 'settings', label: 'Settings', icon: Settings }
+    { id: 'add', label: 'Add Camera', icon: Plus }
   ];
 
   const handleTabChange = (tabId) => {
@@ -76,7 +79,12 @@ const TabbedCameraManager = ({ onClose }) => {
 
   const handleEditCamera = (camera) => {
     setActiveTab('add');
-    setEditingCamera(camera);
+    // Map backend camera properties to form-expected properties
+    const mappedCamera = {
+      ...camera,
+      streamUrl: camera.streamUrl || camera.rtsp_url || camera.stream_url || ''
+    };
+    setEditingCamera(mappedCamera);
     setShowAddCameraForm(true);
   };
 
@@ -95,6 +103,68 @@ const TabbedCameraManager = ({ onClose }) => {
         setShowCreateCollection(false);
       } catch (error) {
         console.error('Error creating collection:', error);
+        // Show user-friendly error message
+        alert(`Failed to create collection: ${error.message || 'Unknown error'}`);
+      }
+    }
+  };
+
+  const handleEditCollection = (collection) => {
+    if (collection.id === 'default') {
+      alert('Cannot edit the default collection');
+      return;
+    }
+    setEditingCollection(collection);
+    setEditCollectionName(collection.name);
+    setEditCollectionDescription(collection.description || '');
+    setShowEditCollection(true);
+  };
+
+  const handleUpdateCollection = async (e) => {
+    e.preventDefault();
+    if (editCollectionName.trim()) {
+      try {
+        await updateCollection(editingCollection.id, {
+          name: editCollectionName.trim(),
+          description: editCollectionDescription.trim() || null
+        });
+        setShowEditCollection(false);
+        setEditingCollection(null);
+        setEditCollectionName('');
+        setEditCollectionDescription('');
+      } catch (error) {
+        console.error('Error updating collection:', error);
+        alert(`Failed to update collection: ${error.message || 'Unknown error'}`);
+      }
+    }
+  };
+
+  const handleDeleteCollection = async () => {
+    if (!editingCollection) return;
+    
+    if (editingCollection.id === 'default') {
+      alert('Cannot delete the default collection');
+      return;
+    }
+
+    const confirmMessage = editingCollection.camera_count > 0
+      ? `This collection has ${editingCollection.camera_count} camera(s). All cameras will be moved to the Default Collection. Are you sure you want to delete "${editingCollection.name}"?`
+      : `Are you sure you want to delete "${editingCollection.name}"?`;
+
+    if (window.confirm(confirmMessage)) {
+      try {
+        await deleteCollection(editingCollection.id);
+        setShowEditCollection(false);
+        setEditingCollection(null);
+        setEditCollectionName('');
+        setEditCollectionDescription('');
+        // Switch to 'all' view if current collection was deleted
+        if (selectedCollection === editingCollection.id) {
+          setSelectedCollection('default');
+        }
+      } catch (error) {
+        console.error('Error deleting collection:', error);
+        alert(`Failed to delete collection: ${error.message || 'Unknown error'}`);
       }
     }
   };
@@ -142,7 +212,7 @@ const TabbedCameraManager = ({ onClose }) => {
 
   const activeCameras = currentCameras?.filter(camera => camera.is_active) || [];
 
-  if (loading) {
+  /*if (loading) {
     return (
       <div className="tabbed-camera-manager loading">
         <div className="loading-spinner">
@@ -151,7 +221,7 @@ const TabbedCameraManager = ({ onClose }) => {
         </div>
       </div>
     );
-  }
+  }*/
 
   return (
     <div className="tabbed-camera-manager">
@@ -189,6 +259,20 @@ const TabbedCameraManager = ({ onClose }) => {
           <Plus size={16} />
           New Collection
         </button>
+        <button
+          className="edit-collection-btn"
+          onClick={() => {
+            const collection = collections?.find(c => c.id === selectedCollection);
+            if (collection) {
+              handleEditCollection(collection);
+            } else {
+              alert('Please select a collection to edit');
+            }
+          }}
+          disabled={selectedCollection === 'all'}
+        >
+          Edit Collection
+        </button>
       </div>
 
       {/* Create Collection Modal */}
@@ -211,6 +295,61 @@ const TabbedCameraManager = ({ onClose }) => {
                   type="button" 
                   className="secondary-btn"
                   onClick={() => setShowCreateCollection(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Collection Modal */}
+      {showEditCollection && editingCollection && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h3>Edit Collection</h3>
+            <form onSubmit={handleUpdateCollection}>
+              <div className="form-group">
+                <label htmlFor="edit-collection-name">Collection Name</label>
+                <input
+                  id="edit-collection-name"
+                  type="text"
+                  value={editCollectionName}
+                  onChange={(e) => setEditCollectionName(e.target.value)}
+                  placeholder="Enter collection name"
+                  autoFocus
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="edit-collection-description">Description (Optional)</label>
+                <textarea
+                  id="edit-collection-description"
+                  value={editCollectionDescription}
+                  onChange={(e) => setEditCollectionDescription(e.target.value)}
+                  placeholder="Enter description"
+                  rows={3}
+                />
+              </div>
+              <div className="modal-actions">
+                <button type="submit" className="primary-btn">Update</button>
+                <button 
+                  type="button" 
+                  className="danger-btn"
+                  onClick={handleDeleteCollection}
+                >
+                  Delete Collection
+                </button>
+                <button 
+                  type="button" 
+                  className="secondary-btn"
+                  onClick={() => {
+                    setShowEditCollection(false);
+                    setEditingCollection(null);
+                    setEditCollectionName('');
+                    setEditCollectionDescription('');
+                  }}
                 >
                   Cancel
                 </button>
@@ -334,75 +473,6 @@ const TabbedCameraManager = ({ onClose }) => {
 
 
 
-        {/* Settings Tab */}
-        {activeTab === 'settings' && (
-          <div className="settings-tab">
-            <div className="tab-header">
-              <h3>Camera Settings</h3>
-            </div>
-
-            <div className="settings-content">
-              <div className="settings-section">
-                <h4>General Settings</h4>
-                <div className="setting-item">
-                  <label>Default Collection</label>
-                  <select value={selectedCollection} onChange={(e) => setSelectedCollection(e.target.value)}>
-                    <option value="all">All Collections</option>
-                    {collections?.map(collection => (
-                      <option key={collection.id} value={collection.id}>
-                        {collection.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="setting-item">
-                  <label>Auto-refresh interval</label>
-                  <select defaultValue="30">
-                    <option value="10">10 seconds</option>
-                    <option value="30">30 seconds</option>
-                    <option value="60">1 minute</option>
-                    <option value="300">5 minutes</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="settings-section">
-                <h4>Stream Settings</h4>
-                <div className="setting-item">
-                  <label>Default stream quality</label>
-                  <select defaultValue="medium">
-                    <option value="low">Low (480p)</option>
-                    <option value="medium">Medium (720p)</option>
-                    <option value="high">High (1080p)</option>
-                  </select>
-                </div>
-                <div className="setting-item">
-                  <label>
-                    <input type="checkbox" defaultChecked />
-                    Enable motion detection
-                  </label>
-                </div>
-              </div>
-
-              <div className="settings-section">
-                <h4>Notifications</h4>
-                <div className="setting-item">
-                  <label>
-                    <input type="checkbox" defaultChecked />
-                    Camera offline alerts
-                  </label>
-                </div>
-                <div className="setting-item">
-                  <label>
-                    <input type="checkbox" />
-                    Motion detection alerts
-                  </label>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Add Camera Tab */}
         {activeTab === 'add' && (
           <div className="add-camera-tab">
@@ -419,44 +489,6 @@ const TabbedCameraManager = ({ onClose }) => {
           </div>
         )}
 
-
-
-        {/* Settings Tab */}
-        {activeTab === 'settings' && (
-          <div className="settings-tab">
-            <div className="tab-header">
-              <h3>Camera Settings</h3>
-            </div>
-            <div className="settings-content">
-              <div className="setting-group">
-                <h4>Collections</h4>
-                <div className="collections-list">
-                  {collections?.map(collection => (
-                    <div key={collection.id} className="collection-item">
-                      <div className="collection-info">
-                        <span className="collection-name">{collection.name}</span>
-                        <span className="collection-count">
-                          {collection.camera_count || 0} cameras
-                        </span>
-                      </div>
-                      <div className="collection-actions">
-                        <button className="edit-btn">Edit</button>
-                        {collection.id !== 'default' && (
-                          <button 
-                            className="delete-btn"
-                            onClick={() => deleteCollection(collection.id)}
-                          >
-                            Delete
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

@@ -15,66 +15,41 @@ const FaceEvents = () => {
   const [fromDate, setFromDate] = useState(subDays(new Date(), 7));
   const [toDate, setToDate] = useState(new Date());
   const [faces, setFaces] = useState([]);
+  const [activeTab, setActiveTab] = useState('all');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   const loadCameras = useCallback(async () => {
     try {
-      // Fix the URL - remove the double prefix
       const cameraUrl = 'http://localhost:8000/api/collections/cameras';
-      console.log('Loading cameras from:', cameraUrl);
       const response = await axios.get(cameraUrl, {
         timeout: 5000,
         headers: {
           'Content-Type': 'application/json',
         }
       });
-      console.log('Cameras response:', response.data);
       if (response.data.cameras) {
         const cameraNames = response.data.cameras.map(camera => camera.name);
         setCameras(['All Cameras', ...cameraNames]);
       }
     } catch (err) {
-      console.error('Failed to load cameras:', err);
-      // Don't show error for cameras, just use default
     }
   }, []);
 
-  const filterFaces = useCallback(async () => {
-    if (fromDate > toDate) {
-      setError('From date cannot be later than To date');
-      return;
-    }
-
+  const fetchFaces = useCallback(async (params = {}) => {
     setLoading(true);
     setError(null);
-
     try {
-      const params = {
-        from_date: format(fromDate, 'yyyy-MM-dd'),
-        to_date: format(toDate, 'yyyy-MM-dd'),
-        camera: selectedCamera === 'All Cameras' ? 'all_cameras' : selectedCamera
-      };
-
-      if (nameFilter.trim()) {
-        params.name = nameFilter.trim();
-      }
-
-      console.log('Filtering faces with params:', params);
-      const response = await axios.get(`${API_BASE_URL}/filter`, { 
+      const response = await axios.get(`${API_BASE_URL}/filter`, {
         params,
         timeout: 10000,
         headers: {
           'Content-Type': 'application/json',
         }
       });
-      
-      console.log('Filter response:', response.data);
-      setFaces(response.data);
+      return Array.isArray(response.data) ? response.data : [];
     } catch (err) {
-      console.error('Filter faces error:', err);
-      let errorMessage = 'Failed to filter faces';
-      
+      let errorMessage = 'Failed to fetch faces';
       if (err.code === 'ECONNABORTED') {
         errorMessage = 'Request timed out. Please check if the backend server is running.';
       } else if (err.response?.status === 400) {
@@ -86,102 +61,112 @@ const FaceEvents = () => {
       } else {
         errorMessage = `Error: ${err.message}`;
       }
-      
       setError(errorMessage);
+      return [];
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  const buildParams = useCallback((overrides = {}) => {
+    const params = {
+      from_date: format(fromDate, 'yyyy-MM-dd'),
+      to_date: format(toDate, 'yyyy-MM-dd'),
+      camera: selectedCamera === 'All Cameras' ? 'all_cameras' : selectedCamera,
+      ...overrides,
+    };
+    if (nameFilter.trim()) {
+      params.name = nameFilter.trim();
+    }
+    return params;
   }, [fromDate, toDate, selectedCamera, nameFilter]);
 
-  const showKnownFaces = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const camera = selectedCamera === 'All Cameras' ? 'all_cameras' : selectedCamera;
-      console.log('Loading known faces for camera:', camera);
-      const response = await axios.get(`${API_BASE_URL}/filter`, {
-        params: { name: '', camera },
-        timeout: 10000,
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
-      
-      const knownFaces = response.data.filter(face => face.name !== 'Unknown');
-      console.log('Known faces:', knownFaces);
-      setFaces(knownFaces);
-    } catch (err) {
-      console.error('Known faces error:', err);
-      let errorMessage = 'Failed to fetch known faces';
-      
-      if (err.code === 'ECONNABORTED') {
-        errorMessage = 'Request timed out. Please check if the backend server is running.';
-      } else if (err.response) {
-        errorMessage = `Server error: ${err.response.status} - ${err.response.data?.detail || err.response.statusText}`;
-      } else if (err.request) {
-        errorMessage = 'Cannot connect to backend server. Please ensure the server is running on http://localhost:8000';
-      } else {
-        errorMessage = `Error: ${err.message}`;
-      }
-      
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
+  const ensureValidDates = useCallback(() => {
+    if (fromDate > toDate) {
+      setError('From date cannot be later than To date');
+      return false;
     }
-  }, [selectedCamera]);
+    return true;
+  }, [fromDate, toDate]);
 
-  const showUnknownFaces = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const camera = selectedCamera === 'All Cameras' ? 'all_cameras' : selectedCamera;
-      console.log('Loading unknown faces for camera:', camera);
-      const response = await axios.get(`${API_BASE_URL}/filter`, {
-        params: { name: 'Unknown', camera },
-        timeout: 10000,
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
-      
-      console.log('Unknown faces:', response.data);
-      setFaces(response.data);
-    } catch (err) {
-      console.error('Unknown faces error:', err);
-      let errorMessage = 'Failed to fetch unknown faces';
-      
-      if (err.code === 'ECONNABORTED') {
-        errorMessage = 'Request timed out. Please check if the backend server is running.';
-      } else if (err.response) {
-        errorMessage = `Server error: ${err.response.status} - ${err.response.data?.detail || err.response.statusText}`;
-      } else if (err.request) {
-        errorMessage = 'Cannot connect to backend server. Please ensure the server is running on http://localhost:8000';
-      } else {
-        errorMessage = `Error: ${err.message}`;
-      }
-      
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
+  const getTabOverrides = useCallback((tab) => {
+    if (tab === 'known') {
+      return { face_type: 'known' };
     }
-  }, [selectedCamera]);
+    if (tab === 'unknown') {
+      return { face_type: 'unknown' };
+    }
+    return {};
+  }, []);
+
+  const handleFilter = useCallback(async (overrides = {}, targetTab = null) => {
+    // Use current activeTab if targetTab is not provided
+    const tabToUse = targetTab !== null ? targetTab : activeTab;
+    
+    if (!ensureValidDates()) {
+      return;
+    }
+
+    const mergedOverrides = { ...getTabOverrides(tabToUse), ...overrides };
+    const params = buildParams(mergedOverrides);
+    
+    console.log('Filtering with params:', params, 'for tab:', tabToUse);
+    const data = await fetchFaces(params);
+    console.log('Received faces:', data.length, 'faces');
+    
+    // Backend already filters by face_type, no need for additional client-side filtering
+    setFaces(data);
+  }, [ensureValidDates, fetchFaces, buildParams, getTabOverrides, activeTab]);
+
+  const handleTabChange = useCallback((tab) => {
+    console.log('Tab changed to:', tab);
+    setActiveTab(tab);
+    handleFilter({}, tab);
+  }, [handleFilter]);
+
+  const refreshData = () => {
+    console.log('Refreshing data for tab:', activeTab);
+    loadCameras();
+    handleFilter({}, activeTab);
+  };
+
+  const onSearch = () => {
+    handleFilter({}, activeTab);
+  };
+
+  const handleCameraChange = (value) => {
+    setSelectedCamera(value);
+    handleFilter({ camera: value === 'All Cameras' ? 'all_cameras' : value }, activeTab);
+  };
 
   useEffect(() => {
     loadCameras();
-  }, [loadCameras]);
+    // Load all faces on initial mount
+    handleFilter({}, 'all');
+  }, []); // Only run once on mount
 
   return (
     <div className="face-events">
       <div className="navigation-buttons">
-        <button onClick={showKnownFaces} className="nav-btn known-btn">
+        <button
+          onClick={() => handleTabChange('all')}
+          className={`nav-btn ${activeTab === 'all' ? 'active-btn' : ''}`}
+        >
+          All Faces
+        </button>
+        <button
+          onClick={() => handleTabChange('known')}
+          className={`nav-btn known-btn ${activeTab === 'known' ? 'active-btn' : ''}`}
+        >
           Known Faces
         </button>
-        <button onClick={showUnknownFaces} className="nav-btn unknown-btn">
+        <button
+          onClick={() => handleTabChange('unknown')}
+          className={`nav-btn unknown-btn ${activeTab === 'unknown' ? 'active-btn' : ''}`}
+        >
           Unknown Faces
         </button>
-        <button onClick={loadCameras} className="nav-btn refresh-btn">
+        <button onClick={refreshData} className="nav-btn refresh-btn">
           Refresh
         </button>
       </div>
@@ -189,9 +174,9 @@ const FaceEvents = () => {
       <div className="filters">
         <div className="filter-group">
           <label>Camera:</label>
-          <select 
-            value={selectedCamera} 
-            onChange={(e) => setSelectedCamera(e.target.value)}
+          <select
+            value={selectedCamera}
+            onChange={(e) => handleCameraChange(e.target.value)}
           >
             {cameras.map(camera => (
               <option key={camera} value={camera}>{camera}</option>
@@ -213,7 +198,7 @@ const FaceEvents = () => {
           <label>From:</label>
           <DatePicker
             selected={fromDate}
-            onChange={setFromDate}
+            onChange={(date) => setFromDate(date)}
             dateFormat="yyyy-MM-dd"
             className="date-picker"
           />
@@ -223,13 +208,13 @@ const FaceEvents = () => {
           <label>To:</label>
           <DatePicker
             selected={toDate}
-            onChange={setToDate}
+            onChange={(date) => setToDate(date)}
             dateFormat="yyyy-MM-dd"
             className="date-picker"
           />
         </div>
 
-        <button onClick={filterFaces} className="search-btn">
+        <button onClick={onSearch} className="search-btn">
           Search
         </button>
       </div>

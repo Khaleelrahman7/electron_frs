@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test MJPEG Stream</title>
+</head>
+<body>
+    <h1>Test MJPEG Stream</h1>
+    <p>Testing direct MJPEG stream in img element:</p>
+    <img src="http://localhost:8000/api/video_feed/default_192.168.4.243" 
+         alt="MJPEG Stream" 
+         style="max-width: 500px; border: 1px solid #ccc;"
+         onload="console.log('Image loaded successfully')"
+         onerror="console.log('Image failed to load')">
+    
+    <p>If you see a live video stream above, the MJPEG endpoint is working correctly.</p>
+    
+    <script>
+        console.log('Test page loaded');
+    </script>
+</body>
+</html>

@@ -274,14 +274,14 @@
   justify-content: space-between;
   align-items: center;
   padding: 8px 12px;
-  background: #2d3748;
+  background: #00091a;
   border-bottom: 1px solid #4a5568;
 }
 
 .camera-name {
   font-size: 14px;
   font-weight: 600;
-  color: #ffffff;
+  color: #000000;
   truncate: true;
   overflow: hidden;
   text-overflow: ellipsis;

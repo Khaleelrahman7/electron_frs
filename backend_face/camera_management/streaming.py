@@ -7,6 +7,7 @@ import uuid
 from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
 import io
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +23,12 @@ class CameraStreamManager:
         stream_id = str(uuid.uuid4())
         
         try:
-            # Test the RTSP connection
-            cap = cv2.VideoCapture(rtsp_url)
+            # Test the RTSP connection (handle camera index vs RTSP URL)
+            if isinstance(rtsp_url, str) and rtsp_url.isdigit():
+                cap = cv2.VideoCapture(int(rtsp_url))
+            else:
+                cap = cv2.VideoCapture(rtsp_url)
+            
             if not cap.isOpened():
                 raise HTTPException(status_code=400, detail="Cannot connect to camera stream")
             
@@ -71,6 +76,12 @@ class CameraStreamManager:
         with self.stream_lock:
             return self.active_streams.get(stream_id)
     
+    def _is_stream_active(self, stream_id: str) -> bool:
+        """Check if a stream is still active (exists and is_active=True)"""
+        with self.stream_lock:
+            stream = self.active_streams.get(stream_id)
+            return stream is not None and stream.get('is_active', False)
+    
     def get_camera_stream(self, camera_id: int) -> Optional[str]:
         """Get active stream ID for a camera"""
         with self.stream_lock:
@@ -80,25 +91,48 @@ class CameraStreamManager:
         return None
     
     def generate_mjpeg_stream(self, stream_id: str):
-        """Generate MJPEG stream for a camera with enhanced frame delivery"""
+        """Generate MJPEG stream for a camera with improved stability"""
         stream_info = self.get_stream_info(stream_id)
         if not stream_info:
             return
 
         rtsp_url = stream_info['rtsp_url']
-        
-        # Initialize camera capture with optimized settings
-        cap = cv2.VideoCapture(rtsp_url)
-        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimize buffering for live feed
-        cap.set(cv2.CAP_PROP_FPS, 30)  # Target FPS
-        
-        # Check if camera is accessible
+        logger.info(f"Starting MJPEG stream generation for {stream_id}")
+
+        # Try to connect to real camera first
+        cap = None
         camera_accessible = False
-        if cap.isOpened():
-            ret, test_frame = cap.read()
-            if ret and test_frame is not None and test_frame.size > 0:
-                camera_accessible = True
-            cap.release()
+
+        try:
+            # Handle camera index (0, 1, 2, etc.) vs RTSP URL
+            if isinstance(rtsp_url, str) and rtsp_url.isdigit():
+                cap = cv2.VideoCapture(int(rtsp_url))
+            else:
+                cap = cv2.VideoCapture(rtsp_url)
+                
+            if cap.isOpened():
+                # Test with multiple frames to ensure stable connection
+                test_frames_count = 0
+                for _ in range(3):
+                    ret, test_frame = cap.read()
+                    if ret and test_frame is not None and test_frame.size > 0:
+                        test_frames_count += 1
+                    time.sleep(0.1)
+
+                if test_frames_count >= 2:  # At least 2 successful frames
+                    camera_accessible = True
+                    logger.info(f"Camera accessible for stream {stream_id} ({test_frames_count}/3 test frames)")
+                else:
+                    logger.warning(f"Camera unstable for stream {stream_id} ({test_frames_count}/3 test frames)")
+
+            if cap:
+                cap.release()
+                cap = None
+        except Exception as e:
+            logger.warning(f"Error testing camera for stream {stream_id}: {e}")
+            if cap:
+                cap.release()
+                cap = None
 
         # If camera is not accessible, generate demo stream
         if not camera_accessible:
@@ -106,90 +140,130 @@ class CameraStreamManager:
             yield from self._generate_demo_stream(stream_id, stream_info)
             return
 
-        # Real camera streaming with enhanced error handling
-        cap = cv2.VideoCapture(rtsp_url)
-        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-        cap.set(cv2.CAP_PROP_FPS, 30)
-        
+        # Real camera streaming with improved stability
+        yield from self._generate_real_camera_stream(stream_id, stream_info, rtsp_url)
+
+    def _generate_real_camera_stream(self, stream_id: str, stream_info: Dict, rtsp_url: str):
+        """Generate stream from real camera with enhanced stability"""
+        cap = None
         consecutive_failures = 0
-        max_failures = 20  # Reduced threshold for faster fallback
+        max_failures = 10
         frame_count = 0
         last_frame = None
-        
-        # Enhanced JPEG encoding parameters
-        encode_params = [
-            cv2.IMWRITE_JPEG_QUALITY, 80,
-            cv2.IMWRITE_JPEG_PROGRESSIVE, 1,
-            cv2.IMWRITE_JPEG_OPTIMIZE, 1
-        ]
+        reconnect_attempts = 0
+        max_reconnect_attempts = 5
 
-        try:
-            while stream_info['is_active']:
-                ret, frame = cap.read()
-                
-                if not ret or frame is None or frame.size == 0:
-                    consecutive_failures += 1
-                    logger.debug(f"Frame read failure {consecutive_failures}/{max_failures} for stream {stream_id}")
-                    
-                    if consecutive_failures >= max_failures:
-                        logger.warning(f"Too many failures for stream {stream_id}, switching to demo")
-                        cap.release()
-                        yield from self._generate_demo_stream(stream_id, stream_info)
-                        return
-                    
-                    # Use last good frame if available, otherwise skip
-                    if last_frame is not None:
-                        frame = last_frame.copy()
-                        # Add "connection issue" overlay
-                        cv2.putText(frame, "Connection Issue", (10, 30),
-                                  cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+        # JPEG encoding parameters for better performance
+        encode_params = [cv2.IMWRITE_JPEG_QUALITY, 85]
+
+        while self._is_stream_active(stream_id) and reconnect_attempts < max_reconnect_attempts:
+            try:
+                # Connect to camera
+                if cap is None or not cap.isOpened():
+                    logger.info(f"Connecting to camera for stream {stream_id}")
+                    # Handle camera index (0, 1, 2, etc.) vs RTSP URL
+                    if isinstance(rtsp_url, str) and rtsp_url.isdigit():
+                        cap = cv2.VideoCapture(int(rtsp_url))
                     else:
-                        time.sleep(0.033)  # Short delay before retry
-                        continue
-                else:
-                    consecutive_failures = 0  # Reset failure counter
-                    last_frame = frame.copy()  # Store good frame
+                        cap = cv2.VideoCapture(rtsp_url)
 
-                # Validate frame quality
-                if frame is not None and frame.size > 0:
-                    # Quick frame quality check
-                    if np.mean(frame) <= 1:  # Likely a black/corrupted frame
-                        logger.debug(f"Detected low-quality frame for stream {stream_id}")
-                        if last_frame is not None:
-                            frame = last_frame.copy()
+                    if cap.isOpened():
+                        # Optimize capture settings
+                        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimal buffering
+                        cap.set(cv2.CAP_PROP_FPS, 25)  # Target 25 FPS
+
+                        # Set timeouts
+                        cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 30000)  # 30 seconds
+                        cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000)   # 5 seconds
+
+                        logger.info(f"Successfully connected to camera for stream {stream_id}")
+                        consecutive_failures = 0
+                    else:
+                        raise Exception("Failed to open camera")
+
+                # Read frame
+                ret, frame = cap.read()
+
+                if ret and frame is not None and frame.size > 0:
+                    consecutive_failures = 0
+                    last_frame = frame.copy()
+
+                    # Apply face detection and recognition
+                    processed_frame = frame
+                    try:
+                        # Try to import and use face pipeline for processing
+                        from face_pipeline import process_frame as face_process_frame
+                        processed_frame, _ = face_process_frame(frame)
+                    except Exception as face_error:
+                        # If face processing fails, use raw frame
+                        logger.debug(f"Face processing skipped for stream {stream_id}: {face_error}")
+                        processed_frame = frame
+
+                    # Encode frame
+                    try:
+                        ret_encode, buffer = cv2.imencode('.jpg', processed_frame, encode_params)
+                        if ret_encode and buffer is not None:
+                            # Update stream info
+                            with self.stream_lock:
+                                if stream_id in self.active_streams:
+                                    self.active_streams[stream_id]['frame_count'] = frame_count
+                                    self.active_streams[stream_id]['last_frame_time'] = time.time()
+
+                            # Yield frame
+                            yield (b'--frame\r\n'
+                                   b'Content-Type: image/jpeg\r\n'
+                                   b'Content-Length: ' + str(len(buffer)).encode() + b'\r\n\r\n' +
+                                   buffer.tobytes() + b'\r\n')
+
+                            frame_count += 1
                         else:
-                            continue
+                            logger.warning(f"Failed to encode frame for stream {stream_id}")
+                    except Exception as encode_error:
+                        logger.error(f"Frame encoding error for stream {stream_id}: {encode_error}")
+                else:
+                    consecutive_failures += 1
+                    logger.warning(f"Failed to read frame {consecutive_failures}/{max_failures} for stream {stream_id}")
 
-                # Encode frame with error handling
-                try:
-                    ret, buffer = cv2.imencode('.jpg', frame, encode_params)
-                    if not ret or buffer is None:
-                        logger.warning(f"Failed to encode frame for stream {stream_id}")
+                    if consecutive_failures >= max_failures:
+                        logger.error(f"Too many consecutive failures for stream {stream_id}, reconnecting...")
+                        if cap:
+                            cap.release()
+                            cap = None
+                        reconnect_attempts += 1
+                        time.sleep(2)  # Wait before reconnecting
                         continue
-                except Exception as encode_error:
-                    logger.error(f"Frame encoding error for stream {stream_id}: {encode_error}")
-                    continue
 
-                # Update frame count
-                with self.stream_lock:
-                    if stream_id in self.active_streams:
-                        self.active_streams[stream_id]['frame_count'] = frame_count
-                        self.active_streams[stream_id]['last_frame_time'] = time.time()
+                    # Use last frame if available
+                    if last_frame is not None:
+                        try:
+                            ret_encode, buffer = cv2.imencode('.jpg', last_frame, encode_params)
+                            if ret_encode and buffer is not None:
+                                yield (b'--frame\r\n'
+                                       b'Content-Type: image/jpeg\r\n'
+                                       b'Content-Length: ' + str(len(buffer)).encode() + b'\r\n\r\n' +
+                                       buffer.tobytes() + b'\r\n')
+                        except:
+                            pass
 
-                # Yield frame in MJPEG format
-                yield (b'--frame\r\n'
-                       b'Content-Type: image/jpeg\r\n'
-                       b'Content-Length: ' + str(len(buffer)).encode() + b'\r\n\r\n' + 
-                       buffer.tobytes() + b'\r\n')
+                # Control frame rate
+                time.sleep(0.04)  # ~25 FPS
 
-                frame_count += 1
-                time.sleep(0.033)  # ~30 FPS
+            except Exception as e:
+                logger.error(f"Error in camera stream {stream_id}: {e}")
+                if cap:
+                    cap.release()
+                    cap = None
+                reconnect_attempts += 1
+                time.sleep(2)
 
-        except Exception as e:
-            logger.error(f"Error in MJPEG stream {stream_id}: {e}")
-        finally:
+        # Cleanup
+        if cap:
             cap.release()
-            self.stop_stream(stream_id)
+
+        # If we exhausted reconnection attempts, fall back to demo
+        if reconnect_attempts >= max_reconnect_attempts:
+            logger.warning(f"Max reconnection attempts reached for stream {stream_id}, falling back to demo")
+            yield from self._generate_demo_stream(stream_id, stream_info)
 
     def _generate_demo_stream(self, stream_id: str, stream_info: Dict):
         """Generate a demo stream when real camera is not available"""
@@ -200,7 +274,7 @@ class CameraStreamManager:
         start_time = time.time()
 
         try:
-            while stream_info['is_active']:
+            while self._is_stream_active(stream_id):
                 # Create a demo frame (640x480)
                 frame = np.zeros((480, 640, 3), dtype=np.uint8)
 

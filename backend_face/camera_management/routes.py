@@ -7,7 +7,8 @@ import numpy as np
 
 from .models import (
     CameraCreateRequest, CameraUpdateRequest, CameraValidationRequest,
-    CameraValidationResponse, CameraListResponse, CameraOperationResponse
+    CameraValidationResponse, CameraListResponse, CameraOperationResponse,
+    CollectionCreateRequest, CollectionUpdateRequest
 )
 from .service import EnhancedCameraService
 from .streaming import get_stream_manager, CameraStreamManager
@@ -275,105 +276,119 @@ async def get_camera_frame(
         frame = None
         is_demo = False
 
-        # Try to get frame from real camera with optimized settings
+        # Try to get frame from real camera with ultra-fast settings
         try:
             cap = cv2.VideoCapture(camera.rtsp_url)
             if cap.isOpened():
-                # Set properties for faster frame capture
-                cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Reduce buffer to get latest frame
-                cap.set(cv2.CAP_PROP_FPS, 30)  # Set target FPS
-                cap.set(cv2.CAP_PROP_FRAME_WIDTH, 960)  # Set reasonable resolution
-                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 540)
+                # Optimized settings for minimum latency
+                cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimal buffer
+                cap.set(cv2.CAP_PROP_FPS, 15)  # Moderate FPS to reduce load
+                cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)  # Smaller resolution for speed
+                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
                 
-                # Try to get a fresh frame quickly
-                for _ in range(2):  # Flush old frames
-                    ret, frame = cap.read()
-                    if ret and frame is not None and frame.size > 0:
-                        # Quick quality check
-                        if np.mean(frame) > 5:  # Frame has meaningful content
-                            break
+                # Quick frame grab with timeout
+                start_time = time.time()
+                ret, frame = cap.read()
+                grab_time = time.time() - start_time
                 
+                if ret and frame is not None and frame.size > 0:
+                    # Quick quality validation
+                    if np.mean(frame) > 10 and grab_time < 2.0:  # Frame quality and speed check
+                        logger.debug(f"✅ Real frame captured from camera {camera_id} in {grab_time:.2f}s")
+                    else:
+                        frame = None  # Force demo mode for poor quality/slow frames
+                        logger.debug(f"⚠️ Slow/poor frame from camera {camera_id}, using demo")
+                else:
+                    frame = None
+                    
             cap.release()
-            
-            # Validate frame
-            if frame is not None and frame.size > 0 and np.mean(frame) > 5:
-                logger.debug(f"✅ Real frame captured from camera {camera_id}")
-            else:
-                frame = None  # Force demo mode
-                logger.debug(f"⚠️ Poor quality frame from camera {camera_id}, using demo")
                 
         except Exception as e:
             logger.debug(f"📷 Camera {camera_id} unavailable: {e}")
             frame = None
 
-        # Enhanced demo frame with smoother animation
+        # Enhanced demo frame with ultra-smooth animation
         if frame is None:
             is_demo = True
             
-            # Create demo frame with better resolution
-            frame = np.zeros((540, 960, 3), dtype=np.uint8)
+            # Create optimized demo frame
+            frame = np.zeros((480, 640, 3), dtype=np.uint8)
 
-            # Smoother animation based on time
+            # Time-based smooth animation
             current_time = time.time()
-            wave_phase = (current_time * 2) % (2 * np.pi)  # 2 second cycle
+            wave_phase = (current_time * 3) % (2 * np.pi)  # 3 second cycle for smoother motion
             
-            # Animated gradient background
-            for y in range(540):
-                for x in range(960):
-                    # Smooth wave animation
-                    wave_x = (x + int(100 * np.sin(wave_phase))) % 960
-                    frame[y, x] = [
-                        int(40 + (wave_x / 960) * 120 + 20 * np.sin(y / 40 + wave_phase)),  # Blue
-                        int(20 + (y / 540) * 100 + 15 * np.cos(wave_x / 50 + wave_phase)),   # Green
-                        int(60 + ((wave_x + y) / 1500) * 140)  # Red
+            # Ultra-smooth gradient background
+            for y in range(0, 480, 2):  # Skip every other line for performance
+                for x in range(0, 640, 2):  # Skip every other pixel
+                    wave_x = (x + int(80 * np.sin(wave_phase + x/100))) % 640
+                    color_intensity = int(60 + 40 * np.sin(y / 30 + wave_phase))
+                    frame[y:y+2, x:x+2] = [
+                        int(30 + (wave_x / 640) * 100 + color_intensity),  # Blue
+                        int(10 + (y / 480) * 80 + color_intensity),   # Green
+                        int(50 + ((wave_x + y) / 1120) * 120)  # Red
                     ]
 
-            # Add dynamic elements
-            timestamp_str = datetime.datetime.now().strftime("%H:%M:%S")
+            # Dynamic elements with ultra-smooth motion
+            timestamp_str = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]  # Include milliseconds
             
-            # Smooth moving elements
-            circle_x = int(480 + 300 * np.sin(current_time * 0.8))
-            circle_y = int(270 + 150 * np.cos(current_time * 0.6))
+            # Primary moving circle with trail effect
+            circle_x = int(320 + 250 * np.sin(current_time * 0.7))
+            circle_y = int(240 + 120 * np.cos(current_time * 0.5))
+            
+            # Draw trail
+            for i in range(5):
+                trail_phase = wave_phase - (i * 0.2)
+                trail_x = int(320 + 250 * np.sin(current_time * 0.7 - i * 0.1))
+                trail_y = int(240 + 120 * np.cos(current_time * 0.5 - i * 0.1))
+                alpha = 255 - (i * 40)
+                cv2.circle(frame, (trail_x, trail_y), 20 - i*2, (0, alpha, alpha), -1)
+            
             cv2.circle(frame, (circle_x, circle_y), 25, (0, 255, 255), -1)
             cv2.circle(frame, (circle_x, circle_y), 30, (255, 255, 255), 2)
             
-            # Secondary moving element
-            pulse_radius = int(15 + 8 * np.sin(current_time * 3))
-            pulse_x = int(480 + 180 * np.cos(current_time * 0.4))
-            pulse_y = int(270 + 90 * np.sin(current_time * 0.5))
+            # Secondary pulsing element
+            pulse_radius = int(12 + 6 * np.sin(current_time * 4))
+            pulse_x = int(320 + 150 * np.cos(current_time * 0.3))
+            pulse_y = int(240 + 75 * np.sin(current_time * 0.4))
             cv2.circle(frame, (pulse_x, pulse_y), pulse_radius, (255, 128, 0), -1)
 
-            # Text overlays
+            # Enhanced text overlays with better contrast
             cv2.putText(frame, f"DEMO CAMERA {camera_id}", (50, 60),
-                       cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 255, 255), 3)
+                       cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 255, 255), 4)  # White outline
             cv2.putText(frame, f"DEMO CAMERA {camera_id}", (50, 60),
-                       cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 0), 2)
+                       cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 150, 255), 2)   # Orange text
             
             cv2.putText(frame, f"Time: {timestamp_str}", (50, 110),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
             
-            cv2.putText(frame, "STATUS: DEMO MODE - LIVE", (50, 470),
-                       cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 3)
-            cv2.putText(frame, "STATUS: DEMO MODE - LIVE", (50, 470),
-                       cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0), 2)
+            cv2.putText(frame, "STATUS: LIVE DEMO STREAMING", (50, 420),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 3)
+            cv2.putText(frame, "STATUS: LIVE DEMO STREAMING", (50, 420),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 2)
             
-            # Frame counter for continuous feedback
-            frame_number = int(current_time * 10) % 99999  # 10 FPS simulation
-            cv2.putText(frame, f"Frame: #{frame_number:05d}", (650, 500),
+            # Real-time frame counter
+            frame_number = int(current_time * 15) % 99999  # 15 FPS simulation
+            cv2.putText(frame, f"Frame: #{frame_number:05d}", (450, 450),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 2)
+            
+            # Live activity indicator
+            activity_pulse = int(128 + 127 * np.sin(current_time * 8))
+            cv2.circle(frame, (600, 50), 15, (0, activity_pulse, 0), -1)
+            cv2.putText(frame, "LIVE", (560, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
-        # Optimized JPEG encoding for fast delivery
+        # Ultra-optimized JPEG encoding for speed
         encode_params = [
-            cv2.IMWRITE_JPEG_QUALITY, 75,  # Balanced quality for speed
-            cv2.IMWRITE_JPEG_PROGRESSIVE, 0,  # Disable progressive for faster decode
-            cv2.IMWRITE_JPEG_OPTIMIZE, 1   # Optimize file size
+            cv2.IMWRITE_JPEG_QUALITY, 70,  # Slightly lower quality for speed
+            cv2.IMWRITE_JPEG_PROGRESSIVE, 0,  # Baseline JPEG for fastest decode
+            cv2.IMWRITE_JPEG_OPTIMIZE, 0   # Skip optimization for speed
         ]
         
         ret, buffer = cv2.imencode('.jpg', frame, encode_params)
         if not ret:
             raise HTTPException(status_code=500, detail="Failed to encode frame")
 
-        # Headers optimized for streaming
+        # Headers optimized for streaming with cache busting
         headers = {
             "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
             "Pragma": "no-cache",
@@ -382,9 +397,11 @@ async def get_camera_frame(
             "X-Frame-Source": "demo" if is_demo else "camera",
             "X-Camera-ID": str(camera_id),
             "X-Timestamp": str(int(time.time() * 1000)),
+            "X-Frame-Time": datetime.datetime.now().isoformat(),
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "GET",
-            "Access-Control-Allow-Headers": "*"
+            "Access-Control-Allow-Headers": "*",
+            "Access-Control-Expose-Headers": "*"
         }
 
         return Response(
@@ -491,8 +508,7 @@ async def get_collections(
 
 @router.post("/")
 async def create_collection(
-    name: str,
-    description: str = None,
+    request: CollectionCreateRequest,
     service: EnhancedCameraService = Depends(get_camera_service)
 ):
     """Create a new collection"""
@@ -504,13 +520,13 @@ async def create_collection(
         collections = service._load_collections()
         
         # Check for duplicate names
-        if any(c.name.lower() == name.lower() for c in collections):
+        if any(c.name.lower() == request.name.lower() for c in collections):
             raise HTTPException(status_code=409, detail="Collection name already exists")
         
         new_collection = CameraCollection(
             id=str(uuid.uuid4()),
-            name=name,
-            description=description,
+            name=request.name,
+            description=request.description,
             created_at=datetime.now(),
             camera_count=0
         )
@@ -524,6 +540,91 @@ async def create_collection(
     except Exception as e:
         logger.error(f"Error creating collection: {e}")
         raise HTTPException(status_code=500, detail="Failed to create collection")
+
+@router.put("/{collection_id}")
+async def update_collection(
+    collection_id: str,
+    request: CollectionUpdateRequest,
+    service: EnhancedCameraService = Depends(get_camera_service)
+):
+    """Update a collection"""
+    try:
+        collections = service._load_collections()
+        
+        # Find the collection to update
+        collection = next((c for c in collections if c.id == collection_id), None)
+        if not collection:
+            raise HTTPException(status_code=404, detail="Collection not found")
+        
+        # Check if it's the default collection
+        if collection_id == "default" and request.name and request.name.lower() != "default collection":
+            raise HTTPException(status_code=400, detail="Cannot rename the default collection")
+        
+        # Check for duplicate names (excluding current collection)
+        if request.name:
+            if any(c.name.lower() == request.name.lower() and c.id != collection_id for c in collections):
+                raise HTTPException(status_code=409, detail="Collection name already exists")
+            collection.name = request.name
+        
+        if request.description is not None:
+            collection.description = request.description
+        
+        service._save_collections(collections)
+        
+        # Update collection name in all cameras
+        if request.name:
+            cameras = service._load_cameras()
+            for camera in cameras:
+                if camera.collection_id == collection_id:
+                    camera.collection_name = collection.name
+            service._save_cameras(cameras)
+        
+        return {"success": True, "collection": collection}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating collection: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update collection")
+
+@router.delete("/{collection_id}")
+async def delete_collection(
+    collection_id: str,
+    service: EnhancedCameraService = Depends(get_camera_service)
+):
+    """Delete a collection"""
+    try:
+        # Prevent deletion of default collection
+        if collection_id == "default":
+            raise HTTPException(status_code=400, detail="Cannot delete the default collection")
+        
+        collections = service._load_collections()
+        
+        # Find the collection
+        collection = next((c for c in collections if c.id == collection_id), None)
+        if not collection:
+            raise HTTPException(status_code=404, detail="Collection not found")
+        
+        # Move all cameras in this collection to default
+        cameras = service._load_cameras()
+        for camera in cameras:
+            if camera.collection_id == collection_id:
+                camera.collection_id = "default"
+                camera.collection_name = "Default Collection"
+        service._save_cameras(cameras)
+        
+        # Remove the collection
+        collections = [c for c in collections if c.id != collection_id]
+        service._save_collections(collections)
+        
+        # Update collection counts
+        service._update_collection_counts()
+        
+        return {"success": True, "message": f"Collection '{collection.name}' deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting collection: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete collection")
 
 # Health check endpoint
 @router.get("/health")

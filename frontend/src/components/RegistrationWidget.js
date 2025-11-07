@@ -345,7 +345,7 @@ const RegistrationWidget = () => {
               <li>Optional columns: 'age', 'gender', 'category'</li>
               <li>Data folder should contain subfolders named after each person</li>
               <li>Each person's subfolder should contain their images (JPG, PNG, JPEG)</li>
-              <li>Valid categories: criminal, offender, chainsnatching, eve teasing, unknown, eagleemployee</li>
+              <li>Valid categories: criminal, offender, chain snatching, eve teasing, unknown, eagle employee</li>
             </ul>
           </div>
 

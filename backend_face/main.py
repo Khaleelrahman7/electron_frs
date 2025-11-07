@@ -1,13 +1,22 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import StreamingResponse, JSONResponse
+from pydantic import BaseModel
 import logging
 import os
 import json
+import uuid
+import time
+import cv2
+import threading
+from typing import Dict, Optional
+from face_pipeline import init as init_face_pipeline, process_frame
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+FACE_PIPELINE_READY = False
 
 # Create main FastAPI app
 app = FastAPI(
@@ -132,6 +141,14 @@ def mount_services():
 
 # Mount all services
 mount_services()
+# Initialize face pipeline (non-disruptive; skips if unavailable)
+try:
+    init_face_pipeline(os.path.join(os.path.dirname(__file__), "data"), ctx=0, det_size=(640, 640))
+    FACE_PIPELINE_READY = True
+    logger.info("✓ Face pipeline initialized")
+except Exception as e:
+    FACE_PIPELINE_READY = False
+    logger.error(f"✗ Face pipeline init failed: {e}")
 
 # Configure static file serving for gallery images and captured faces
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -207,18 +224,27 @@ async def get_captured_image(face_type: str, camera: str, person: str, image_nam
         person = person.replace('..', '').replace('/', '').replace('\\', '')
         image_name = image_name.replace('..', '').replace('/', '').replace('\\', '')
 
-        # Construct the image path
-        image_path = os.path.join(CAPTURED_FACES_DIR, face_type, camera, person, image_name)
+        base_dir = os.path.join(CAPTURED_FACES_DIR, face_type)
+        candidates = []
 
-        # Check if file exists and is within the captured faces directory
-        if not os.path.exists(image_path):
+        if camera == "default":
+            candidates.append(os.path.join(base_dir, image_name))
+            if person and person not in ["default", "unknown"]:
+                candidates.append(os.path.join(base_dir, person, image_name))
+        else:
+            candidates.append(os.path.join(base_dir, camera, person, image_name))
+            candidates.append(os.path.join(base_dir, camera, image_name))
+            if person and person not in ["default", "unknown"]:
+                candidates.append(os.path.join(base_dir, person, image_name))
+
+        image_path = next((path for path in candidates if os.path.exists(path)), None)
+
+        if not image_path:
             raise HTTPException(status_code=404, detail="Image not found")
 
-        # Ensure the path is within the captured faces directory (security check)
         if not os.path.abspath(image_path).startswith(os.path.abspath(CAPTURED_FACES_DIR)):
             raise HTTPException(status_code=403, detail="Access denied")
 
-        # Return the image file
         return FileResponse(
             image_path,
             media_type="image/jpeg",
@@ -247,9 +273,376 @@ async def root():
             "video": "/api/video",
             "status": "/api/status",
             "health": "/api/health",
-            "collections": "/api/collections"
+            "collections": "/api/collections",
+            "capture": "/capture_face_upload or /capture_face_b64"
         }
     }
+
+# ============= FACE CAPTURE ENDPOINTS =============
+
+class CaptureBase64(BaseModel):
+    """Pydantic model for base64 face capture requests"""
+    image_b64: str
+    label: str = "unknown"
+    confidence: Optional[float] = None
+
+@app.post("/capture_face_upload", tags=["Face Capture"])
+async def capture_face_upload(file: UploadFile = File(...), label: str = Form("unknown"), confidence: float = Form(None)):
+    """
+    Upload a face image file and save it to captured_faces.
+    
+    Parameters:
+    - file: JPEG/PNG image file
+    - label: Person name/label for the face (default: "unknown")
+    - confidence: Optional confidence score (0.0-1.0)
+    """
+    try:
+        from save_face import save_face_image
+        import numpy as np
+        
+        contents = await file.read()
+        nparr = np.frombuffer(contents, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        
+        if img is None:
+            raise HTTPException(status_code=400, detail="Invalid image format")
+        
+        saved = save_face_image(img, label, confidence=confidence, source="upload")
+        
+        return {
+            "saved": bool(saved),
+            "path": str(saved) if saved else None,
+            "label": label,
+            "source": "upload"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error uploading face image: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to save face: {str(e)}")
+
+@app.post("/capture_face_b64", tags=["Face Capture"])
+async def capture_face_b64(payload: CaptureBase64):
+    """
+    Capture face from base64 encoded image (typically from frontend video element).
+    
+    JSON payload:
+    {
+        "image_b64": "data:image/jpeg;base64,...",
+        "label": "person_name",
+        "confidence": 0.95
+    }
+    """
+    try:
+        from save_face import save_face_image
+        import base64
+        import numpy as np
+        
+        image_b64 = payload.image_b64
+        label = payload.label
+        confidence = payload.confidence
+        
+        if not image_b64:
+            raise HTTPException(status_code=400, detail="No image_b64 provided")
+        
+        # Handle data URL prefix (e.g., "data:image/jpeg;base64,...")
+        header, data = (image_b64.split(",", 1) if "," in image_b64 else (None, image_b64))
+        img_data = base64.b64decode(data)
+        nparr = np.frombuffer(img_data, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        
+        if img is None:
+            raise HTTPException(status_code=400, detail="Invalid image format")
+        
+        saved = save_face_image(img, label, confidence=confidence, source="upload")
+        
+        return {
+            "saved": bool(saved),
+            "path": str(saved) if saved else None,
+            "label": label,
+            "source": "upload_b64"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error capturing face from base64: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to save face: {str(e)}")
+
+# Simple stream management for compatibility with working implementation
+active_streams: Dict[str, Dict] = {}
+stream_lock = threading.Lock()
+
+class SimpleRTSPStream:
+    """Simple RTSP stream handler for MJPEG streaming"""
+
+    def __init__(self, rtsp_url: str, stream_id: str):
+        self.rtsp_url = rtsp_url
+        self.stream_id = stream_id
+        self.cap = None
+        self.is_running = False
+        self.lock = threading.Lock()
+        self.last_frame = None
+        self.thread = None
+
+    def start(self):
+        """Start the RTSP stream capture in a separate thread"""
+        with self.lock:
+            if self.is_running:
+                return
+
+            self.is_running = True
+            self.thread = threading.Thread(target=self._capture_frames, daemon=True)
+            self.thread.start()
+            logger.info(f"Started RTSP stream for {self.rtsp_url}")
+
+    def stop(self):
+        """Stop the RTSP stream capture"""
+        with self.lock:
+            self.is_running = False
+            if self.cap:
+                self.cap.release()
+                self.cap = None
+            logger.info(f"Stopped RTSP stream for {self.rtsp_url}")
+
+    def _capture_frames(self):
+        """Continuously capture frames from RTSP stream"""
+        retry_count = 0
+        max_retries = 5
+
+        while self.is_running:
+            try:
+                if self.cap is None or not self.cap.isOpened():
+                    logger.info(f"Connecting to RTSP stream: {self.rtsp_url}")
+                    # Handle camera index (0, 1, 2, etc.) vs RTSP URL
+                    if isinstance(self.rtsp_url, str) and self.rtsp_url.isdigit():
+                        self.cap = cv2.VideoCapture(int(self.rtsp_url))
+                    else:
+                        self.cap = cv2.VideoCapture(self.rtsp_url)
+
+                    if self.cap.isOpened():
+                        # Optimize capture settings for higher quality
+                        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                        self.cap.set(cv2.CAP_PROP_FPS, 25)
+                        # Try to maximize resolution
+                        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
+                        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+                        logger.info(f"Successfully connected to RTSP stream")
+                        retry_count = 0
+                    else:
+                        raise Exception("Failed to open camera")
+
+                # Read frame
+                ret, frame = self.cap.read()
+
+                if ret and frame is not None and frame.size > 0:
+                    with self.lock:
+                        self.last_frame = frame.copy()
+                    retry_count = 0
+                else:
+                    retry_count += 1
+                    if retry_count >= max_retries:
+                        logger.error(f"Too many consecutive failures for stream {self.stream_id}")
+                        if self.cap:
+                            self.cap.release()
+                            self.cap = None
+                        time.sleep(2)
+                        retry_count = 0
+                        continue
+
+                # Control frame rate
+                time.sleep(0.04)  # ~25 FPS
+
+            except Exception as e:
+                logger.error(f"Error in RTSP capture for {self.rtsp_url}: {e}")
+                if self.cap:
+                    self.cap.release()
+                    self.cap = None
+                time.sleep(2)
+
+    def get_frame(self) -> Optional[bytes]:
+        """Get the latest frame as JPEG bytes"""
+        with self.lock:
+            if self.last_frame is not None:
+                try:
+                    # Encode frame as JPEG with higher quality
+                    _, buffer = cv2.imencode('.jpg', self.last_frame, [cv2.IMWRITE_JPEG_QUALITY, 95])
+                    return buffer.tobytes()
+                except Exception as e:
+                    logger.error(f"Error encoding frame: {e}")
+                    return None
+            return None
+
+def generate_mjpeg_stream(stream_id: str):
+    """Generate MJPEG stream for a given stream ID"""
+    if stream_id not in active_streams:
+        logger.error(f"Stream {stream_id} not found")
+        return
+
+    stream = active_streams[stream_id]['stream']
+    logger.info(f"Starting MJPEG stream generation for {stream_id}")
+
+    try:
+        while True:
+            # Prefer raw frame for processing if pipeline ready
+            frame = None
+            if FACE_PIPELINE_READY:
+                try:
+                    with stream.lock:
+                        frame = stream.last_frame.copy() if getattr(stream, 'last_frame', None) is not None else None
+                except Exception:
+                    frame = None
+
+            if frame is not None:
+                try:
+                    processed_frame, _ = process_frame(frame)
+                except Exception as e:
+                    logger.debug(f"Face pipeline processing error for {stream_id}: {e}")
+                    processed_frame = frame
+                try:
+                    _, buffer = cv2.imencode('.jpg', processed_frame, [cv2.IMWRITE_JPEG_QUALITY, 95])
+                    yield (b'--frame\r\n'
+                           b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+                except Exception as e:
+                    logger.error(f"Error encoding processed frame for {stream_id}: {e}")
+                    time.sleep(0.033)
+                continue
+
+            # Fallback: use existing encoded frame path (no changes to behavior)
+            frame_data = stream.get_frame()
+            if frame_data:
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + frame_data + b'\r\n')
+            else:
+                # Send a small delay if no frame is available
+                time.sleep(0.033)  # ~30 FPS
+    except Exception as e:
+        logger.error(f"Error in MJPEG stream generation for {stream_id}: {e}")
+        return
+
+@app.get("/api/video_feed/{stream_id}")
+async def video_feed(stream_id: str):
+    """Serve MJPEG video feed for a specific stream"""
+    logger.info(f"Video feed requested for stream: {stream_id}")
+
+    if stream_id not in active_streams:
+        logger.error(f"Stream {stream_id} not found in active streams")
+        return JSONResponse({"error": "Stream not found"}, status_code=404)
+
+    stream = active_streams[stream_id]['stream']
+    if not stream.is_running:
+        logger.error(f"Stream {stream_id} is not running")
+        return JSONResponse({"error": "Stream not running"}, status_code=404)
+
+    logger.info(f"Serving MJPEG video feed for stream: {stream_id}")
+    return StreamingResponse(
+        generate_mjpeg_stream(stream_id),
+        media_type='multipart/x-mixed-replace; boundary=frame',
+        headers={
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+        }
+    )
+
+@app.get("/api/get_stream_for_camera")
+async def get_stream_for_camera(camera_ip: str, collection_name: str = None):
+    """Get existing stream information for a camera"""
+    try:
+        # Generate consistent stream ID
+        if not collection_name:
+            collection_name = 'default'
+
+        consistent_stream_id = f"{collection_name}_{camera_ip}"
+
+        # Check if stream already exists
+        if consistent_stream_id in active_streams:
+            existing_stream = active_streams[consistent_stream_id]
+            if existing_stream['stream'].is_running:
+                return JSONResponse({
+                    "success": True,
+                    "stream_id": consistent_stream_id,
+                    "feed_url": f"/api/video_feed/{consistent_stream_id}",
+                    "exists": True,
+                    "is_running": True
+                })
+
+        return JSONResponse({
+            "success": True,
+            "stream_id": consistent_stream_id,
+            "feed_url": f"/api/video_feed/{consistent_stream_id}",
+            "exists": False,
+            "is_running": False
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting stream for camera: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.post("/api/start_stream")
+async def start_stream(request: Request):
+    """Start a new RTSP stream"""
+    try:
+        body = await request.json()
+        rtsp_url = body.get("rtsp_url")
+        stream_id = body.get("stream_id")
+
+        if not rtsp_url or not stream_id:
+            return JSONResponse({"error": "rtsp_url and stream_id are required"}, status_code=400)
+
+        # Check if stream already exists and is running
+        if stream_id in active_streams:
+            existing_stream = active_streams[stream_id]
+            if existing_stream['stream'].is_running and existing_stream['rtsp_url'] == rtsp_url:
+                logger.debug(f"Stream {stream_id} already exists and running, reusing...")
+                return JSONResponse({
+                    "success": True,
+                    "stream_id": stream_id,
+                    "feed_url": f"/api/video_feed/{stream_id}",
+                    "reused": True
+                })
+            else:
+                # Stop existing stream if URL is different or not running
+                logger.info(f"Stopping existing stream {stream_id}")
+                existing_stream['stream'].stop()
+                del active_streams[stream_id]
+
+        # Create new stream
+        logger.info(f"Creating new stream {stream_id} for URL: {rtsp_url}")
+        stream = SimpleRTSPStream(rtsp_url, stream_id)
+        stream.start()
+
+        active_streams[stream_id] = {
+            'stream': stream,
+            'rtsp_url': rtsp_url,
+            'created_at': time.time()
+        }
+
+        logger.info(f"Started stream {stream_id} for URL: {rtsp_url}")
+
+        return JSONResponse({
+            "success": True,
+            "stream_id": stream_id,
+            "feed_url": f"/api/video_feed/{stream_id}"
+        })
+
+    except Exception as e:
+        logger.error(f"Error starting stream: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.delete("/api/stop_stream/{stream_id}")
+async def stop_stream(stream_id: str):
+    """Stop a specific stream"""
+    try:
+        if stream_id in active_streams:
+            active_streams[stream_id]['stream'].stop()
+            del active_streams[stream_id]
+            logger.info(f"Stopped stream {stream_id}")
+            return JSONResponse({"success": True, "message": f"Stream {stream_id} stopped"})
+        else:
+            return JSONResponse({"error": "Stream not found"}, status_code=404)
+    except Exception as e:
+        logger.error(f"Error stopping stream {stream_id}: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 @app.options("/{full_path:path}")
 async def options_handler(full_path: str):

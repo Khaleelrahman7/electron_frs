@@ -57,7 +57,17 @@ const MJPEGStreamPlayer = ({ camera }) => {
       setErrorMessage('');
       setStreamId(newStreamId);
 
-      // First, check if a stream already exists for this camera
+      // CHECK 1: If camera has an ID, it's from camera management - use enhanced stream
+      if (camera.id) {
+        console.log(`Camera ${camera.id} is from camera management, using enhanced stream endpoint`);
+        const enhancedStreamUrl = `${API_BASE_URL}/api/collections/cameras/${camera.id}/stream`;
+        setStreamUrl(enhancedStreamUrl);
+        setRetryCount(0);
+        console.log(`Using enhanced stream: ${enhancedStreamUrl}`);
+        return;
+      }
+
+      // CHECK 2: For non-camera-management cameras, check if legacy stream exists
       let collectionName = 'default';
 
       // Use the same logic as generateStreamId for consistency
@@ -95,6 +105,7 @@ const MJPEGStreamPlayer = ({ camera }) => {
         console.log('Could not check for existing stream, proceeding with new stream creation');
       }
 
+      // CHECK 3: Only create new legacy stream if camera doesn't have ID
       // Check if we have an RTSP URL
       let rtspUrl = camera.streamUrl;
 

@@ -13,6 +13,13 @@ const VideoWidget = () => {
   const fileInputRef = useRef(null);
   const progressIntervalRef = useRef(null);
 
+  // Helper function to format time in seconds to MM:SS format
+  const formatTime = (seconds) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+  };
+
   const handleFileSelect = (event) => {
     const file = event.target.files[0];
     if (file) {
@@ -301,8 +308,71 @@ const VideoWidget = () => {
               <div className="persons-list">
                 {results.detected_persons.map((person, index) => (
                   <div key={index} className="person-item">
-                    <span className="person-name">{person.name}</span>
-                    <span className="person-count">{person.count} detections</span>
+                    <div className="person-header">
+                      <span className="person-name">{person.name}</span>
+                      <span className="person-count">{person.count} detections</span>
+                      {person.total_duration && (
+                        <span className="person-duration">
+                          Duration: {person.total_duration.toFixed(1)}s
+                        </span>
+                      )}
+                    </div>
+                    
+                    {/* Show appearance intervals if available */}
+                    {results.person_tracking && results.person_tracking[person.name] && 
+                     results.person_tracking[person.name].appearances && (
+                      <div className="person-appearances">
+                        <h5>Appearances:</h5>
+                        {results.person_tracking[person.name].appearances.map((appearance, idx) => (
+                          <div key={idx} className="appearance-item">
+                            <span className="appearance-time">
+                              {formatTime(appearance.start_time)} - {formatTime(appearance.end_time)}
+                            </span>
+                            <span className="appearance-confidence">
+                              Confidence: {appearance.confidence.toFixed(1)}%
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {/* Show face detections if available */}
+                    {results.face_detections && (
+                      <div className="face-detections">
+                        <h5>Face Detections:</h5>
+                        <div className="detection-list">
+                          {results.face_detections
+                            .filter(detection => 
+                              detection.faces.some(face => face.name === person.name)
+                            )
+                            .slice(0, 5) // Show first 5 detections
+                            .map((detection, idx) => {
+                              const personFace = detection.faces.find(face => face.name === person.name);
+                              return (
+                                <div key={idx} className="detection-item">
+                                  <div className="detection-info">
+                                    <span className="detection-time">
+                                      Time: {formatTime(detection.timestamp)}
+                                    </span>
+                                    <span className="detection-confidence">
+                                      Confidence: {personFace.confidence.toFixed(1)}%
+                                    </span>
+                                  </div>
+                                  {personFace.face_image && (
+                                    <img 
+                                      src={`data:image/jpeg;base64,${personFace.face_image}`}
+                                      alt={`${person.name} at ${formatTime(detection.timestamp)}`}
+                                      className="face-thumbnail"
+                                      style={{ width: '50px', height: '50px', objectFit: 'cover' }}
+                                    />
+                                  )}
+                                </div>
+                              );
+                            })
+                          }
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

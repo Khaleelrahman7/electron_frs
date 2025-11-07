@@ -50,7 +50,7 @@ export const useCameraStore = create((set, get) => ({
   },
 
   // Add new camera
-  addCamera: async (name, streamUrl, collectionId = null) => {
+  addCamera: async (name, streamUrl, collectionId = null, location = '') => {
     set({ loading: true, error: null });
     try {
       const response = await fetch(`${API_BASE_URL}/api/collections/cameras`, {
@@ -61,7 +61,8 @@ export const useCameraStore = create((set, get) => ({
         body: JSON.stringify({
           name: name.trim(),
           rtsp_url: streamUrl.trim(),
-          collection_id: collectionId || 'default'
+          collection_id: collectionId || 'default',
+          location: location.trim()
         }),
       });
 
@@ -93,12 +94,23 @@ export const useCameraStore = create((set, get) => ({
   updateCamera: async (cameraId, updates) => {
     set({ loading: true, error: null });
     try {
+      // Map frontend field names to backend field names
+      const backendUpdates = {
+        ...updates,
+        rtsp_url: updates.streamUrl || updates.rtsp_url,
+        collection_id: updates.collectionId || updates.collection_id
+      };
+      
+      // Remove frontend-only fields
+      delete backendUpdates.streamUrl;
+      delete backendUpdates.collectionId;
+      
       const response = await fetch(`${API_BASE_URL}/api/collections/cameras/${cameraId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(updates),
+        body: JSON.stringify(backendUpdates),
       });
 
       if (!response.ok) {
@@ -245,8 +257,9 @@ export const useCameraStore = create((set, get) => ({
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to create collection');
+        const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+        const errorMessage = errorData.detail || errorData.message || 'Failed to create collection';
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
@@ -263,25 +276,85 @@ export const useCameraStore = create((set, get) => ({
 
   renameCollection: async (collectionId, newName) => {
     try {
-      // This would be implemented when the backend supports it
-      set(state => ({
-        collections: state.collections.map(c => 
-          c.id === collectionId ? { ...c, name: newName } : c
-        )
-      }));
+      const response = await fetch(`${API_BASE_URL}/api/collections/${collectionId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: newName
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+        const errorMessage = errorData.detail || errorData.message || 'Failed to rename collection';
+        throw new Error(errorMessage);
+      }
+
+      const result = await response.json();
+      
+      // Refresh collections
+      await get().fetchCameras(get().currentPage);
+      
+      return result;
     } catch (error) {
       console.error('Error renaming collection:', error);
       throw error;
     }
   },
 
+  updateCollection: async (collectionId, updates) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/collections/${collectionId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updates),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+        const errorMessage = errorData.detail || errorData.message || 'Failed to update collection';
+        throw new Error(errorMessage);
+      }
+
+      const result = await response.json();
+      
+      // Refresh collections
+      await get().fetchCameras(get().currentPage);
+      
+      return result;
+    } catch (error) {
+      console.error('Error updating collection:', error);
+      throw error;
+    }
+  },
+
   deleteCollection: async (collectionId) => {
     try {
-      // This would be implemented when the backend supports it
-      set(state => ({
-        collections: state.collections.filter(c => c.id !== collectionId),
-        cameras: state.cameras.filter(c => c.collection_id !== collectionId)
-      }));
+      const response = await fetch(`${API_BASE_URL}/api/collections/${collectionId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+        const errorMessage = errorData.detail || errorData.message || 'Failed to delete collection';
+        throw new Error(errorMessage);
+      }
+
+      const result = await response.json();
+      
+      // Refresh collections
+      await get().fetchCameras(get().currentPage);
+      
+      // If the deleted collection was selected, switch to 'all'
+      if (get().activeCollection === collectionId) {
+        set({ activeCollection: 'default' });
+      }
+      
+      return result;
     } catch (error) {
       console.error('Error deleting collection:', error);
       throw error;

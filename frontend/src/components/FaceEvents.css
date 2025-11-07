@@ -14,6 +14,11 @@
   font-size: 0.9rem;
 }
 
+.nav-btn.active-btn {
+  box-shadow: 0 0 0 2px rgba(49, 130, 206, 0.4) inset;
+  color: #fff;
+}
+
 .known-btn {
   background-color: #38a169;
 }

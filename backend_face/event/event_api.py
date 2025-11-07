@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Query, UploadFile, File
 from pydantic import BaseModel
 import os
 import shutil
+import re
 from typing import List, Optional
 from datetime import datetime
 import logging
@@ -14,32 +15,35 @@ from .config import KNOWN_FACES_DIR, UNKNOWN_FACES_DIR
 API_BASE_URL = "http://localhost:8000"
 
 def convert_file_path_to_url(file_path: str) -> str:
-    """Convert a file path to an HTTP URL for serving images"""
     try:
-        # Normalize the path
-        file_path = os.path.normpath(file_path)
+        normalized_path = os.path.normpath(file_path)
+        known_root = os.path.normpath(KNOWN_FACES_DIR)
+        unknown_root = os.path.normpath(UNKNOWN_FACES_DIR)
 
-        # Check if it's a known or unknown face
-        if "known" in file_path:
-            # Extract components for known faces: camera/person/image
-            parts = file_path.split(os.sep)
-            known_idx = parts.index("known")
-            if len(parts) > known_idx + 3:
-                camera = parts[known_idx + 1]
-                person = parts[known_idx + 2]
-                image_name = parts[known_idx + 3]
-                return f"{API_BASE_URL}/api/captured/image/known/{camera}/{person}/{image_name}"
-        elif "unknown" in file_path:
-            # Extract components for unknown faces: camera/image
-            parts = file_path.split(os.sep)
-            unknown_idx = parts.index("unknown")
-            if len(parts) > unknown_idx + 2:
-                camera = parts[unknown_idx + 1]
-                image_name = parts[unknown_idx + 2]
-                return f"{API_BASE_URL}/api/captured/image/unknown/{camera}/unknown/{image_name}"
+        if normalized_path.startswith(known_root):
+            relative_path = os.path.relpath(normalized_path, known_root)
+            parts = relative_path.split(os.sep)
+            image_name = parts[-1]
+            if len(parts) >= 3:
+                camera_name = parts[0]
+                person_name = parts[1]
+                return f"{API_BASE_URL}/api/captured/image/known/{camera_name}/{person_name}/{image_name}"
+            if len(parts) >= 2:
+                person_name = parts[-2]
+                return f"{API_BASE_URL}/api/captured/image/known/default/{person_name}/{image_name}"
+            return f"{API_BASE_URL}/api/captured/image/known/default/default/{image_name}"
 
-        # Fallback: return the original path (shouldn't happen in normal cases)
-        return file_path
+        if normalized_path.startswith(unknown_root):
+            relative_path = os.path.relpath(normalized_path, unknown_root)
+            parts = relative_path.split(os.sep)
+            image_name = parts[-1]
+            if len(parts) >= 2:
+                camera_name = parts[0]
+            else:
+                camera_name = "default"
+            return f"{API_BASE_URL}/api/captured/image/unknown/{camera_name}/unknown/{image_name}"
+
+        return normalized_path
     except Exception as e:
         logger.warning(f"Error converting file path to URL: {file_path}, error: {e}")
         return file_path
@@ -125,120 +129,128 @@ async def filter_faces(
     name: Optional[str] = Query(None, description="Filter by name"),
     from_date: Optional[str] = Query(None, description="Start date in YYYY-MM-DD format"),
     to_date: Optional[str] = Query(None, description="End date in YYYY-MM-DD format"),
-    camera: Optional[str] = Query("all_cameras", description="Filter by camera")
+    camera: Optional[str] = Query("all_cameras", description="Filter by camera"),
+    face_type: Optional[str] = Query(None, description="Filter by face type: known or unknown")
 ):
     """Filter faces by name, date range, and camera."""
-    # Validate date range if both dates are provided
-    if from_date and to_date:
-        try:
-            from_dt = datetime.strptime(from_date, "%Y-%m-%d")
-            to_dt = datetime.strptime(to_date, "%Y-%m-%d")
-            if from_dt > to_dt:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Invalid date range: from_date cannot be later than to_date"
-                )
-        except ValueError as e:
+    name_filter = name.lower().strip() if name else None
+    from_date_obj = None
+    to_date_obj = None
+    face_type_filter = None
+
+    if face_type:
+        normalized_face_type = face_type.lower().strip()
+        if normalized_face_type not in {"known", "unknown"}:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid date format. Please use YYYY-MM-DD format: {str(e)}"
+                detail="Invalid face type. Allowed values are 'known' or 'unknown'"
             )
+        face_type_filter = normalized_face_type
 
-    matching_faces = []
-    
-    # Helper function to process a directory
-    def process_directory(base_dir, face_type):
+    try:
+        if from_date:
+            from_date_obj = datetime.strptime(from_date, "%Y-%m-%d").date()
+        if to_date:
+            to_date_obj = datetime.strptime(to_date, "%Y-%m-%d").date()
+        if from_date_obj and to_date_obj and from_date_obj > to_date_obj:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid date range: from_date cannot be later than to_date"
+            )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid date format. Please use YYYY-MM-DD format: {exc}"
+        ) from exc
+
+    timestamp_regex = re.compile(r"(\d{8}_\d{6}(?:_\d{3,6})?)")
+
+    def extract_timestamp(face_file: str, img_path: str) -> datetime:
+        match = timestamp_regex.search(face_file)
+        if match:
+            raw = match.group(1)
+            for fmt in ("%Y%m%d_%H%M%S_%f", "%Y%m%d_%H%M%S"):
+                try:
+                    return datetime.strptime(raw, fmt)
+                except ValueError:
+                    continue
+        try:
+            return datetime.fromtimestamp(os.path.getmtime(img_path))
+        except Exception:
+            return datetime.utcnow()
+
+    def resolve_known_metadata(parts: List[str], face_file: str) -> tuple[str, str]:
+        image_name = parts[-1] if parts else face_file
+        if len(parts) >= 3:
+            return parts[1], parts[0]
+        if len(parts) >= 2:
+            person = parts[-2]
+            camera_name = parts[0] if parts[0].lower().startswith("camera_") else "default"
+            return person, camera_name
+        base_name = os.path.splitext(image_name)[0]
+        match = timestamp_regex.search(base_name)
+        if match:
+            person = base_name[:match.start()].rstrip('_') or "Unknown"
+        else:
+            splits = base_name.split('_')
+            person = splits[0] if splits else base_name
+        return person, "default"
+
+    def resolve_unknown_metadata(parts: List[str]) -> str:
+        if len(parts) >= 2:
+            return parts[0]
+        return "default"
+
+    def process_directory(base_dir: str, directory_type: str):
+        if face_type_filter and face_type_filter != directory_type:
+            return []
         if not os.path.exists(base_dir):
             return []
-            
         faces = []
-        for camera_dir in os.listdir(base_dir):
-            camera_path = os.path.join(base_dir, camera_dir)
-            if not os.path.isdir(camera_path):
-                continue
-                
-            # Skip if camera filter is set and doesn't match
-            if camera != "all_cameras" and camera_dir != camera:
-                continue
-                
-            # For known faces, process person directories
-            if face_type == "known":
-                for person_dir in os.listdir(camera_path):
-                    person_path = os.path.join(camera_path, person_dir)
-                    if not os.path.isdir(person_path):
+        for root_dir, _, files in os.walk(base_dir):
+            for face_file in files:
+                if not face_file.lower().endswith((".jpg", ".jpeg", ".png")):
+                    continue
+                img_path = os.path.join(root_dir, face_file)
+                if not os.path.isfile(img_path):
+                    continue
+
+                timestamp = extract_timestamp(face_file, img_path)
+                timestamp_date = timestamp.date()
+                if from_date_obj and timestamp_date < from_date_obj:
+                    continue
+                if to_date_obj and timestamp_date > to_date_obj:
+                    continue
+
+                relative_path = os.path.relpath(img_path, base_dir)
+                parts = relative_path.split(os.sep)
+
+                if directory_type == "known":
+                    person_name, camera_name = resolve_known_metadata(parts, face_file)
+                    if name_filter and name_filter not in person_name.lower():
                         continue
-                        
-                    # Skip if name filter is set and doesn't match
-                    if name and name.lower() not in person_dir.lower():
+                else:
+                    camera_name = resolve_unknown_metadata(parts)
+                    person_name = "Unknown"
+                    if name_filter and name_filter not in "unknown":
                         continue
-                        
-                    for face_file in os.listdir(person_path):
-                        img_path = os.path.join(person_path, face_file)
-                        if not os.path.isfile(img_path):
-                            continue
-                            
-                        try:
-                            timestamp_str = face_file.split('_', 1)[1].rsplit('.', 1)[0]
-                            timestamp = datetime.strptime(timestamp_str, "%Y%m%d_%H%M%S")
-                            
-                            # Apply date filters
-                            if from_date and timestamp < datetime.strptime(from_date, "%Y-%m-%d"):
-                                continue
-                            if to_date and timestamp > datetime.strptime(to_date, "%Y-%m-%d"):
-                                continue
-                                
-                            faces.append({
-                                "name": person_dir,
-                                "image_path": convert_file_path_to_url(img_path),
-                                "timestamp": timestamp.isoformat(),
-                                "type": "known",
-                                "camera": camera_dir
-                            })
-                        except (ValueError, IndexError) as e:
-                            logger.warning(f"Error processing file {face_file}: {e}")
-                            continue
-                            
-            # For unknown faces, process directly in camera directory
-            else:
-                for face_file in os.listdir(camera_path):
-                    img_path = os.path.join(camera_path, face_file)
-                    if not os.path.isfile(img_path):
-                        continue
-                        
-                    try:
-                        timestamp_str = face_file.split('_', 1)[1].rsplit('.', 1)[0]
-                        timestamp = datetime.strptime(timestamp_str, "%Y%m%d_%H%M%S")
-                        
-                        # Apply date filters
-                        if from_date and timestamp < datetime.strptime(from_date, "%Y-%m-%d"):
-                            continue
-                        if to_date and timestamp > datetime.strptime(to_date, "%Y-%m-%d"):
-                            continue
-                            
-                        faces.append({
-                            "name": "Unknown",
-                            "image_path": convert_file_path_to_url(img_path),
-                            "timestamp": timestamp.isoformat(),
-                            "type": "unknown",
-                            "camera": camera_dir
-                        })
-                    except (ValueError, IndexError) as e:
-                        logger.warning(f"Error processing file {face_file}: {e}")
-                        continue
-                        
+
+                if camera and camera != "all_cameras" and camera_name != camera:
+                    continue
+
+                faces.append({
+                    "name": person_name,
+                    "image_path": convert_file_path_to_url(img_path),
+                    "timestamp": timestamp.isoformat(),
+                    "type": directory_type,
+                    "camera": camera_name
+                })
         return faces
-    
-    # Process known faces
-    known_faces = process_directory(KNOWN_FACES_DIR, "known")
-    matching_faces.extend(known_faces)
-    
-    # Process unknown faces
-    unknown_faces = process_directory(UNKNOWN_FACES_DIR, "unknown")
-    matching_faces.extend(unknown_faces)
-    
-    # Sort faces by timestamp (newest first)
-    matching_faces.sort(key=lambda x: x["timestamp"], reverse=True)
-    
+
+    matching_faces = []
+    matching_faces.extend(process_directory(KNOWN_FACES_DIR, "known"))
+    matching_faces.extend(process_directory(UNKNOWN_FACES_DIR, "unknown"))
+    matching_faces.sort(key=lambda item: item["timestamp"], reverse=True)
     return matching_faces
 
 @router.get("/directories")
@@ -312,7 +324,7 @@ async def match_face(image: UploadFile = File(...)):
                                             timestamp = datetime.fromtimestamp(os.path.getctime(img_path))
                                         
                                         matching_faces.append(FaceMatch(
-                                            image_path=img_path,
+                                            image_path=convert_file_path_to_url(img_path),
                                             name=person_name,
                                             confidence=float(confidence),
                                             timestamp=timestamp.isoformat()

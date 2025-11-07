@@ -56,12 +56,15 @@ const StreamViewer = () => {
 
   // Convert camera data to format expected by MJPEGPlayer
   const convertCameraToPlayerFormat = (camera) => {
+    const resolvedIp = camera.ip_address || camera.ip || extractIPFromRTSP(camera.rtsp_url);
+    const resolvedCollection = camera.collection_id || camera.collectionId || camera.collection_name || 'default';
+
     return {
-      id: camera.id, // Keep the original camera ID for API calls
+      id: camera.id,
       name: camera.name,
-      ip: extractIPFromRTSP(camera.rtsp_url),
+      ip: resolvedIp,
       streamUrl: camera.rtsp_url,
-      collectionId: camera.collection_id || 'default',
+      collectionId: resolvedCollection,
       isActive: camera.is_active
     };
   };

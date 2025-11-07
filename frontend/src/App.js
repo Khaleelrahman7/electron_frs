@@ -4,22 +4,31 @@ import FaceGallery from './components/FaceGallery';
 import EventsWidget from './components/EventsWidget';
 import RegistrationWidget from './components/RegistrationWidget';
 import VideoWidget from './components/VideoWidget';
+import FaceMatching from './components/FaceMatching';
 import { CameraProvider } from './components/camera/CameraManager';
 import SimpleCameraManager from './components/camera/SimpleCameraManager';
 import StreamViewer from './components/StreamViewer';
-import WebRTCTest from './components/camera/WebRTCTest';
+
+// Import SVG icons
+import { ReactComponent as GalleryIcon } from './icon/gallery.svg';
+import { ReactComponent as EventsIcon } from './icon/Events.svg';
+import { ReactComponent as RegistrationIcon } from './icon/registration.svg';
+import { ReactComponent as FaceMatchingIcon } from './icon/face_matching.svg';
+import { ReactComponent as VideoIcon } from './icon/video_processing.svg';
+import { ReactComponent as CameraIcon } from './icon/camera.svg';
+import { ReactComponent as StreamViewerIcon } from './icon/stream_viewer.svg';
 
 function App() {
   const [activeTab, setActiveTab] = useState('gallery');
 
   const tabs = [
-    { id: 'gallery', label: 'Gallery', icon: '👥' },
-    { id: 'events', label: 'Events', icon: '📅' },
-    { id: 'registration', label: 'Registration', icon: '➕' },
-    { id: 'video', label: 'Video Processing', icon: '🎥' },
-    { id: 'camera', label: 'Camera Management', icon: '📹' },
-    { id: 'stream-viewer', label: 'Stream Viewer', icon: '📺' },
-    { id: 'webrtc-test', label: 'WebRTC Test', icon: '🔴' }
+    { id: 'gallery', label: 'Gallery', icon: <GalleryIcon /> },
+    { id: 'events', label: 'Events', icon: <EventsIcon /> },
+    { id: 'registration', label: 'Registration', icon: <RegistrationIcon /> },
+    { id: 'matching', label: 'Face Matching', icon: <FaceMatchingIcon /> },
+    { id: 'video', label: 'Video Processing', icon: <VideoIcon /> },
+    { id: 'camera', label: 'Camera Management', icon: <CameraIcon /> },
+    { id: 'stream-viewer', label: 'Stream Viewer', icon: <StreamViewerIcon /> },
   ];
 
   const renderActiveComponent = () => {
@@ -30,6 +39,8 @@ function App() {
         return <EventsWidget />;
       case 'registration':
         return <RegistrationWidget />;
+      case 'matching':
+        return <FaceMatching />;
       case 'video':
         return <VideoWidget />;
       case 'camera':
@@ -49,26 +60,30 @@ function App() {
 
   return (
     <div className="app">
-      <header className="app-header">
-        <h1>🔍 Face Recognition System</h1>
-        <nav className="tab-navigation">
-          {tabs.map(tab => (
-            <button
-              key={tab.id}
-              className={`tab-button ${activeTab === tab.id ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab.id)}
-              title={tab.label}
-            >
-              <span className="tab-icon">{tab.icon}</span>
-              <span className="tab-label">{tab.label}</span>
-            </button>
-          ))}
-        </nav>
-      </header>
+      <div className="app-layout">
+        <aside className="sidebar">
+          <div className="sidebar-header">
+            <h1>🔍 Face Recognition System</h1>
+          </div>
+          <nav className="sidebar-navigation">
+            {tabs.map(tab => (
+              <button
+                key={tab.id}
+                className={`sidebar-button ${activeTab === tab.id ? 'active' : ''}`}
+                onClick={() => setActiveTab(tab.id)}
+                title={tab.label}
+              >
+                <span className="sidebar-icon">{tab.icon}</span>
+                <span className="sidebar-label">{tab.label}</span>
+              </button>
+            ))}
+          </nav>
+        </aside>
 
-      <main className="app-content">
-        {renderActiveComponent()}
-      </main>
+        <main className="main-content">
+          {renderActiveComponent()}
+        </main>
+      </div>
     </div>
   );
 }

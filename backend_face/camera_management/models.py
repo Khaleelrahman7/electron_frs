@@ -1,4 +1,5 @@
 from pydantic import BaseModel, validator
+from pydantic import BaseModel, validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 import re
@@ -10,6 +11,26 @@ class CameraCollection(BaseModel):
     description: Optional[str] = None
     created_at: datetime
     camera_count: int = 0
+
+class CollectionCreateRequest(BaseModel):
+    name: str
+    description: Optional[str] = None
+    
+    @validator('name')
+    def validate_name(cls, v):
+        if not v or not v.strip():
+            raise ValueError("Collection name is required")
+        return v.strip()
+
+class CollectionUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    
+    @validator('name')
+    def validate_name(cls, v):
+        if v is not None and (not v or not v.strip()):
+            raise ValueError("Collection name cannot be empty")
+        return v.strip() if v else None
 
 class CameraValidationRequest(BaseModel):
     ip: str
@@ -30,6 +51,7 @@ class EnhancedCamera(BaseModel):
     collection_id: Optional[str] = None
     collection_name: Optional[str] = None
     ip_address: Optional[str] = None
+    location: Optional[str] = None
     status: str = "inactive"
     created_at: datetime
     last_seen: Optional[datetime] = None
@@ -40,6 +62,7 @@ class CameraCreateRequest(BaseModel):
     name: str
     rtsp_url: str
     collection_id: Optional[str] = None
+    location: Optional[str] = None
 
     @validator('rtsp_url')
     def validate_rtsp_url(cls, v):
@@ -47,8 +70,13 @@ class CameraCreateRequest(BaseModel):
             raise ValueError("RTSP URL is required")
         
         v = v.strip()
+        
+        # Allow local camera indices (0, 1, 2, etc.) for testing
+        if v.isdigit():
+            return v
+        
         if not (v.startswith('rtsp://') or v.startswith('http://')):
-            raise ValueError("Stream URL must start with rtsp:// or http://")
+            raise ValueError("Stream URL must start with rtsp://, http://, or be a camera index (0, 1, 2)")
         
         # Extract IP address for validation
         ip_pattern = r'(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'
@@ -77,10 +105,15 @@ class CameraUpdateRequest(BaseModel):
     name: Optional[str] = None
     rtsp_url: Optional[str] = None
     collection_id: Optional[str] = None
+    location: Optional[str] = None
 
     @validator('rtsp_url')
     def validate_rtsp_url(cls, v):
         if v is not None:
+            v = v.strip()
+            # Allow local camera indices
+            if v.isdigit():
+                return v
             return CameraCreateRequest.validate_rtsp_url(v)
         return v
 
@@ -106,13 +139,26 @@ class CameraOperationResponse(BaseModel):
     error: Optional[str] = None
 
 def extract_ip_from_url(url: str) -> Optional[str]:
-    """Extract IP address from RTSP/HTTP URL"""
+    """Extract IP address from RTSP/HTTP URL or camera index for local cameras"""
+    # Check if it's a local camera index (just a number)
+    if re.match(r'^\d+$', url):
+        return url  # Return the index as-is for camera indices
+    
     ip_pattern = r'(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'
     match = re.search(ip_pattern, url)
     return match.group(1) if match else None
 
 def validate_private_ip(ip: str) -> Dict[str, Any]:
-    """Validate if IP is within private network ranges"""
+    """Validate if IP is within private network ranges or is a valid camera index"""
+    # Check if it's a local camera index (just a number)
+    if re.match(r'^\d+$', ip):
+        return {
+            "isValid": True,
+            "ip": ip,
+            "type": "camera_index",
+            "message": f"Valid local camera index: {ip}"
+        }
+    
     try:
         ip_obj = ipaddress.IPv4Address(ip)
         is_valid = ip_obj.is_private

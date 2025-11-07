@@ -6,6 +6,7 @@ import './AddCameraForm.css';
 const AddCameraForm = ({ collectionId, onClose, editingCamera = null }) => {
   const { addCamera, updateCamera, removeCamera, collections, activeCollection } = useCameras();
   const [cameraName, setCameraName] = useState('');
+  const [location, setLocation] = useState('');
   const [streamUrl, setStreamUrl] = useState('');
   const [selectedCollection, setSelectedCollection] = useState(null);
   const [showForm, setShowForm] = useState(true);
@@ -18,9 +19,11 @@ const AddCameraForm = ({ collectionId, onClose, editingCamera = null }) => {
   useEffect(() => {
     if (editingCamera) {
       setCameraName(editingCamera.name);
+      setLocation(editingCamera.location || '');
       setStreamUrl(editingCamera.streamUrl);
     } else {
       setCameraName('');
+      setLocation('');
       setStreamUrl('');
     }
   }, [editingCamera]);
@@ -79,23 +82,36 @@ const AddCameraForm = ({ collectionId, onClose, editingCamera = null }) => {
       return false;
     }
 
-    if (!streamUrl.trim().startsWith('rtsp://') && !streamUrl.trim().startsWith('http://')) {
-      setError('Stream URL must start with rtsp:// or http://');
+    const trimmedUrl = streamUrl.trim();
+
+    // Allow local camera indices (0, 1, 2, etc.) for testing
+    const isCameraIndex = /^\d+$/.test(trimmedUrl);
+    
+    if (!isCameraIndex && !trimmedUrl.startsWith('rtsp://') && !trimmedUrl.startsWith('http://')) {
+      setError('Stream URL must start with rtsp://, http://, or be a camera index (0, 1, 2...)');
       return false;
     }
 
-    // Extract IP address from stream URL for validation
-    const extractedIP = extractIPFromStreamURL(streamUrl.trim());
-    if (!extractedIP) {
-      setError('Could not extract IP address from stream URL. Please ensure the URL contains a valid IP address.');
-      return false;
-    }
+    let extractedIP = null;
 
-    // Basic client-side IP validation
-    const ipValidation = validatePrivateIP(extractedIP);
-    if (!ipValidation.isValid) {
-      setError(`Camera IP address (${extractedIP}) must be within private network ranges:\n• 192.168.0.0 – 192.168.255.255 (most common)\n• 10.0.0.0 – 10.255.255.255\n• 172.16.0.0 – 172.31.255.255`);
-      return false;
+    // Skip IP validation for local camera indices
+    if (!isCameraIndex) {
+      // Extract IP address from stream URL for validation
+      extractedIP = extractIPFromStreamURL(trimmedUrl);
+      if (!extractedIP) {
+        setError('Could not extract IP address from stream URL. Please ensure the URL contains a valid IP address.');
+        return false;
+      }
+
+      // Basic client-side IP validation
+      const ipValidation = validatePrivateIP(extractedIP);
+      if (!ipValidation.isValid) {
+        setError(`Camera IP address (${extractedIP}) must be within private network ranges:\n• 192.168.0.0 – 192.168.255.255 (most common)\n• 10.0.0.0 – 10.255.255.255\n• 172.16.0.0 – 172.31.255.255`);
+        return false;
+      }
+    } else {
+      // For camera indices, use the index as the IP for backend validation
+      extractedIP = trimmedUrl;
     }
 
     // Backend validation including duplicate checking
@@ -104,7 +120,7 @@ const AddCameraForm = ({ collectionId, onClose, editingCamera = null }) => {
     const targetCollection = collections.find(c => c.id === targetCollectionId);
     const collectionName = targetCollection?.name;
 
-    const excludeIp = editingCamera ? extractIPFromStreamURL(editingCamera.streamUrl) : null;
+    const excludeIp = editingCamera ? extractIPFromStreamURL(editingCamera.streamUrl) || editingCamera.streamUrl : null;
 
     const validation = await validateCameraData(
       extractedIP,
@@ -142,16 +158,18 @@ const AddCameraForm = ({ collectionId, onClose, editingCamera = null }) => {
         // Update existing camera
         await updateCamera(editingCamera.id, {
           name: cameraName.trim(),
+          location: location.trim(),
           streamUrl: streamUrl.trim(),
           collectionId: targetCollectionId
         });
       } else {
         // Add new camera
-        addCamera(cameraName.trim(), streamUrl.trim(), targetCollectionId);
+        addCamera(cameraName.trim(), streamUrl.trim(), targetCollectionId, location.trim());
       }
 
       // Reset form
       setCameraName('');
+      setLocation('');
       setStreamUrl('');
       setError('');
       setValidationResult(null);
@@ -199,6 +217,7 @@ const AddCameraForm = ({ collectionId, onClose, editingCamera = null }) => {
 
   const handleCancel = () => {
     setCameraName('');
+    setLocation('');
     setStreamUrl('');
     setError('');
     setShowDeleteConfirm(false);
@@ -233,13 +252,23 @@ const AddCameraForm = ({ collectionId, onClose, editingCamera = null }) => {
           />
         </div>
         <div className="form-group">
-          <label htmlFor="stream-url">Stream URL (RTSP/HTTP)</label>
+          <label htmlFor="location">Location</label>
+          <input
+            id="location"
+            type="text"
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            placeholder="Enter camera location (e.g. Front Door, Parking Lot)"
+          />
+        </div>
+        <div className="form-group">
+          <label htmlFor="stream-url">Stream URL (RTSP/HTTP/Camera Index)</label>
           <input
             id="stream-url"
             type="text"
             value={streamUrl}
             onChange={(e) => setStreamUrl(e.target.value)}
-            placeholder="e.g. rtsp://admin:password@192.168.1.100:554/stream"
+            placeholder="e.g. rtsp://admin:password@192.168.1.100:554/stream or 0 (for webcam)"
             required
           />
         </div>

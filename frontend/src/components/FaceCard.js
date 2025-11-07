@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './FaceCard.css';
 
 const FaceCard = ({ imagePath, name, camera, timestamp }) => {
   const [imageError, setImageError] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
+  const imageRef = useRef(null);
 
   const handleImageError = () => {
     console.error('Failed to load image:', imagePath);
@@ -11,14 +12,16 @@ const FaceCard = ({ imagePath, name, camera, timestamp }) => {
   };
 
   const handleImageLoad = () => {
-    console.log('Image loaded successfully:', imagePath);
     setImageLoaded(true);
   };
 
-  // Reset image states when imagePath changes
   useEffect(() => {
     setImageError(false);
-    setImageLoaded(false);
+    if (imageRef.current && imageRef.current.complete && imageRef.current.naturalWidth > 0) {
+      setImageLoaded(true);
+    } else {
+      setImageLoaded(false);
+    }
   }, [imagePath]);
 
   // Format timestamp for display
@@ -36,6 +39,7 @@ const FaceCard = ({ imagePath, name, camera, timestamp }) => {
       <div className="image-container">
         {!imageError ? (
           <img
+            ref={imageRef}
             src={imagePath}
             alt={name}
             className={`face-image ${imageLoaded ? 'loaded' : ''}`}

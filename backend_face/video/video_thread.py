@@ -572,6 +572,9 @@ def process_video_task(task_id: str, video_id: str, options: Dict[str, Any]):
                             try:
                                 image_path = os.path.join(person_path, img_file)
                                 image = face_recognition.load_image_file(image_path)
+                                if image is None:
+                                    logger.warning(f"  ✗ Could not load image: {img_file}")
+                                    continue
                                 face_locations = face_recognition.face_locations(image)
 
                                 if face_locations:

@@ -102,19 +102,26 @@ class EnhancedCameraService:
     def validate_camera(self, request: CameraValidationRequest) -> CameraValidationResponse:
         """Validate camera data including duplicate checking"""
         try:
-            # Validate IP format
-            ip_validation = validate_private_ip(request.ip)
-            if not ip_validation["isValid"]:
-                return CameraValidationResponse(
-                    valid=False,
-                    error=ip_validation["message"],
-                    type="ip_validation"
-                )
+            # Check if it's a local camera index (numeric value like 0, 1, 2)
+            is_camera_index = request.ip.isdigit() if isinstance(request.ip, str) else False
             
-            # Check for duplicate IP (excluding specified IP if editing)
+            if is_camera_index:
+                # Skip IP validation for local camera indices
+                logger.info(f"Using local camera index: {request.ip}")
+            else:
+                # Validate IP format for non-index URLs
+                ip_validation = validate_private_ip(request.ip)
+                if not ip_validation["isValid"]:
+                    return CameraValidationResponse(
+                        valid=False,
+                        error=ip_validation["message"],
+                        type="ip_validation"
+                    )
+            
+            # Check for duplicate IP/index (excluding specified IP if editing)
             cameras = self._load_cameras()
             for camera in cameras:
-                camera_ip = extract_ip_from_url(camera.rtsp_url)
+                camera_ip = extract_ip_from_url(camera.rtsp_url) or camera.rtsp_url
                 if camera_ip == request.ip and camera_ip != request.exclude_ip:
                     collections = self._load_collections()
                     existing_collection = next(
@@ -123,7 +130,7 @@ class EnhancedCameraService:
                     )
                     return CameraValidationResponse(
                         valid=False,
-                        error=f"A camera with IP {request.ip} already exists",
+                        error=f"A camera with IP/index {request.ip} already exists",
                         type="duplicate",
                         existingCollection=existing_collection
                     )
@@ -146,10 +153,14 @@ class EnhancedCameraService:
             # Generate new ID
             new_id = max([c.id for c in cameras], default=0) + 1
             
-            # Extract IP for validation
+            # Extract IP for validation (or use the URL itself for camera indices)
             ip_address = extract_ip_from_url(request.rtsp_url)
             if not ip_address:
-                raise HTTPException(status_code=400, detail="Could not extract IP from stream URL")
+                # If no IP extracted, check if it's a camera index (numeric like 0, 1, 2)
+                if request.rtsp_url.isdigit():
+                    ip_address = request.rtsp_url  # Use the index as-is
+                else:
+                    raise HTTPException(status_code=400, detail="Could not extract IP from stream URL or recognize camera index")
             
             # Validate for duplicates
             validation_request = CameraValidationRequest(
@@ -176,6 +187,7 @@ class EnhancedCameraService:
                 collection_id=request.collection_id or "default",
                 collection_name=collection_name or "Default Collection",
                 ip_address=ip_address,
+                location=request.location,
                 status="inactive",
                 created_at=datetime.now(),
                 error_count=0,
@@ -273,7 +285,7 @@ class EnhancedCameraService:
             raise HTTPException(status_code=500, detail="Failed to activate camera")
 
     def deactivate_camera(self, camera_id: int) -> CameraOperationResponse:
-        """Deactivate a camera"""
+        """Deactivate a camera and stop its stream"""
         try:
             cameras = self._load_cameras()
             camera = next((c for c in cameras if c.id == camera_id), None)
@@ -287,6 +299,63 @@ class EnhancedCameraService:
 
             # Save updated cameras
             self._save_cameras(cameras)
+
+            # Stop the enhanced stream for this camera
+            try:
+                from .streaming import get_stream_manager
+                stream_manager = get_stream_manager()
+                stream_id = stream_manager.get_camera_stream(camera_id)
+                if stream_id:
+                    stream_manager.stop_stream(stream_id)
+                    logger.info(f"Stopped enhanced stream {stream_id} for deactivated camera {camera_id}")
+            except Exception as stream_error:
+                logger.warning(f"Failed to stop enhanced stream for camera {camera_id}: {stream_error}")
+                # Don't fail deactivation if stream stop fails
+
+            # Stop legacy MJPEG stream in main.py if it exists
+            logger.info(f"Attempting to stop legacy stream for camera {camera_id}...")
+            try:
+                # Import __main__ to get access to the running main module
+                import __main__ as main_module
+                
+                if hasattr(main_module, 'active_streams'):
+                    ip_address = camera.ip_address
+                    collection_id = camera.collection_id or 'default'
+                    
+                    # Normalize collection name to match frontend format
+                    collection_name = collection_id.lower().replace(' ', '_')
+                    
+                    # Try multiple possible stream ID formats
+                    possible_stream_ids = [
+                        f"{collection_name}_{ip_address}",
+                        f"default_{ip_address}",
+                        ip_address,
+                        f"{collection_id}_{ip_address}"
+                    ]
+                    
+                    # Log current active streams for debugging
+                    logger.info(f"Current active streams: {list(main_module.active_streams.keys())}")
+                    logger.info(f"Looking for camera {camera_id} with IP {ip_address}, checking IDs: {possible_stream_ids}")
+                    
+                    stopped_legacy = False
+                    for legacy_stream_id in possible_stream_ids:
+                        if legacy_stream_id in main_module.active_streams:
+                            logger.info(f"Found matching legacy stream: {legacy_stream_id}")
+                            stream_obj = main_module.active_streams[legacy_stream_id]['stream']
+                            stream_obj.stop()
+                            del main_module.active_streams[legacy_stream_id]
+                            logger.info(f"✓ Stopped legacy MJPEG stream {legacy_stream_id} for deactivated camera {camera_id}")
+                            stopped_legacy = True
+                            break
+                    
+                    if not stopped_legacy:
+                        logger.warning(f"⚠ No legacy stream found for camera {camera_id} (checked: {possible_stream_ids})")
+                else:
+                    logger.warning(f"⚠ Main module has no active_streams attribute")
+                    
+            except Exception as legacy_error:
+                logger.error(f"✗ Failed to stop legacy stream for camera {camera_id}: {legacy_error}", exc_info=True)
+                # Don't fail deactivation if legacy stream stop fails
 
             return CameraOperationResponse(
                 success=True,
@@ -312,9 +381,17 @@ class EnhancedCameraService:
             if request.name is not None:
                 camera.name = request.name
             
+            if request.location is not None:
+                camera.location = request.location
+            
             if request.rtsp_url is not None:
                 # Validate new URL
                 new_ip = extract_ip_from_url(request.rtsp_url)
+                
+                # If no IP extracted, check if it's a camera index
+                if not new_ip and request.rtsp_url.isdigit():
+                    new_ip = request.rtsp_url
+                
                 if new_ip:
                     validation_request = CameraValidationRequest(
                         ip=new_ip,
@@ -358,6 +435,61 @@ class EnhancedCameraService:
             
             if not camera:
                 raise HTTPException(status_code=404, detail="Camera not found")
+            
+            # Stop enhanced stream if active
+            try:
+                from .streaming import get_stream_manager
+                stream_manager = get_stream_manager()
+                stream_id = stream_manager.get_camera_stream(camera_id)
+                if stream_id:
+                    stream_manager.stop_stream(stream_id)
+                    logger.info(f"Stopped enhanced stream {stream_id} for deleted camera {camera_id}")
+            except Exception as stream_error:
+                logger.warning(f"Failed to stop enhanced stream for camera {camera_id}: {stream_error}")
+
+            # Stop legacy MJPEG stream in main.py if it exists
+            logger.info(f"Attempting to stop legacy stream for deleted camera {camera_id}...")
+            try:
+                # Import __main__ to get access to the running main module
+                import __main__ as main_module
+                
+                if hasattr(main_module, 'active_streams'):
+                    ip_address = camera.ip_address
+                    collection_id = camera.collection_id or 'default'
+                    
+                    # Normalize collection name to match frontend format
+                    collection_name = collection_id.lower().replace(' ', '_')
+                    
+                    # Try multiple possible stream ID formats
+                    possible_stream_ids = [
+                        f"{collection_name}_{ip_address}",
+                        f"default_{ip_address}",
+                        ip_address,
+                        f"{collection_id}_{ip_address}"
+                    ]
+                    
+                    # Log current active streams for debugging
+                    logger.info(f"Current active streams: {list(main_module.active_streams.keys())}")
+                    logger.info(f"Looking for camera {camera_id} with IP {ip_address}, checking IDs: {possible_stream_ids}")
+                    
+                    stopped_legacy = False
+                    for legacy_stream_id in possible_stream_ids:
+                        if legacy_stream_id in main_module.active_streams:
+                            logger.info(f"Found matching legacy stream: {legacy_stream_id}")
+                            stream_obj = main_module.active_streams[legacy_stream_id]['stream']
+                            stream_obj.stop()
+                            del main_module.active_streams[legacy_stream_id]
+                            logger.info(f"✓ Stopped legacy MJPEG stream {legacy_stream_id} for deleted camera {camera_id}")
+                            stopped_legacy = True
+                            break
+                    
+                    if not stopped_legacy:
+                        logger.warning(f"⚠ No legacy stream found for camera {camera_id} (checked: {possible_stream_ids})")
+                else:
+                    logger.warning(f"⚠ Main module has no active_streams attribute")
+                    
+            except Exception as legacy_error:
+                logger.error(f"✗ Failed to stop legacy stream for camera {camera_id}: {legacy_error}", exc_info=True)
             
             # Remove camera
             cameras = [c for c in cameras if c.id != camera_id]
