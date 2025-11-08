@@ -345,7 +345,7 @@ class VideoThread(QThread):
                     matches = face_recognition.compare_faces(
                         self.known_faces["encodings"],
                         face_encoding,
-                        tolerance=0.6
+                        tolerance=0.55
                     )
                     
                     if True in matches:
@@ -401,12 +401,12 @@ class VideoThread(QThread):
                 # Draw label
                 label = f"{name} ({confidence:.1f}%)"
                 cv2.rectangle(display_frame, 
-                            (expanded_left, expanded_top - 20), 
-                            (expanded_left + len(label)*8, expanded_top), 
+                            (expanded_left, expanded_top - 28), 
+                            (expanded_left + len(label)*10, expanded_top), 
                             color, -1)
                 cv2.putText(display_frame, label, 
                           (expanded_left, expanded_top - 5),
-                          cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                          cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2)
             
             return display_frame, annotations
             
@@ -708,7 +708,7 @@ def process_video_task(task_id: str, video_id: str, options: Dict[str, Any]):
                             matches = face_recognition.compare_faces(
                                 known_faces["encodings"],
                                 face_encoding,
-                                tolerance=0.5
+                                tolerance=0.55
                             )
                             
                             if True in matches:
@@ -719,7 +719,7 @@ def process_video_task(task_id: str, video_id: str, options: Dict[str, Any]):
                                 best_match_index = np.argmin(face_distances)
                                 if matches[best_match_index]:
                                     confidence = (1 - face_distances[best_match_index]) * 100
-                                    if confidence > 60:
+                                    if confidence > 53:
                                         name = known_faces["names"][best_match_index]
                                         detected_names.add(name)
                                         logger.info(f"Frame {frame_count}: Recognized {name} with {confidence:.1f}% confidence")
@@ -739,7 +739,7 @@ def process_video_task(task_id: str, video_id: str, options: Dict[str, Any]):
                                                 confidence
                                             )
                         
-                        if confidence > 60:  # Only store high confidence detections
+                        if confidence > 53:  # Only store high confidence detections
                             # Extract face image with margin
                             margin = 0.2  # 20% margin
                             height = bottom - top

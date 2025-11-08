@@ -7,7 +7,7 @@ from typing import List, Tuple, Dict, Any
 import threading
 from save_face import save_face_image
 
-TOLERANCE = 0.45 # Stricter matching (lower = more strict). Was 0.5, now more selective
+TOLERANCE = 0.47 # Stricter matching (lower = more strict). Was 0.5, now more selective
 # Rate limit for saving same face per label (seconds)
 MIN_SAVE_INTERVAL = 5.0
 
