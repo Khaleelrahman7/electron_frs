@@ -50,7 +50,6 @@ const FaceMatching = () => {
   const tabs = [
     { id: 'one-to-many', label: 'One-to-Many', icon: '🔍' },
     { id: 'one-to-one', label: 'One-to-One', icon: '⚖️' },
-    { id: 'gallery-stats', label: 'Gallery Stats', icon: '📊' }
   ];
 
   const handleImageSelect = (event, imageNumber) => {

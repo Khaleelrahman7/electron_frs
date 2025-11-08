@@ -63,7 +63,7 @@ function App() {
       <div className="app-layout">
         <aside className="sidebar">
           <div className="sidebar-header">
-            <h1>🔍 Face Recognition System</h1>
+            <h1>Face Recognition System</h1>
           </div>
           <nav className="sidebar-navigation">
             {tabs.map(tab => (
