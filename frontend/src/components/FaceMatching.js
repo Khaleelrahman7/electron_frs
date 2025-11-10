@@ -3,7 +3,7 @@ import axios from 'axios';
 import FaceCard from './FaceCard';
 import './FaceMatching.css';
 
-const API_BASE_URL = "http://localhost:8000/api/matching/api/match";
+const API_BASE_URL = "http://192.168.1.209:8005/api/matching/api/match";
 
 // Utility function to convert local file paths to API URLs
 const convertImagePathToUrl = (imagePath) => {
@@ -23,7 +23,7 @@ const convertImagePathToUrl = (imagePath) => {
       const imageName = pathParts[dataIndex + 2];
       
       // Return the proper API URL for serving gallery images
-      return `http://localhost:8000/api/gallery/image/${personName}/${imageName}`;
+      return `http://192.168.1.209:8005/api/gallery/image/${personName}/${imageName}`;
     }
     
     // Fallback: return empty string if path format is not recognized
@@ -151,7 +151,7 @@ const FaceMatching = () => {
     setError(null);
 
     try {
-      const response = await axios.get(`http://localhost:8000/api/matching/api/gallery/stats`);
+      const response = await axios.get(`http://192.168.1.209:8005/api/matching/api/gallery/stats`);
       console.log('Gallery stats response:', response.data);
       setGalleryStats(response.data);
       setError(null);
@@ -168,7 +168,7 @@ const FaceMatching = () => {
     setError(null);
 
     try {
-      const response = await axios.post(`http://localhost:8000/api/matching/api/gallery/reload`);
+      const response = await axios.post(`http://192.168.1.209:8005/api/matching/api/gallery/reload`);
       console.log('Gallery reload response:', response.data);
       setError('Gallery reloaded successfully!');
       

@@ -26,7 +26,7 @@ def main():
         logger.info("=" * 60)
         logger.info("Starting Face Recognition System - Unified Backend")
         logger.info("=" * 60)
-        logger.info("Port: 8000")
+        logger.info("Port: 8005")
         logger.info("Host: 0.0.0.0")
         logger.info("Services included:")
         logger.info("  - Camera Management & Face Recognition")
@@ -42,7 +42,7 @@ def main():
         uvicorn.run(
             app,
             host="0.0.0.0",
-            port=8000,
+            port=8005,
             log_level="info",
             access_log=True,
             reload=False  # Set to True for development

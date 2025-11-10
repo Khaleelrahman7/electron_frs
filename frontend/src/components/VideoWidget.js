@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import './VideoWidget.css';
 
-const BASE_URL = "http://localhost:8000";
+const BASE_URL = "http://192.168.1.209:8005";
 
 const VideoWidget = () => {
   const [selectedFile, setSelectedFile] = useState(null);

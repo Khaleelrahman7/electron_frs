@@ -663,7 +663,10 @@ async def get_gallery():
                 # Extract image filename from photo_path
                 if 'photo_path' in person_data:
                     photo_path = person_data['photo_path']
+                    # Ensure we only get the filename, not the full path
                     image_filename = os.path.basename(photo_path)
+                    # Additional safety: remove any path separators that might have been included
+                    image_filename = image_filename.replace('\\', '').replace('/', '')
                     processed_data[person_id]['image_filename'] = image_filename
                 else:
                     # Default fallback

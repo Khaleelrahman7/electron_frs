@@ -5,11 +5,16 @@ import face_recognition
 from insightface.app import FaceAnalysis
 from typing import List, Tuple, Dict, Any
 import threading
+import os
 from save_face import save_face_image
 
 TOLERANCE = 0.47 # Stricter matching (lower = more strict). Was 0.5, now more selective
 # Rate limit for saving same face per label (seconds)
 MIN_SAVE_INTERVAL = 5.0
+
+# Performance optimization: process every Nth frame for real-time streaming
+PROCESS_EVERY_N_FRAMES = 2  # Process every 2nd frame (30fps -> 15fps processing)
+FRAME_COUNTER = 0
 
 # Initialize detector and known faces (singleton-like)
 face_app = None
@@ -17,8 +22,35 @@ known_encodings: List[np.ndarray] = []
 known_names: List[str] = []
 
 
+def check_gpu_availability() -> int:
+    """Check if GPU is available for InsightFace/ONNXRuntime."""
+    try:
+        import onnxruntime as ort
+        providers = ort.get_available_providers()
+        if 'CUDAExecutionProvider' in providers:
+            # Try to create a simple session to verify CUDA works
+            try:
+                # Check if CUDA libraries are accessible
+                test_providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
+                print(f"[INFO] ONNX providers available: {providers}")
+                return 0  # GPU device ID
+            except Exception as e:
+                print(f"[WARN] CUDA provider available but may have library issues: {e}")
+                print("[INFO] Falling back to CPU")
+                return -1
+        else:
+            print(f"[INFO] CUDA provider not available. Available providers: {providers}")
+            return -1
+    except ImportError:
+        print("[WARN] onnxruntime not available")
+        return -1
+    except Exception as e:
+        print(f"[WARN] Error checking GPU availability: {e}")
+        return -1
+
+
 def init(data_dir: str, ctx: int = -1, det_size: Tuple[int, int] = (640, 640)) -> None:
-    """Initialize known faces and InsightFace detector."""
+    """Initialize known faces and InsightFace detector with GPU detection."""
     global face_app, known_encodings, known_names
 
     # Reuse your function from fr1.py
@@ -29,14 +61,44 @@ def init(data_dir: str, ctx: int = -1, det_size: Tuple[int, int] = (640, 640)) -
 
     known_encodings, known_names = load_known_faces(data_dir)
 
-    face_app = FaceAnalysis(allowed_modules=['detection'])
-    face_app.prepare(ctx_id=ctx, det_size=det_size)
-    print("[face_pipeline] Initialized successfully.")
+    # Auto-detect GPU if ctx is 0 but GPU might not be available
+    if ctx == 0:
+        detected_ctx = check_gpu_availability()
+        if detected_ctx == -1:
+            print("[WARN] GPU requested but not available, using CPU")
+            ctx = -1
+        else:
+            print("[INFO] Using GPU for face detection")
+    elif ctx == -1:
+        print("[INFO] Using CPU for face detection")
+
+    try:
+        face_app = FaceAnalysis(allowed_modules=['detection'])
+        face_app.prepare(ctx_id=ctx, det_size=det_size)
+        print(f"[face_pipeline] Initialized successfully with ctx={ctx}, det_size={det_size}")
+    except Exception as e:
+        # If GPU init fails, try CPU
+        if ctx != -1:
+            print(f"[WARN] GPU initialization failed: {e}")
+            print("[INFO] Falling back to CPU")
+            try:
+                face_app = FaceAnalysis(allowed_modules=['detection'])
+                face_app.prepare(ctx_id=-1, det_size=det_size)
+                print(f"[face_pipeline] Initialized with CPU fallback, det_size={det_size}")
+            except Exception as cpu_error:
+                raise RuntimeError(f"Failed to initialize face pipeline (GPU and CPU): {cpu_error}") from cpu_error
+        else:
+            raise
 
 
-def process_frame(frame_bgr: np.ndarray) -> Tuple[np.ndarray, List[Dict[str, Any]]]:
-    """Detect + recognize faces in one frame. Returns annotated frame + detections."""
-    global face_app, known_encodings, known_names
+def process_frame(frame_bgr: np.ndarray, force_process: bool = False) -> Tuple[np.ndarray, List[Dict[str, Any]]]:
+    """Detect + recognize faces in one frame. Returns annotated frame + detections.
+    
+    Args:
+        frame_bgr: Input BGR frame
+        force_process: If True, process this frame regardless of frame skipping
+    """
+    global face_app, known_encodings, known_names, FRAME_COUNTER
 
     if face_app is None:
         raise RuntimeError("Face pipeline not initialized. Call init() first.")
@@ -44,8 +106,31 @@ def process_frame(frame_bgr: np.ndarray) -> Tuple[np.ndarray, List[Dict[str, Any
     if frame_bgr is None:
         return frame_bgr, []
 
-    h, w = frame_bgr.shape[:2]
-    faces = face_app.get(frame_bgr)
+    # Frame skipping for performance: only process every Nth frame
+    if not force_process:
+        FRAME_COUNTER += 1
+        if FRAME_COUNTER % PROCESS_EVERY_N_FRAMES != 0:
+            # Return frame without processing but keep detections from last processed frame
+            return frame_bgr, []
+
+    # Downscale frame for faster processing while maintaining quality
+    # Process at 640p max width for speed
+    original_h, original_w = frame_bgr.shape[:2]
+    max_width = 1280  # Process at max 1280px width for better speed/quality balance
+    
+    if original_w > max_width:
+        scale = max_width / original_w
+        new_w = max_width
+        new_h = int(original_h * scale)
+        scaled_frame = cv2.resize(frame_bgr, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+        scale_back = original_w / new_w
+    else:
+        scaled_frame = frame_bgr
+        scale_back = 1.0
+        new_w, new_h = original_w, original_h
+
+    h, w = new_h, new_w
+    faces = face_app.get(scaled_frame)
     detections: List[Dict[str, Any]] = []
 
     for f in faces:
@@ -58,7 +143,15 @@ def process_frame(frame_bgr: np.ndarray) -> Tuple[np.ndarray, List[Dict[str, Any
                 continue
             x1, y1, x2, y2 = int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])
 
-        # Clamp to image bounds
+        # Scale bbox back to original frame size if we downscaled
+        if scale_back != 1.0:
+            x1 = int(x1 * scale_back)
+            x2 = int(x2 * scale_back)
+            y1 = int(y1 * scale_back)
+            y2 = int(y2 * scale_back)
+            w, h = original_w, original_h
+
+        # Clamp to original image bounds
         x1 = max(0, min(w - 1, x1))
         x2 = max(0, min(w - 1, x2))
         y1 = max(0, min(h - 1, y1))
@@ -68,19 +161,24 @@ def process_frame(frame_bgr: np.ndarray) -> Tuple[np.ndarray, List[Dict[str, Any
         if (x2 - x1) < 20 or (y2 - y1) < 20:
             continue
 
-        # Crop face and encode
+        # Crop face from original frame (not downscaled)
         face_crop_bgr = frame_bgr[y1:y2, x1:x2]
         if face_crop_bgr.size == 0:
             continue
 
+        # Skip very small faces (likely false positives)
+        if (x2 - x1) < 30 or (y2 - y1) < 30:
+            continue
+
         face_crop_rgb = cv2.cvtColor(face_crop_bgr, cv2.COLOR_BGR2RGB)
 
-        # Provide location relative to crop for speed
+        # Provide location relative to crop for speed (num_jitters=0 for speed)
         crop_h, crop_w = face_crop_rgb.shape[:2]
         crop_location = [(0, crop_w - 1, crop_h - 1, 0)]
         try:
+            # Use num_jitters=0 for faster encoding (trades slight accuracy for speed)
             encs = face_recognition.face_encodings(
-                face_crop_rgb, known_face_locations=crop_location, num_jitters=0
+                face_crop_rgb, known_face_locations=crop_location, num_jitters=0, model='small'
             )
         except Exception:
             encs = []
@@ -109,10 +207,10 @@ def process_frame(frame_bgr: np.ndarray) -> Tuple[np.ndarray, List[Dict[str, Any
                     confidence=conf,
                     min_interval=MIN_SAVE_INTERVAL,
                     source="stream",
-                    expand_factor=0.5,  # 50% expansion for better context
-                    target_width=512,   # Higher resolution target
-                    max_upscale=1.5,    # Conservative upscaling to preserve quality
-                    jpeg_quality=98     # Very high quality JPEG
+                    expand_factor=0.3,  # 30% expansion for better context (reduced for speed)
+                    target_width=640,   # Higher resolution for better clarity
+                    max_upscale=2.0,    # Allow more upscaling for small faces
+                    jpeg_quality=95     # High quality JPEG (slightly reduced for file size)
                 )
             except Exception as e:
                 print(f"Error saving face in async thread: {e}")

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import './MJPEGPlayer.css';
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://192.168.1.209:8005';
 
 const MJPEGPlayer = ({ camera, onPlay, onError }) => {
   const [streamUrl, setStreamUrl] = useState(null);

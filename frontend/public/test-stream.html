@@ -103,7 +103,7 @@
             updateStatus('Loading single frame...');
             
             const img = document.getElementById('streamImage');
-            const frameUrl = `http://localhost:8000/api/collections/cameras/1/frame?t=${Date.now()}`;
+            const frameUrl = `http://192.168.1.209:8005/api/collections/cameras/1/frame?t=${Date.now()}`;
             
             img.onload = function() {
                 log(`✓ Single frame loaded successfully (${frameUrl})`);
@@ -130,7 +130,7 @@
             frameCount = 0;
             
             // Start the backend stream first
-            fetch('http://localhost:8000/api/collections/cameras/1/start-stream', {
+            fetch('http://192.168.1.209:8005/api/collections/cameras/1/start-stream', {
                 method: 'POST'
             })
             .then(response => response.json())
@@ -142,7 +142,7 @@
                 img.style.display = 'block';
                 
                 const updateFrame = () => {
-                    const frameUrl = `http://localhost:8000/api/collections/cameras/1/frame?t=${Date.now()}`;
+                    const frameUrl = `http://192.168.1.209:8005/api/collections/cameras/1/frame?t=${Date.now()}`;
                     
                     // Create a new image to test loading
                     const testImg = new Image();
@@ -185,7 +185,7 @@
             }
             
             // Stop the backend stream
-            fetch('http://localhost:8000/api/collections/cameras/1/stop-stream', {
+            fetch('http://192.168.1.209:8005/api/collections/cameras/1/stop-stream', {
                 method: 'DELETE'
             })
             .then(response => {
@@ -209,7 +209,7 @@
         
         // Initial log
         log('Stream test page loaded');
-        log('Backend URL: http://localhost:8000');
+        log('Backend URL: http://192.168.1.209:8005');
         log('Frame endpoint: /api/collections/cameras/1/frame');
     </script>
 </body>

@@ -12,7 +12,7 @@ import numpy as np
 from .config import KNOWN_FACES_DIR, UNKNOWN_FACES_DIR
 
 # API base URL for constructing image URLs
-API_BASE_URL = "http://localhost:8000"
+API_BASE_URL = "http://192.168.1.209:8005"
 
 def convert_file_path_to_url(file_path: str) -> str:
     try:

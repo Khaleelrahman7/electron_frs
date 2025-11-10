@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './RegistrationWidget.css';
 
-const BASE_URL = "http://localhost:8000";
+const BASE_URL = "http://192.168.1.209:8005";
 
 const RegistrationWidget = () => {
   const [activeMode, setActiveMode] = useState('single');
