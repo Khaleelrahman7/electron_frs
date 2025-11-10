@@ -5,6 +5,9 @@ const axios = require('axios');
 const FormData = require('form-data');
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
+// API Base URL - defaults to localhost, can be overridden via environment variable
+const API_BASE_URL = process.env.API_BASE_URL || process.env.REACT_APP_API_BASE_URL || 'http://localhost:8005';
+
 function loadFallbackPage(mainWindow) {
   const fallbackHtml = `
     <!DOCTYPE html>
@@ -30,7 +33,7 @@ function loadFallbackPage(mainWindow) {
       </div>
       <script>
         // Check backend status
-        fetch('http://192.168.1.209:8005/health')
+        fetch('` + API_BASE_URL + `/health')
           .then(() => {
             document.getElementById('backend-status').textContent = 'Running ✅';
             document.getElementById('backend-status').style.color = '#27ae60';
@@ -134,7 +137,7 @@ function createWindow() {
 // IPC Handlers for Video Processing
 ipcMain.handle('check-backend-status', async () => {
   try {
-    const response = await axios.get('http://192.168.1.209:8005/api/status', { timeout: 5000 });
+    const response = await axios.get(`${API_BASE_URL}/api/status`, { timeout: 5000 });
     return {
       success: true,
       available: true,
@@ -179,7 +182,7 @@ ipcMain.handle('upload-video', async (event, filePath) => {
     const formData = new FormData();
     formData.append('video', fs.createReadStream(filePath));
 
-    const response = await axios.post('http://192.168.1.209:8005/api/video/upload', formData, {
+    const response = await axios.post(`${API_BASE_URL}/api/video/upload`, formData, {
       headers: formData.getHeaders(),
       timeout: 30000
     });
@@ -198,7 +201,7 @@ ipcMain.handle('upload-video', async (event, filePath) => {
 
 ipcMain.handle('start-processing', async (event, videoId, options) => {
   try {
-    const response = await axios.post(`http://192.168.1.209:8005/api/video/process/${videoId}`, options, {
+    const response = await axios.post(`${API_BASE_URL}/api/video/process/${videoId}`, options, {
       timeout: 10000
     });
 
@@ -216,7 +219,7 @@ ipcMain.handle('start-processing', async (event, videoId, options) => {
 
 ipcMain.handle('get-process-status', async (event, taskId) => {
   try {
-    const response = await axios.get(`http://192.168.1.209:8005/api/video/status/${taskId}`, {
+    const response = await axios.get(`${API_BASE_URL}/api/video/status/${taskId}`, {
       timeout: 5000
     });
 
@@ -234,7 +237,7 @@ ipcMain.handle('get-process-status', async (event, taskId) => {
 
 ipcMain.handle('get-process-result', async (event, taskId) => {
   try {
-    const response = await axios.get(`http://192.168.1.209:8005/api/video/result/${taskId}`, {
+    const response = await axios.get(`${API_BASE_URL}/api/video/result/${taskId}`, {
       timeout: 10000
     });
 
@@ -252,7 +255,7 @@ ipcMain.handle('get-process-result', async (event, taskId) => {
 
 ipcMain.handle('cancel-processing', async (event, taskId) => {
   try {
-    const response = await axios.post(`http://192.168.1.209:8005/api/video/cancel/${taskId}`, {}, {
+    const response = await axios.post(`${API_BASE_URL}/api/video/cancel/${taskId}`, {}, {
       timeout: 5000
     });
 
@@ -270,7 +273,7 @@ ipcMain.handle('cancel-processing', async (event, taskId) => {
 
 ipcMain.handle('delete-video', async (event, videoId) => {
   try {
-    const response = await axios.delete(`http://192.168.1.209:8005/api/video/${videoId}`, {
+    const response = await axios.delete(`${API_BASE_URL}/api/video/${videoId}`, {
       timeout: 5000
     });
 
@@ -289,7 +292,7 @@ ipcMain.handle('delete-video', async (event, videoId) => {
 // IPC Handlers for Enhanced Camera Management
 ipcMain.handle('get-camera-list', async () => {
   try {
-    const response = await axios.get('http://192.168.1.209:8005/api/collections/cameras', { timeout: 5000 });
+    const response = await axios.get(`${API_BASE_URL}/api/collections/cameras`, { timeout: 5000 });
     return {
       success: true,
       data: response.data
@@ -304,7 +307,7 @@ ipcMain.handle('get-camera-list', async () => {
 
 ipcMain.handle('add-camera', async (event, config) => {
   try {
-    const response = await axios.post('http://192.168.1.209:8005/api/collections/cameras', {
+    const response = await axios.post(`${API_BASE_URL}/api/collections/cameras`, {
       name: config.name || 'Camera',
       rtsp_url: config.rtsp_url,
       collection_id: config.collection_id || 'default'
@@ -325,7 +328,7 @@ ipcMain.handle('add-camera', async (event, config) => {
 
 ipcMain.handle('remove-camera', async (event, cameraId) => {
   try {
-    const response = await axios.delete(`http://192.168.1.209:8005/api/collections/cameras/${cameraId}`, {
+    const response = await axios.delete(`${API_BASE_URL}/api/collections/cameras/${cameraId}`, {
       timeout: 5000
     });
     return {
@@ -342,7 +345,7 @@ ipcMain.handle('remove-camera', async (event, cameraId) => {
 
 ipcMain.handle('validate-camera', async (event, validationData) => {
   try {
-    const response = await axios.post('http://192.168.1.209:8005/api/collections/validate-camera', validationData, {
+    const response = await axios.post(`${API_BASE_URL}/api/collections/validate-camera`, validationData, {
       timeout: 5000
     });
     return {
@@ -360,7 +363,7 @@ ipcMain.handle('validate-camera', async (event, validationData) => {
 // Enhanced camera activation/deactivation
 ipcMain.handle('activate-camera', async (event, cameraId) => {
   try {
-    const response = await axios.post(`http://192.168.1.209:8005/api/collections/cameras/${cameraId}/activate`, {}, {
+    const response = await axios.post(`${API_BASE_URL}/api/collections/cameras/${cameraId}/activate`, {}, {
       timeout: 5000
     });
     return {
@@ -377,7 +380,7 @@ ipcMain.handle('activate-camera', async (event, cameraId) => {
 
 ipcMain.handle('deactivate-camera', async (event, cameraId) => {
   try {
-    const response = await axios.post(`http://192.168.1.209:8005/api/collections/cameras/${cameraId}/deactivate`, {}, {
+    const response = await axios.post(`${API_BASE_URL}/api/collections/cameras/${cameraId}/deactivate`, {}, {
       timeout: 5000
     });
     return {
@@ -395,13 +398,13 @@ ipcMain.handle('deactivate-camera', async (event, cameraId) => {
 ipcMain.handle('get-camera-frame', async (event, cameraId) => {
   try {
     // Get camera stream URL for frame retrieval
-    const response = await axios.get(`http://192.168.1.209:8005/api/collections/cameras/${cameraId}/stream`, {
+    const response = await axios.get(`${API_BASE_URL}/api/collections/cameras/${cameraId}/stream`, {
       timeout: 5000,
       responseType: 'stream'
     });
     return {
       success: true,
-      streamUrl: `http://192.168.1.209:8005/api/collections/cameras/${cameraId}/stream`
+      streamUrl: `${API_BASE_URL}/api/collections/cameras/${cameraId}/stream`
     };
   } catch (error) {
     return {
@@ -414,7 +417,7 @@ ipcMain.handle('get-camera-frame', async (event, cameraId) => {
 // New streaming handlers
 ipcMain.handle('start-camera-stream', async (event, cameraId) => {
   try {
-    const response = await axios.post(`http://192.168.1.209:8005/api/collections/cameras/${cameraId}/start-stream`, {}, {
+    const response = await axios.post(`${API_BASE_URL}/api/collections/cameras/${cameraId}/start-stream`, {}, {
       timeout: 10000
     });
     return {
@@ -431,7 +434,7 @@ ipcMain.handle('start-camera-stream', async (event, cameraId) => {
 
 ipcMain.handle('stop-camera-stream', async (event, cameraId) => {
   try {
-    const response = await axios.delete(`http://192.168.1.209:8005/api/collections/cameras/${cameraId}/stop-stream`, {
+    const response = await axios.delete(`${API_BASE_URL}/api/collections/cameras/${cameraId}/stop-stream`, {
       timeout: 5000
     });
     return {
@@ -449,7 +452,7 @@ ipcMain.handle('stop-camera-stream', async (event, cameraId) => {
 // Recording handlers
 ipcMain.handle('start-camera-recording', async (event, cameraId, durationMinutes) => {
   try {
-    const response = await axios.post(`http://192.168.1.209:8005/api/collections/cameras/${cameraId}/start-recording`, {
+    const response = await axios.post(`${API_BASE_URL}/api/collections/cameras/${cameraId}/start-recording`, {
       duration_minutes: durationMinutes
     }, {
       timeout: 10000
@@ -468,7 +471,7 @@ ipcMain.handle('start-camera-recording', async (event, cameraId, durationMinutes
 
 ipcMain.handle('stop-camera-recording', async (event, cameraId, recordingId) => {
   try {
-    const response = await axios.post(`http://192.168.1.209:8005/api/collections/cameras/${cameraId}/stop-recording/${recordingId}`, {}, {
+    const response = await axios.post(`${API_BASE_URL}/api/collections/cameras/${cameraId}/stop-recording/${recordingId}`, {}, {
       timeout: 5000
     });
     return {
@@ -485,7 +488,7 @@ ipcMain.handle('stop-camera-recording', async (event, cameraId, recordingId) => 
 
 ipcMain.handle('get-camera-recordings', async (event, cameraId) => {
   try {
-    const response = await axios.get(`http://192.168.1.209:8005/api/collections/cameras/${cameraId}/recordings`, {
+    const response = await axios.get(`${API_BASE_URL}/api/collections/cameras/${cameraId}/recordings`, {
       timeout: 5000
     });
     return {
@@ -502,7 +505,7 @@ ipcMain.handle('get-camera-recordings', async (event, cameraId) => {
 
 ipcMain.handle('get-active-recordings', async (event) => {
   try {
-    const response = await axios.get(`http://192.168.1.209:8005/api/collections/recordings/active`, {
+    const response = await axios.get(`${API_BASE_URL}/api/collections/recordings/active`, {
       timeout: 5000
     });
     return {
@@ -520,7 +523,7 @@ ipcMain.handle('get-active-recordings', async (event) => {
 ipcMain.handle('get-camera-status', async (event, cameraId) => {
   try {
     // Get camera status from the enhanced system
-    const response = await axios.get(`http://192.168.1.209:8005/api/collections/cameras/${cameraId}`, {
+    const response = await axios.get(`${API_BASE_URL}/api/collections/cameras/${cameraId}`, {
       timeout: 5000
     });
     return {
@@ -538,7 +541,7 @@ ipcMain.handle('get-camera-status', async (event, cameraId) => {
 // IPC Handlers for Registration
 ipcMain.handle('register-single', async (event, formData) => {
   try {
-    const response = await axios.post('http://192.168.1.209:8005/api/registration/single', formData, {
+    const response = await axios.post(`${API_BASE_URL}/api/registration/single`, formData, {
       headers: formData.getHeaders ? formData.getHeaders() : { 'Content-Type': 'multipart/form-data' },
       timeout: 30000
     });
@@ -556,7 +559,7 @@ ipcMain.handle('register-single', async (event, formData) => {
 
 ipcMain.handle('register-bulk', async (event, formData) => {
   try {
-    const response = await axios.post('http://192.168.1.209:8005/api/registration/bulk', formData, {
+    const response = await axios.post(`${API_BASE_URL}/api/registration/bulk`, formData, {
       headers: formData.getHeaders ? formData.getHeaders() : { 'Content-Type': 'multipart/form-data' },
       timeout: 60000
     });
@@ -574,7 +577,7 @@ ipcMain.handle('register-bulk', async (event, formData) => {
 
 ipcMain.handle('get-registered-faces', async () => {
   try {
-    const response = await axios.get('http://192.168.1.209:8005/api/registration/gallery', {
+    const response = await axios.get(`${API_BASE_URL}/api/registration/gallery`, {
       timeout: 10000
     });
     return {

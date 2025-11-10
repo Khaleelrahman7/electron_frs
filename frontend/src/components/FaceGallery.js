@@ -3,7 +3,7 @@ import axios from 'axios';
 import PersonCard from './PersonCard';
 import './FaceGallery.css';
 
-const API_BASE_URL = "http://192.168.1.209:8005";
+import { API_BASE_URL } from '../utils/apiConfig';
 const GALLERY_ENDPOINT = `${API_BASE_URL}/api/registration/gallery`;
 
 const FaceGallery = () => {
@@ -44,7 +44,7 @@ const FaceGallery = () => {
       } else if (err.response) {
         errorMessage = `Server error: ${err.response.status} - ${err.response.data?.detail || err.response.statusText}`;
       } else if (err.request) {
-        errorMessage = 'Cannot connect to backend server. Please ensure the server is running on http://192.168.1.209:8005';
+        errorMessage = `Cannot connect to backend server. Please ensure the server is running on ${API_BASE_URL}`;
       } else {
         errorMessage = `Error: ${err.message}`;
       }

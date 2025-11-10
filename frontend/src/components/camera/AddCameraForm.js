@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useCameras } from './CameraManager';
 import { extractIPFromStreamURL, validatePrivateIP } from '../../utils/ipValidation';
+import { API_BASE_URL } from '../../utils/apiConfig';
 import './AddCameraForm.css';
 
 const AddCameraForm = ({ collectionId, onClose, editingCamera = null }) => {
@@ -46,7 +47,7 @@ const AddCameraForm = ({ collectionId, onClose, editingCamera = null }) => {
   // Validate camera data with backend
   const validateCameraData = async (ip, streamUrl, collectionName = null, excludeIp = null) => {
     try {
-      const response = await fetch('http://192.168.1.209:8005/api/collections/validate-camera', {
+      const response = await fetch(`${API_BASE_URL}/api/collections/validate-camera`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
