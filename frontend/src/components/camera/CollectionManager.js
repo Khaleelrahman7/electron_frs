@@ -14,8 +14,6 @@ const StreamPlayer = ({ cameraId, cameraName, rtspUrl, isStreaming, onStreamStar
   const [streamUrl, setStreamUrl] = useState(null);
   const imgRef = useRef(null);
 
-  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
-
   const startMJPEGStream = useCallback(async () => {
     try {
       console.log(`✓ Starting MJPEG stream for camera ${cameraId}`);
