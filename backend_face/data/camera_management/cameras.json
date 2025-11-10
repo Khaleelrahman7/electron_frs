@@ -9,7 +9,7 @@
     "location": "Eagle Tower",
     "status": "inactive",
     "created_at": "2025-07-31 10:49:38.890043",
-    "last_seen": "2025-11-10 10:22:50.045424",
+    "last_seen": "2025-11-10 14:58:26.427857",
     "error_count": 0,
     "is_active": false
   },
@@ -23,7 +23,7 @@
     "location": "Eagle Tower",
     "status": "inactive",
     "created_at": "2025-09-20 12:01:37.386403",
-    "last_seen": "2025-10-31 17:21:15.840092",
+    "last_seen": "2025-11-10 15:09:57.875970",
     "error_count": 0,
     "is_active": false
   },
@@ -35,11 +35,11 @@
     "collection_name": "Default Collection",
     "ip_address": "192.168.4.244",
     "location": "Eagle Tower",
-    "status": "inactive",
+    "status": "active",
     "created_at": "2025-09-20 12:05:52.267585",
-    "last_seen": "2025-11-07 18:42:35.703368",
+    "last_seen": "2025-11-10 15:10:01.852165",
     "error_count": 0,
-    "is_active": false
+    "is_active": true
   },
   {
     "id": 6,

@@ -134,11 +134,10 @@ class CameraStreamManager:
                 cap.release()
                 cap = None
 
-        # If camera is not accessible, generate demo stream
+        # Always try to stream from real camera, even if initial test failed
+        # This allows for cameras that take time to initialize
         if not camera_accessible:
-            logger.warning(f"Camera not accessible for stream {stream_id}, generating demo stream")
-            yield from self._generate_demo_stream(stream_id, stream_info)
-            return
+            logger.warning(f"Camera initial test failed for stream {stream_id}, but will attempt real stream anyway")
 
         # Real camera streaming with improved stability
         yield from self._generate_real_camera_stream(stream_id, stream_info, rtsp_url)
@@ -150,13 +149,12 @@ class CameraStreamManager:
         max_failures = 10
         frame_count = 0
         last_frame = None
-        reconnect_attempts = 0
-        max_reconnect_attempts = 5
 
         # JPEG encoding parameters for better performance
         encode_params = [cv2.IMWRITE_JPEG_QUALITY, 85]
 
-        while self._is_stream_active(stream_id) and reconnect_attempts < max_reconnect_attempts:
+        # Keep retrying as long as stream is active - no demo fallback
+        while self._is_stream_active(stream_id):
             try:
                 # Connect to camera
                 if cap is None or not cap.isOpened():
@@ -229,7 +227,7 @@ class CameraStreamManager:
                         if cap:
                             cap.release()
                             cap = None
-                        reconnect_attempts += 1
+                        consecutive_failures = 0  # Reset for next reconnection attempt
                         time.sleep(2)  # Wait before reconnecting
                         continue
 
@@ -253,17 +251,16 @@ class CameraStreamManager:
                 if cap:
                     cap.release()
                     cap = None
-                reconnect_attempts += 1
-                time.sleep(2)
+                consecutive_failures += 1
+                time.sleep(2)  # Wait before retrying
 
         # Cleanup
         if cap:
             cap.release()
 
-        # If we exhausted reconnection attempts, fall back to demo
-        if reconnect_attempts >= max_reconnect_attempts:
-            logger.warning(f"Max reconnection attempts reached for stream {stream_id}, falling back to demo")
-            yield from self._generate_demo_stream(stream_id, stream_info)
+        # Keep retrying instead of falling back to demo
+        # If we reach here, it means stream was stopped or deactivated
+        logger.info(f"Stream {stream_id} ended - stream was stopped or deactivated")
 
     def _generate_demo_stream(self, stream_id: str, stream_info: Dict):
         """Generate a demo stream when real camera is not available"""
