@@ -305,14 +305,14 @@ async def match_face(image: UploadFile = File(...)):
                             # Compare with uploaded face
                             for known_face_encoding in known_face_encodings:
                                 # Compare faces
-                                matches = face_recognition.compare_faces([face_encoding], known_face_encoding, tolerance=0.6)
+                                matches = face_recognition.compare_faces([face_encoding], known_face_encoding, tolerance=0.5)
                                 if matches[0]:
                                     # Calculate face distance (lower is better)
                                     face_distance = face_recognition.face_distance([face_encoding], known_face_encoding)[0]
                                     confidence = 1 - face_distance
                                     
                                     # Only include matches with confidence >= 50%
-                                    if confidence >= 0.5:
+                                    if confidence >= 0.53:
                                         # Get person name from directory structure
                                         person_name = os.path.basename(os.path.dirname(img_path))
                                         

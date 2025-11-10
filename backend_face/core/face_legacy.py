@@ -1227,7 +1227,7 @@ class CameraService:
                                                 matches = face_recognition.compare_faces(
                                                     self.known_faces["encodings"],
                                                     face_encoding,
-                                                    tolerance=0.4  # Stricter tolerance for better accuracy
+                                                    tolerance=0.5  # Stricter tolerance for better accuracy
                                                 )
                                                
                                                 face_distances = face_recognition.face_distance(
