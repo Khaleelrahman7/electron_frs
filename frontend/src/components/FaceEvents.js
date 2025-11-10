@@ -86,8 +86,27 @@ const FaceEvents = () => {
       setError('From date cannot be later than To date');
       return false;
     }
+    setError(null); // Clear error if dates are valid
     return true;
   }, [fromDate, toDate]);
+
+  const handleFromDateChange = (date) => {
+    setFromDate(date);
+    if (date && toDate && date > toDate) {
+      setError('From date cannot be later than To date');
+    } else {
+      setError(null);
+    }
+  };
+
+  const handleToDateChange = (date) => {
+    setToDate(date);
+    if (date && fromDate && date < fromDate) {
+      setError('To date cannot be earlier than From date');
+    } else {
+      setError(null);
+    }
+  };
 
   const getTabOverrides = useCallback((tab) => {
     if (tab === 'known') {
@@ -198,9 +217,13 @@ const FaceEvents = () => {
           <label>From:</label>
           <DatePicker
             selected={fromDate}
-            onChange={(date) => setFromDate(date)}
+            onChange={handleFromDateChange}
             dateFormat="yyyy-MM-dd"
             className="date-picker"
+            maxDate={toDate}
+            showYearDropdown
+            showMonthDropdown
+            dropdownMode="select"
           />
         </div>
 
@@ -208,9 +231,14 @@ const FaceEvents = () => {
           <label>To:</label>
           <DatePicker
             selected={toDate}
-            onChange={(date) => setToDate(date)}
+            onChange={handleToDateChange}
             dateFormat="yyyy-MM-dd"
             className="date-picker"
+            minDate={fromDate}
+            maxDate={new Date()}
+            showYearDropdown
+            showMonthDropdown
+            dropdownMode="select"
           />
         </div>
 

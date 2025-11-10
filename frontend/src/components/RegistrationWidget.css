@@ -137,6 +137,17 @@
   cursor: not-allowed;
 }
 
+.field-error {
+  color: #e53e3e;
+  font-size: 0.85rem;
+  margin-top: 4px;
+  display: block;
+}
+
+.form-group input:invalid:not(:placeholder-shown) {
+  border-color: #e53e3e;
+}
+
 .image-upload-area {
   position: relative;
   width: 100%;

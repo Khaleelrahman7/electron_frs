@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import './RegistrationWidget.css';
 
 const BASE_URL = "http://localhost:8000";
@@ -7,7 +7,7 @@ const RegistrationWidget = () => {
   const [activeMode, setActiveMode] = useState('single');
   const [formData, setFormData] = useState({
     name: '',
-    age: '',
+    age: '18',
     gender: 'Male',
     category: ''
   });
@@ -16,6 +16,8 @@ const RegistrationWidget = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState(''); // 'success' or 'error'
+  const [ageError, setAgeError] = useState('');
+  const [categoryError, setCategoryError] = useState('');
   const fileInputRef = useRef(null);
 
   // Bulk registration with Excel + Folder
@@ -23,7 +25,49 @@ const RegistrationWidget = () => {
   const [selectedFolder, setSelectedFolder] = useState('');
   const excelFileInputRef = useRef(null);
 
+  // Ensure age is always 18 or above on component mount and whenever it changes
+  useEffect(() => {
+    const ageNum = parseInt(formData.age, 10);
+    if (!formData.age || isNaN(ageNum) || ageNum < 18) {
+      setFormData(prev => ({ ...prev, age: '18' }));
+    }
+  }, [formData.age]);
+
   const handleInputChange = (field, value) => {
+    // Validate age - must be 18 or above
+    if (field === 'age') {
+      const ageValue = value.trim();
+      if (ageValue === '') {
+        // If empty, set to 18 as default
+        setAgeError('');
+        setFormData(prev => ({ ...prev, [field]: '18' }));
+        return;
+      }
+      const ageNum = parseInt(ageValue, 10);
+      if (isNaN(ageNum) || ageNum < 18) {
+        setAgeError('Age must be 18 or above');
+      } else {
+        setAgeError('');
+      }
+    }
+    
+    // Validate category - only letters and spaces, no numbers
+    if (field === 'category') {
+      const categoryValue = value.trim();
+      if (categoryValue === '') {
+        setCategoryError('');
+        setFormData(prev => ({ ...prev, [field]: '' }));
+        return;
+      }
+      // Allow only letters, spaces, and common punctuation for category names
+      const categoryPattern = /^[a-zA-Z\s\-']+$/;
+      if (!categoryPattern.test(categoryValue)) {
+        setCategoryError('Category should only contain letters and spaces (no numbers)');
+      } else {
+        setCategoryError('');
+      }
+    }
+    
     setFormData(prev => ({
       ...prev,
       [field]: value
@@ -60,12 +104,14 @@ const RegistrationWidget = () => {
   const resetForm = () => {
     setFormData({
       name: '',
-      age: '',
+      age: '18',
       gender: 'Male',
       category: ''
     });
     setImageFile(null);
     setImagePreview(null);
+    setAgeError('');
+    setCategoryError('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -81,6 +127,26 @@ const RegistrationWidget = () => {
     if (!formData.name.trim()) {
       showMessage('Please enter a name', 'error');
       return;
+    }
+
+    // Validate age if provided
+    if (formData.age.trim()) {
+      const ageNum = parseInt(formData.age.trim(), 10);
+      if (isNaN(ageNum) || ageNum < 18) {
+        showMessage('Age must be 18 or above', 'error');
+        setAgeError('Age must be 18 or above');
+        return;
+      }
+    }
+
+    // Validate category if provided
+    if (formData.category.trim()) {
+      const categoryPattern = /^[a-zA-Z\s\-']+$/;
+      if (!categoryPattern.test(formData.category.trim())) {
+        showMessage('Category should only contain letters and spaces (no numbers)', 'error');
+        setCategoryError('Category should only contain letters and spaces (no numbers)');
+        return;
+      }
     }
 
     setIsLoading(true);
@@ -235,13 +301,60 @@ const RegistrationWidget = () => {
                   <label>Age</label>
                   <input
                     type="number"
-                    value={formData.age}
-                    onChange={(e) => handleInputChange('age', e.target.value)}
-                    placeholder="Age"
-                    min="1"
-                    max="120"
+                    defaultValue="18"
+                    value={(() => {
+                      const ageValue = formData.age || '18';
+                      const ageNum = parseInt(ageValue, 10);
+                      const finalValue = (isNaN(ageNum) || ageNum < 18) ? '18' : String(ageNum);
+                      return finalValue;
+                    })()}
+                    onChange={(e) => {
+                      const newValue = e.target.value;
+                      // If empty or invalid, set to 18
+                      if (newValue === '' || newValue === null || newValue === undefined) {
+                        setFormData(prev => ({ ...prev, age: '18' }));
+                        return;
+                      }
+                      const ageNum = parseInt(newValue, 10);
+                      // If less than 18, set to 18 immediately
+                      if (isNaN(ageNum) || ageNum < 18) {
+                        setFormData(prev => ({ ...prev, age: '18' }));
+                      } else {
+                        setFormData(prev => ({ ...prev, age: String(ageNum) }));
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      // Prevent typing values less than 18
+                      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                        const currentValue = parseInt(formData.age || '18', 10);
+                        if (e.key === 'ArrowDown' && currentValue <= 18) {
+                          e.preventDefault();
+                        }
+                      }
+                    }}
+                    onFocus={(e) => {
+                      // Ensure value is at least 18 when focused
+                      const currentValue = parseInt(e.target.value || '18', 10);
+                      if (isNaN(currentValue) || currentValue < 18) {
+                        e.target.value = '18';
+                        setFormData(prev => ({ ...prev, age: '18' }));
+                      }
+                    }}
+                    onBlur={(e) => {
+                      // Ensure value is at least 18 when field loses focus
+                      const currentValue = parseInt(e.target.value || '18', 10);
+                      if (isNaN(currentValue) || currentValue < 18) {
+                        e.target.value = '18';
+                        setFormData(prev => ({ ...prev, age: '18' }));
+                      }
+                    }}
+                    placeholder="Age (must be 18+)"
+                    min={18}
+                    max={120}
+                    step={1}
                     disabled={isLoading}
                   />
+                  {ageError && <span className="field-error">{ageError}</span>}
                 </div>
                 <div className="form-group">
                   <label>Gender</label>
@@ -262,9 +375,12 @@ const RegistrationWidget = () => {
                   type="text"
                   value={formData.category}
                   onChange={(e) => handleInputChange('category', e.target.value)}
-                  placeholder="e.g., Employee, Visitor, Student"
+                  placeholder="e.g., Employee, Visitor, Student (letters only)"
                   disabled={isLoading}
+                  pattern="[a-zA-Z\s\-']+"
+                  title="Category should only contain letters and spaces (no numbers)"
                 />
+                {categoryError && <span className="field-error">{categoryError}</span>}
               </div>
             </div>
 
