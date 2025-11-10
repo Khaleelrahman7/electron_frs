@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import MJPEGStreamPlayer from './MJPEGStreamPlayer';
 import { useCameraStore } from '../../store/cameraStore';
 import { useArchiveStore } from '../../store/archiveStore';
+import { API_BASE_URL } from '../../utils/apiConfig';
 import './CameraCard.css';
 
 const CameraCard = ({
@@ -229,7 +230,7 @@ const CameraCard = ({
           <div className="camera-stream-container">
             {camera.is_active ? (
               <img
-                src={`http://192.168.1.209:8005/api/collections/cameras/${camera.id}/stream`}
+                src={`${API_BASE_URL}/api/collections/cameras/${camera.id}/stream`}
                 alt={`${camera.name} stream`}
                 className="camera-stream-image"
                 onError={(e) => {

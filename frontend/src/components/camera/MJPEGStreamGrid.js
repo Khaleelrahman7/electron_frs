@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import './MJPEGStreamGrid.css';
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://192.168.1.209:8005';
+import { API_BASE_URL } from '../../utils/apiConfig';
 
 const MJPEGStreamGrid = ({ collectionName }) => {
   const [streams, setStreams] = useState([]);
