@@ -9,7 +9,7 @@
     "location": "Eagle Tower",
     "status": "inactive",
     "created_at": "2025-07-31 10:49:38.890043",
-    "last_seen": "2025-11-08 10:49:21.034371",
+    "last_seen": "2025-11-10 10:22:50.045424",
     "error_count": 0,
     "is_active": false
   },
@@ -51,7 +51,7 @@
     "location": "EAGLE",
     "status": "inactive",
     "created_at": "2025-11-07 11:45:06.182602",
-    "last_seen": "2025-11-08 11:39:41.872400",
+    "last_seen": "2025-11-08 12:00:18.495956",
     "error_count": 0,
     "is_active": false
   }
