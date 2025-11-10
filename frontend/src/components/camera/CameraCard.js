@@ -229,7 +229,7 @@ const CameraCard = ({
           <div className="camera-stream-container">
             {camera.is_active ? (
               <img
-                src={`http://localhost:8000/api/collections/cameras/${camera.id}/stream`}
+                src={`http://192.168.1.209:8005/api/collections/cameras/${camera.id}/stream`}
                 alt={`${camera.name} stream`}
                 className="camera-stream-image"
                 onError={(e) => {

@@ -294,7 +294,7 @@ const CollectionManager = ({ onClose, onViewChange }) => {
   const fetchCameraStreams = async () => {
     setStreamsLoading(true);
     try {
-      const response = await fetch('http://localhost:8000/api/collections/cameras');
+      const response = await fetch('http://192.168.1.209:8005/api/collections/cameras');
       if (response.ok) {
         const data = await response.json();
         setAllCameras(data.cameras || []);

@@ -4,7 +4,7 @@ import MJPEGPlayer from './camera/MJPEGPlayer';
 import { Grid, Play, Square, RefreshCw, Settings, Monitor } from 'lucide-react';
 import './StreamViewer.css';
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://192.168.1.209:8005';
 
 const StreamViewer = () => {
   const [cameras, setCameras] = useState([]);

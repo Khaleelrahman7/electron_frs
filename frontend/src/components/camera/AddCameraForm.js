@@ -46,7 +46,7 @@ const AddCameraForm = ({ collectionId, onClose, editingCamera = null }) => {
   // Validate camera data with backend
   const validateCameraData = async (ip, streamUrl, collectionName = null, excludeIp = null) => {
     try {
-      const response = await fetch('http://localhost:8000/api/collections/validate-camera', {
+      const response = await fetch('http://192.168.1.209:8005/api/collections/validate-camera', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { extractIPFromStreamURL } from '../utils/ipValidation';
 
-const API_BASE_URL = "http://localhost:8000";
+const API_BASE_URL = "http://192.168.1.209:8005";
 
 export const useCameraStore = create((set, get) => ({
   // State

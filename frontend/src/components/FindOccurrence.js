@@ -3,7 +3,7 @@ import axios from 'axios';
 import FaceCard from './FaceCard';
 import './FindOccurrence.css';
 
-const API_BASE_URL = "http://localhost:8000/api/events";
+const API_BASE_URL = "http://192.168.1.209:8005/api/events";
 
 const FindOccurrence = () => {
   const [selectedImage, setSelectedImage] = useState(null);
@@ -72,7 +72,7 @@ const FindOccurrence = () => {
       } else if (err.response) {
         errorMessage = `Server error: ${err.response.status} - ${err.response.data?.detail || err.response.statusText}`;
       } else if (err.request) {
-        errorMessage = 'Cannot connect to backend server. Please ensure the server is running on http://localhost:8000';
+        errorMessage = 'Cannot connect to backend server. Please ensure the server is running on http://192.168.1.209:8005';
       } else {
         errorMessage = `Error: ${err.message}`;
       }

@@ -9,11 +9,13 @@ import cv2
 import numpy as np
 from typing import Optional, Dict, Tuple
 
-# CONFIG
-BASE_DIR = Path(r"C:\python programs\electron_frs\backend_face\captured_faces")
+# CONFIG - Use dynamic path based on file location
+# Get the backend_face directory (parent of this file's directory)
+BACKEND_FACE_DIR = Path(__file__).parent.absolute()
+BASE_DIR = BACKEND_FACE_DIR / "captured_faces"
 KNOWN_DIRNAME = "known"
 UNKNOWN_DIRNAME = "unknown"
-LOG_CSV = Path(r"C:\python programs\electron_frs\backend_face\captured_faces\capture_log.csv")
+LOG_CSV = BASE_DIR / "capture_log.csv"
 # Minimum seconds between saves for same label (to avoid duplicates)
 DEFAULT_MIN_SAVE_INTERVAL_SECONDS = 5.0
 

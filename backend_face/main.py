@@ -142,13 +142,17 @@ def mount_services():
 # Mount all services
 mount_services()
 # Initialize face pipeline (non-disruptive; skips if unavailable)
+# Try GPU first (ctx=0), will auto-fallback to CPU if GPU unavailable
 try:
+    # Use smaller detection size for better performance: (640, 640) is good balance
+    # For better quality but slower: (832, 832) or (1024, 1024)
     init_face_pipeline(os.path.join(os.path.dirname(__file__), "data"), ctx=0, det_size=(640, 640))
     FACE_PIPELINE_READY = True
     logger.info("✓ Face pipeline initialized")
 except Exception as e:
     FACE_PIPELINE_READY = False
     logger.error(f"✗ Face pipeline init failed: {e}")
+    logger.info("Face recognition will be disabled. Check CUDA/GPU setup if GPU was expected.")
 
 # Configure static file serving for gallery images and captured faces
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -168,12 +172,14 @@ app.mount("/static/captured", StaticFiles(directory=CAPTURED_FACES_DIR), name="c
 from fastapi import HTTPException
 from fastapi.responses import FileResponse
 
-@app.get("/api/gallery/image/{person_name}/{image_name}")
+@app.get("/api/gallery/image/{person_name}/{image_name:path}")
 async def get_gallery_image(person_name: str, image_name: str):
     """Serve gallery images with proper error handling and fallback"""
     try:
         # Sanitize the inputs to prevent directory traversal
         person_name = person_name.replace('..', '').replace('/', '').replace('\\', '')
+        # Extract just the filename from image_name (in case full path is passed)
+        image_name = os.path.basename(image_name)
         image_name = image_name.replace('..', '').replace('/', '').replace('\\', '')
 
         # Construct the image path
@@ -222,6 +228,8 @@ async def get_captured_image(face_type: str, camera: str, person: str, image_nam
         # Sanitize the inputs to prevent directory traversal
         camera = camera.replace('..', '').replace('/', '').replace('\\', '')
         person = person.replace('..', '').replace('/', '').replace('\\', '')
+        # Extract just the filename from image_name (in case full path is passed)
+        image_name = os.path.basename(image_name)
         image_name = image_name.replace('..', '').replace('/', '').replace('\\', '')
 
         base_dir = os.path.join(CAPTURED_FACES_DIR, face_type)
@@ -651,5 +659,5 @@ async def options_handler(full_path: str):
 
 if __name__ == "__main__":
     import uvicorn
-    logger.info("Starting unified Face Recognition System API on port 8000")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    logger.info("Starting unified Face Recognition System API on port 8005")
+    uvicorn.run(app, host="0.0.0.0", port=8005)
