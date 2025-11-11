@@ -162,3 +162,4 @@ echo $REACT_APP_API_BASE_URL
 4. Check console for the actual URL being used
 5. Verify variable name: `REACT_APP_API_BASE_URL` (must start with `REACT_APP_`)
 
+
