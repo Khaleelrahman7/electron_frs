@@ -144,7 +144,8 @@ def save_face_image(
     expand_factor: float = 0.5,
     target_width: int = 512,
     max_upscale: float = 1.5,
-    jpeg_quality: int = 98
+    jpeg_quality: int = 98,
+    stream_id: Optional[str] = None  # Optional stream_id to access frame buffer for sharp capture
 ) -> Optional[Path]:
     """
     Robust face saving with auto-detected bbox format, smart padding, and limited upscaling.
@@ -168,8 +169,21 @@ def save_face_image(
     try:
         # If bbox + frame provided, extract and expand crop
         if frame_bgr is not None and bbox is not None:
-            H, W = frame_bgr.shape[:2]
-            l, t, r, b = _bbox_to_ltrb(bbox, frame_bgr.shape)
+            # Try to get best (sharpest) frame from buffer if stream_id provided
+            best_frame = None
+            if stream_id and source == "stream":
+                try:
+                    from camera_management.streaming import stream_manager
+                    best_frame = stream_manager._get_best_frame_from_buffer(stream_id, bbox)
+                except Exception as e:
+                    # Fallback to current frame if buffer access fails
+                    pass
+            
+            # Use best frame from buffer if available, otherwise use current frame
+            frame_to_use = best_frame if best_frame is not None else frame_bgr
+            
+            H, W = frame_to_use.shape[:2]
+            l, t, r, b = _bbox_to_ltrb(bbox, frame_to_use.shape)
             w_box = r - l
             h_box = b - t
             
@@ -196,7 +210,7 @@ def save_face_image(
             er = min(W, er)
             eb = min(H, eb)
             
-            face = frame_bgr[et:eb, el:er].copy()
+            face = frame_to_use[et:eb, el:er].copy()
             if face.size == 0:
                 return None
             
@@ -213,8 +227,12 @@ def save_face_image(
         if face_crop_bgr.dtype != "uint8":
             face_crop_bgr = (face_crop_bgr * 255).astype("uint8") if face_crop_bgr.max() <= 1.0 else face_crop_bgr.astype("uint8")
         
-        # Apply denoising first for better quality
-        face_crop_bgr = cv2.fastNlMeansDenoisingColored(face_crop_bgr, None, 10, 10, 7, 21)
+        # Apply gentle denoising (reduced strength to preserve details)
+        # Only denoise if image is large enough (small images get too blurry)
+        h, w = face_crop_bgr.shape[:2]
+        if h > 100 and w > 100:
+            # Use lighter denoising parameters to preserve sharpness
+            face_crop_bgr = cv2.fastNlMeansDenoisingColored(face_crop_bgr, None, 5, 5, 7, 21)
         
         # Smart resize: maintain aspect ratio, limit upscaling
         fh, fw = face_crop_bgr.shape[:2]
@@ -222,7 +240,7 @@ def save_face_image(
         desired_w = target_width
         desired_h = max(1, int(desired_w / aspect))
         
-        # Limit upscaling to avoid heavy blur
+        # Limit upscaling to avoid heavy blur (more conservative)
         max_allowed_w = int(fw * max_upscale)
         if desired_w > max_allowed_w:
             desired_w = max_allowed_w
@@ -230,8 +248,8 @@ def save_face_image(
         
         # Choose interpolation based on scaling direction
         if desired_w > fw:
-            # Upscaling - use high quality interpolation
-            interpolation = cv2.INTER_CUBIC
+            # Upscaling - use LANCZOS4 for best quality (slower but much better)
+            interpolation = cv2.INTER_LANCZOS4
         else:
             # Downscaling - use area interpolation for best quality
             interpolation = cv2.INTER_AREA
@@ -243,9 +261,11 @@ def save_face_image(
                 interpolation=interpolation
             )
         
-        # Apply gentle unsharp mask for clarity without artifacts
-        gaussian = cv2.GaussianBlur(face_crop_bgr, (0, 0), 2.0)
-        face_crop_bgr = cv2.addWeighted(face_crop_bgr, 1.5, gaussian, -0.5, 0)
+        # Apply gentle unsharp mask for clarity (reduced strength to avoid artifacts)
+        # Only apply if image is large enough
+        if fh > 80 and fw > 80:
+            gaussian = cv2.GaussianBlur(face_crop_bgr, (0, 0), 1.5)
+            face_crop_bgr = cv2.addWeighted(face_crop_bgr, 1.3, gaussian, -0.3, 0)
         
         # Apply CLAHE for better contrast (reduced clip limit to avoid over-enhancement)
         face_crop_bgr = apply_clahe(face_crop_bgr)

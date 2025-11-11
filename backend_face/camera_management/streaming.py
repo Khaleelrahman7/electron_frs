@@ -2,12 +2,15 @@ import cv2
 import threading
 import time
 import logging
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple, List
 import uuid
 from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
 import io
 import numpy as np
+from queue import Queue, Empty
+from collections import deque
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +20,28 @@ class CameraStreamManager:
     def __init__(self):
         self.active_streams: Dict[str, Dict] = {}
         self.stream_lock = threading.Lock()
+        # Per-stream frame processing queues and threads
+        self.processing_queues: Dict[str, Queue] = {}
+        self.processed_frames: Dict[str, deque] = {}  # Buffer of processed frames
+        self.processing_threads: Dict[str, threading.Thread] = {}
+        self.frame_counters: Dict[str, int] = {}  # Per-stream frame counters
+        self.max_buffer_size = 3  # Keep max 3 processed frames in buffer
+        # Frame quality tracking
+        self.last_good_frames: Dict[str, np.ndarray] = {}  # Store last valid frame per stream
+        self.frame_validation_enabled = True
+        # Frame buffer for sharp face capture (stores raw frames with timestamps)
+        self.frame_buffers: Dict[str, deque] = {}  # Buffer of raw frames for best capture
+        self.max_frame_buffer_size = 10  # Keep 10 frames for sharpness selection (increased for better quality)
+        
+        # Temporal tracking for stable bounding boxes (per stream)
+        self.tracked_detections: Dict[str, List[Dict]] = {}  # Store tracked detections per stream
+        self.tracking_max_age = 5  # Max frames to keep a detection without update
+        self.tracking_iou_threshold = 0.3  # IoU threshold for matching detections
+        
+        # Set FFmpeg environment variables to suppress H.264 error messages and handle errors better
+        os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = 'rtsp_transport;tcp|fflags;nobuffer|flags;low_delay|strict;experimental|err_detect;ignore_err'
+        # Suppress FFmpeg stderr output for H.264 errors (they're handled gracefully)
+        os.environ['OPENCV_LOG_LEVEL'] = 'ERROR'
     
     def start_stream(self, camera_id: int, rtsp_url: str) -> str:
         """Start a new camera stream"""
@@ -60,6 +85,34 @@ class CameraStreamManager:
     def stop_stream(self, stream_id: str) -> bool:
         """Stop a camera stream"""
         try:
+            # Stop processing thread
+            if stream_id in self.processing_threads:
+                if stream_id in self.processing_queues:
+                    # Signal stop by putting None
+                    try:
+                        self.processing_queues[stream_id].put(None, timeout=0.1)
+                    except:
+                        pass
+                # Wait for thread to finish (with timeout)
+                thread = self.processing_threads[stream_id]
+                if thread.is_alive():
+                    thread.join(timeout=2.0)
+                del self.processing_threads[stream_id]
+            
+            # Clean up queues and buffers
+            if stream_id in self.processing_queues:
+                del self.processing_queues[stream_id]
+            if stream_id in self.processed_frames:
+                del self.processed_frames[stream_id]
+            if stream_id in self.frame_counters:
+                del self.frame_counters[stream_id]
+            if stream_id in self.last_good_frames:
+                del self.last_good_frames[stream_id]
+            if stream_id in self.frame_buffers:
+                del self.frame_buffers[stream_id]
+            if stream_id in self.tracked_detections:
+                del self.tracked_detections[stream_id]
+            
             with self.stream_lock:
                 if stream_id in self.active_streams:
                     self.active_streams[stream_id]['is_active'] = False
@@ -90,6 +143,41 @@ class CameraStreamManager:
                     return stream_id
         return None
     
+    def _validate_frame(self, frame: np.ndarray) -> bool:
+        """Validate frame quality - check for corruption or pixelation"""
+        if frame is None:
+            return False
+        if frame.size == 0:
+            return False
+        if len(frame.shape) != 3 or frame.shape[2] != 3:
+            return False
+        
+        h, w = frame.shape[:2]
+        if h < 10 or w < 10:  # Too small
+            return False
+        
+        # Check for completely black or white frames (likely corruption)
+        mean_val = np.mean(frame)
+        if mean_val < 5 or mean_val > 250:
+            return False
+        
+        # Check for excessive noise or pixelation patterns
+        # Sample a few regions to check for blocky artifacts
+        sample_regions = [
+            frame[0:h//4, 0:w//4],      # Top-left
+            frame[h//4:h//2, w//2:3*w//4],  # Center
+            frame[3*h//4:h, 3*w//4:w]    # Bottom-right
+        ]
+        
+        for region in sample_regions:
+            if region.size > 0:
+                region_std = np.std(region)
+                # Very low std might indicate blocky/pixelated regions
+                if region_std < 0.5:
+                    return False
+        
+        return True
+    
     def generate_mjpeg_stream(self, stream_id: str):
         """Generate MJPEG stream for a camera with improved stability"""
         stream_info = self.get_stream_info(stream_id)
@@ -108,7 +196,8 @@ class CameraStreamManager:
             if isinstance(rtsp_url, str) and rtsp_url.isdigit():
                 cap = cv2.VideoCapture(int(rtsp_url))
             else:
-                cap = cv2.VideoCapture(rtsp_url)
+                # Use FFMPEG backend for RTSP streams
+                cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
                 
             if cap.isOpened():
                 # Test with multiple frames to ensure stable connection
@@ -143,18 +232,293 @@ class CameraStreamManager:
         # Real camera streaming with improved stability
         yield from self._generate_real_camera_stream(stream_id, stream_info, rtsp_url)
 
+    def _focus_measure(self, gray: np.ndarray) -> float:
+        """Calculate sharpness using variance of Laplacian (improved for better detection)"""
+        try:
+            # Use Laplacian variance for sharpness
+            laplacian_var = cv2.Laplacian(gray, cv2.CV_64F).var()
+            
+            # Also check gradient magnitude for additional sharpness metric
+            grad_x = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
+            grad_y = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
+            gradient_mag = np.sqrt(grad_x**2 + grad_y**2).mean()
+            
+            # Combine both metrics (weighted average)
+            combined_score = laplacian_var * 0.7 + gradient_mag * 0.3
+            return combined_score
+        except:
+            return 0.0
+    
+    def _get_best_frame_from_buffer(self, stream_id: str, bbox: Tuple[int, int, int, int]) -> Optional[np.ndarray]:
+        """Get the sharpest frame from buffer for the given bounding box"""
+        buffer = self.frame_buffers.get(stream_id)
+        if not buffer or len(buffer) == 0:
+            return None
+        
+        x1, y1, x2, y2 = bbox
+        best_frame = None
+        best_score = -1
+        
+        for frame_data in buffer:
+            frame, _ = frame_data
+            if frame is None:
+                continue
+            
+            h, w = frame.shape[:2]
+            # Clamp bbox to frame bounds
+            x1_c = max(0, min(w-1, x1))
+            y1_c = max(0, min(h-1, y1))
+            x2_c = max(0, min(w-1, x2))
+            y2_c = max(0, min(h-1, y2))
+            
+            if x2_c <= x1_c or y2_c <= y1_c:
+                continue
+            
+            # Extract crop
+            crop = frame[y1_c:y2_c, x1_c:x2_c]
+            if crop.size == 0:
+                continue
+            
+            # Convert to grayscale and measure sharpness
+            if len(crop.shape) == 3:
+                gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+            else:
+                gray = crop
+            
+            score = self._focus_measure(gray)
+            if score > best_score:
+                best_score = score
+                best_frame = frame.copy()
+        
+        # Only return if sharpness is above threshold (avoid very blurry faces)
+        # Lowered threshold slightly but improved measurement should catch more good frames
+        if best_score < 30:  # Threshold for acceptable sharpness (reduced from 50, improved measurement compensates)
+            return None
+        
+        return best_frame
+    
+    def _calculate_iou(self, bbox1: Tuple[int, int, int, int], bbox2: Tuple[int, int, int, int]) -> float:
+        """Calculate Intersection over Union (IoU) between two bounding boxes"""
+        x1_1, y1_1, x2_1, y2_1 = bbox1
+        x1_2, y1_2, x2_2, y2_2 = bbox2
+        
+        # Calculate intersection
+        x1_i = max(x1_1, x1_2)
+        y1_i = max(y1_1, y1_2)
+        x2_i = min(x2_1, x2_2)
+        y2_i = min(y2_1, y2_2)
+        
+        if x2_i <= x1_i or y2_i <= y1_i:
+            return 0.0
+        
+        intersection = (x2_i - x1_i) * (y2_i - y1_i)
+        area1 = (x2_1 - x1_1) * (y2_1 - y1_1)
+        area2 = (x2_2 - x1_2) * (y2_2 - y1_2)
+        union = area1 + area2 - intersection
+        
+        if union == 0:
+            return 0.0
+        
+        return intersection / union
+    
+    def _match_detections(self, new_detections: List[Dict], tracked_detections: List[Dict]) -> List[Dict]:
+        """Match new detections with tracked detections using IoU and update tracking"""
+        matched = [False] * len(new_detections)
+        updated_tracked = []
+        
+        # Age existing tracked detections
+        for track in tracked_detections:
+            track['age'] = track.get('age', 0) + 1
+        
+        # Try to match new detections with existing tracks
+        for i, new_det in enumerate(new_detections):
+            best_match_idx = -1
+            best_iou = 0.0
+            
+            for j, track in enumerate(tracked_detections):
+                if track.get('matched', False):
+                    continue
+                
+                iou = self._calculate_iou(new_det['bbox'], track['bbox'])
+                if iou > best_iou and iou >= self.tracking_iou_threshold:
+                    best_iou = iou
+                    best_match_idx = j
+            
+            if best_match_idx >= 0:
+                # Match found - update track with new detection (smooth position)
+                track = tracked_detections[best_match_idx]
+                old_bbox = track['bbox']
+                new_bbox = new_det['bbox']
+                
+                # Exponential smoothing for bbox position (alpha = 0.7 for stability)
+                alpha = 0.7
+                smoothed_bbox = (
+                    int(old_bbox[0] * (1 - alpha) + new_bbox[0] * alpha),
+                    int(old_bbox[1] * (1 - alpha) + new_bbox[1] * alpha),
+                    int(old_bbox[2] * (1 - alpha) + new_bbox[2] * alpha),
+                    int(old_bbox[3] * (1 - alpha) + new_bbox[3] * alpha)
+                )
+                
+                # Update track
+                track['bbox'] = smoothed_bbox
+                track['name'] = new_det['name']  # Update name/confidence
+                track['conf'] = new_det['conf']
+                track['age'] = 0  # Reset age
+                track['matched'] = True
+                matched[i] = True
+                updated_tracked.append(track)
+            else:
+                # New detection - add as new track
+                new_track = {
+                    'bbox': new_det['bbox'],
+                    'name': new_det['name'],
+                    'conf': new_det['conf'],
+                    'age': 0,
+                    'matched': True
+                }
+                updated_tracked.append(new_track)
+                matched[i] = True
+        
+        # Keep unmatched tracks that haven't aged too much
+        for track in tracked_detections:
+            if not track.get('matched', False) and track.get('age', 0) < self.tracking_max_age:
+                track['matched'] = False  # Reset for next frame
+                updated_tracked.append(track)
+        
+        return updated_tracked
+    
+    def _face_processing_worker(self, stream_id: str):
+        """Background worker thread for async face processing with temporal smoothing"""
+        queue = self.processing_queues.get(stream_id)
+        if not queue:
+            return
+        
+        frame_counter = 0
+        PROCESS_EVERY_N_FRAMES = 2  # Process every 2nd frame for performance
+        # Initialize tracked detections for this stream
+        if stream_id not in self.tracked_detections:
+            self.tracked_detections[stream_id] = []
+        
+        try:
+            while self._is_stream_active(stream_id):
+                try:
+                    # Get frame from queue (with timeout to allow checking stream status)
+                    frame_data = queue.get(timeout=0.5)
+                    
+                    # None signals stop
+                    if frame_data is None:
+                        break
+                    
+                    frame, frame_num = frame_data
+                    frame_counter += 1
+                    
+                    # Skip processing for some frames to maintain frame rate
+                    if frame_counter % PROCESS_EVERY_N_FRAMES != 0:
+                        # Use raw frame but still add to buffer
+                        processed_frame = frame.copy()
+                        # Use tracked detections for temporal smoothing (stable boxes)
+                        tracked = self.tracked_detections.get(stream_id, [])
+                        detections = [
+                            {'name': t['name'], 'conf': t['conf'], 'bbox': t['bbox']}
+                            for t in tracked if t.get('age', 0) < self.tracking_max_age
+                        ]
+                    else:
+                        # Process frame for face detection
+                        try:
+                            from face_pipeline import process_frame as face_process_frame
+                            # Use per-stream frame counter, pass stream_id for frame buffer access
+                            # Get frame with detections drawn (face_pipeline draws them)
+                            processed_frame_with_detections, new_detections = face_process_frame(frame, force_process=True, stream_id=stream_id)
+                            
+                            # Match new detections with tracked detections for stability
+                            tracked = self.tracked_detections.get(stream_id, [])
+                            # Reset matched flags
+                            for t in tracked:
+                                t['matched'] = False
+                            
+                            # Match and update tracked detections
+                            updated_tracked = self._match_detections(new_detections, tracked)
+                            self.tracked_detections[stream_id] = updated_tracked
+                            
+                            # Convert tracked detections back to detection format
+                            detections = [
+                                {'name': t['name'], 'conf': t['conf'], 'bbox': t['bbox']}
+                                for t in updated_tracked if t.get('age', 0) < self.tracking_max_age
+                            ]
+                            
+                            # Use original frame and draw tracked (stable) detections on it
+                            # This ensures smooth boxes without flickering
+                            processed_frame = frame.copy()
+                            for det in detections:
+                                x1, y1, x2, y2 = det['bbox']
+                                cv2.rectangle(processed_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                                label = f"{det['name']} ({det['conf']:.2f})"
+                                label_y = y1 - 10 if y1 - 10 > 10 else y1 + 10
+                                cv2.putText(
+                                    processed_frame,
+                                    label,
+                                    (x1, label_y),
+                                    cv2.FONT_HERSHEY_SIMPLEX,
+                                    0.5,
+                                    (255, 255, 255),
+                                    2,
+                                )
+                        except Exception as face_error:
+                            logger.debug(f"Face processing error for stream {stream_id}: {face_error}")
+                            processed_frame = frame.copy()
+                            # Use existing tracked detections even on error
+                            tracked = self.tracked_detections.get(stream_id, [])
+                            detections = [
+                                {'name': t['name'], 'conf': t['conf'], 'bbox': t['bbox']}
+                                for t in tracked if t.get('age', 0) < self.tracking_max_age
+                            ]
+                    
+                    # Add to processed frames buffer (thread-safe)
+                    if stream_id not in self.processed_frames:
+                        self.processed_frames[stream_id] = deque(maxlen=self.max_buffer_size)
+                    
+                    buffer = self.processed_frames[stream_id]
+                    buffer.append((processed_frame, frame_num, time.time()))
+                    
+                    queue.task_done()
+                    
+                except Empty:
+                    continue
+                except Exception as e:
+                    logger.error(f"Error in face processing worker for {stream_id}: {e}")
+                    continue
+        except Exception as e:
+            logger.error(f"Face processing worker exited for {stream_id}: {e}")
+    
     def _generate_real_camera_stream(self, stream_id: str, stream_info: Dict, rtsp_url: str):
-        """Generate stream from real camera with enhanced stability"""
+        """Generate stream from real camera with enhanced stability and async face processing"""
         cap = None
         consecutive_failures = 0
         max_failures = 10
         frame_count = 0
         last_frame = None
+        last_processed_frame = None
         reconnect_attempts = 0
         max_reconnect_attempts = 5
 
-        # JPEG encoding parameters for better performance
-        encode_params = [cv2.IMWRITE_JPEG_QUALITY, 85]
+        # JPEG encoding parameters - slightly lower quality for better performance
+        encode_params = [cv2.IMWRITE_JPEG_QUALITY, 80]
+        
+        # Initialize processing queue and thread for this stream
+        if stream_id not in self.processing_queues:
+            self.processing_queues[stream_id] = Queue(maxsize=2)  # Small queue to prevent lag
+            self.processed_frames[stream_id] = deque(maxlen=self.max_buffer_size)
+            self.frame_counters[stream_id] = 0
+            
+            # Start processing thread
+            processing_thread = threading.Thread(
+                target=self._face_processing_worker,
+                args=(stream_id,),
+                daemon=True
+            )
+            processing_thread.start()
+            self.processing_threads[stream_id] = processing_thread
+            logger.info(f"Started face processing thread for stream {stream_id}")
 
         while self._is_stream_active(stream_id) and reconnect_attempts < max_reconnect_attempts:
             try:
@@ -165,61 +529,169 @@ class CameraStreamManager:
                     if isinstance(rtsp_url, str) and rtsp_url.isdigit():
                         cap = cv2.VideoCapture(int(rtsp_url))
                     else:
-                        cap = cv2.VideoCapture(rtsp_url)
+                        # Use FFMPEG backend for RTSP streams to better handle H.264
+                        cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
 
                     if cap.isOpened():
-                        # Optimize capture settings
-                        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimal buffering
+                        # Optimize capture settings to reduce H.264 errors
+                        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimal buffering to reduce latency
                         cap.set(cv2.CAP_PROP_FPS, 25)  # Target 25 FPS
-
+                        
+                        # Try hardware acceleration if available (NVDEC for NVIDIA GPUs)
+                        if not isinstance(rtsp_url, str) or not rtsp_url.isdigit():
+                            try:
+                                # Try to enable hardware acceleration via environment
+                                # This uses NVDEC on NVIDIA GPUs if available
+                                os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = (
+                                    'rtsp_transport;tcp|'
+                                    'fflags;nobuffer|'
+                                    'flags;low_delay|'
+                                    'strict;experimental|'
+                                    'err_detect;ignore_err|'
+                                    'hwaccel;nvdec|'  # NVIDIA hardware acceleration
+                                    'hwaccel_device;0'
+                                )
+                            except:
+                                pass
+                            
+                            try:
+                                # Try to set MJPG codec preference (less errors than H264)
+                                fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+                                cap.set(cv2.CAP_PROP_FOURCC, fourcc)
+                            except:
+                                pass  # Some cameras don't support codec change
+                        
                         # Set timeouts
-                        cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 30000)  # 30 seconds
-                        cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000)   # 5 seconds
+                        try:
+                            cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 30000)  # 30 seconds
+                            cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000)   # 5 seconds
+                        except:
+                            pass  # Some backends don't support timeouts
 
                         logger.info(f"Successfully connected to camera for stream {stream_id}")
                         consecutive_failures = 0
                     else:
                         raise Exception("Failed to open camera")
 
-                # Read frame
-                ret, frame = cap.read()
-
+                # Use grab()/retrieve() pattern to avoid FFmpeg backlogs
+                if not cap.grab():
+                    consecutive_failures += 1
+                    if consecutive_failures >= max_failures:
+                        logger.error(f"Too many consecutive grab failures for stream {stream_id}, reconnecting...")
+                        if cap:
+                            cap.release()
+                            cap = None
+                        reconnect_attempts += 1
+                        time.sleep(2)
+                        continue
+                    time.sleep(0.01)
+                    continue
+                
+                ret, frame = cap.retrieve()
+                
                 if ret and frame is not None and frame.size > 0:
-                    consecutive_failures = 0
-                    last_frame = frame.copy()
+                    # Validate frame quality - skip corrupted/pixelated frames
+                    frame_valid = True
+                    if self.frame_validation_enabled:
+                        frame_valid = self._validate_frame(frame)
+                    
+                    if frame_valid:
+                        consecutive_failures = 0
+                        last_frame = frame.copy()
+                        self.last_good_frames[stream_id] = frame.copy()  # Store good frame
+                        frame_count += 1
+                        self.frame_counters[stream_id] = frame_count
 
-                    # Apply face detection and recognition
-                    processed_frame = frame
-                    try:
-                        # Try to import and use face pipeline for processing
-                        from face_pipeline import process_frame as face_process_frame
-                        processed_frame, _ = face_process_frame(frame)
-                    except Exception as face_error:
-                        # If face processing fails, use raw frame
-                        logger.debug(f"Face processing skipped for stream {stream_id}: {face_error}")
-                        processed_frame = frame
+                        # Add to frame buffer for sharp face capture (use original resolution)
+                        if stream_id not in self.frame_buffers:
+                            self.frame_buffers[stream_id] = deque(maxlen=self.max_frame_buffer_size)
+                        # Store full resolution frame for better quality captures
+                        self.frame_buffers[stream_id].append((frame.copy(), frame_count))
 
-                    # Encode frame
-                    try:
-                        ret_encode, buffer = cv2.imencode('.jpg', processed_frame, encode_params)
-                        if ret_encode and buffer is not None:
-                            # Update stream info
-                            with self.stream_lock:
-                                if stream_id in self.active_streams:
-                                    self.active_streams[stream_id]['frame_count'] = frame_count
-                                    self.active_streams[stream_id]['last_frame_time'] = time.time()
+                        # Send frame to processing queue (non-blocking)
+                        queue = self.processing_queues.get(stream_id)
+                        if queue:
+                            try:
+                                # Don't block if queue is full - drop frame to maintain real-time
+                                queue.put_nowait((frame.copy(), frame_count))
+                            except:
+                                # Queue full, skip this frame for processing
+                                pass
 
-                            # Yield frame
-                            yield (b'--frame\r\n'
-                                   b'Content-Type: image/jpeg\r\n'
-                                   b'Content-Length: ' + str(len(buffer)).encode() + b'\r\n\r\n' +
-                                   buffer.tobytes() + b'\r\n')
+                        # Try to get processed frame from buffer (non-blocking)
+                        processed_frame = None
+                        buffer = self.processed_frames.get(stream_id)
+                        if buffer and len(buffer) > 0:
+                            try:
+                                # Get most recent processed frame
+                                processed_frame, _, _ = buffer[-1]
+                            except:
+                                pass
+                        
+                        # Fallback to raw frame if no processed frame available
+                        if processed_frame is None:
+                            processed_frame = frame
 
-                            frame_count += 1
+                        # Encode and send frame immediately (don't wait for processing)
+                        try:
+                            ret_encode, buffer = cv2.imencode('.jpg', processed_frame, encode_params)
+                            if ret_encode and buffer is not None:
+                                # Update stream info
+                                with self.stream_lock:
+                                    if stream_id in self.active_streams:
+                                        self.active_streams[stream_id]['frame_count'] = frame_count
+                                        self.active_streams[stream_id]['last_frame_time'] = time.time()
+
+                                # Yield frame
+                                yield (b'--frame\r\n'
+                                       b'Content-Type: image/jpeg\r\n'
+                                       b'Content-Length: ' + str(len(buffer)).encode() + b'\r\n\r\n' +
+                                       buffer.tobytes() + b'\r\n')
+                                
+                                last_processed_frame = processed_frame
+                            else:
+                                logger.warning(f"Failed to encode frame for stream {stream_id}")
+                        except Exception as encode_error:
+                            logger.error(f"Frame encoding error for stream {stream_id}: {encode_error}")
+                    else:
+                        # Frame is corrupted - use last good frame
+                        if stream_id in self.last_good_frames:
+                            frame = self.last_good_frames[stream_id].copy()
+                            # Continue with the good frame (don't increment failure counter)
+                            # Send frame to processing queue
+                            queue = self.processing_queues.get(stream_id)
+                            if queue:
+                                try:
+                                    queue.put_nowait((frame.copy(), frame_count))
+                                except:
+                                    pass
+                            
+                            # Get processed frame or use raw
+                            processed_frame = None
+                            buffer = self.processed_frames.get(stream_id)
+                            if buffer and len(buffer) > 0:
+                                try:
+                                    processed_frame, _, _ = buffer[-1]
+                                except:
+                                    pass
+                            
+                            if processed_frame is None:
+                                processed_frame = frame
+                            
+                            # Send the good frame
+                            try:
+                                ret_encode, buffer = cv2.imencode('.jpg', processed_frame, encode_params)
+                                if ret_encode and buffer is not None:
+                                    yield (b'--frame\r\n'
+                                           b'Content-Type: image/jpeg\r\n'
+                                           b'Content-Length: ' + str(len(buffer)).encode() + b'\r\n\r\n' +
+                                           buffer.tobytes() + b'\r\n')
+                                    last_processed_frame = processed_frame
+                            except:
+                                pass
                         else:
-                            logger.warning(f"Failed to encode frame for stream {stream_id}")
-                    except Exception as encode_error:
-                        logger.error(f"Frame encoding error for stream {stream_id}: {encode_error}")
+                            # No good frame available yet, skip this frame
+                            consecutive_failures += 1
                 else:
                     consecutive_failures += 1
                     logger.warning(f"Failed to read frame {consecutive_failures}/{max_failures} for stream {stream_id}")
@@ -233,10 +705,18 @@ class CameraStreamManager:
                         time.sleep(2)  # Wait before reconnecting
                         continue
 
-                    # Use last frame if available
-                    if last_frame is not None:
+                    # Use last processed frame if available, otherwise last good raw frame
+                    frame_to_send = None
+                    if last_processed_frame is not None:
+                        frame_to_send = last_processed_frame
+                    elif stream_id in self.last_good_frames:
+                        frame_to_send = self.last_good_frames[stream_id]
+                    elif last_frame is not None:
+                        frame_to_send = last_frame
+                    
+                    if frame_to_send is not None:
                         try:
-                            ret_encode, buffer = cv2.imencode('.jpg', last_frame, encode_params)
+                            ret_encode, buffer = cv2.imencode('.jpg', frame_to_send, encode_params)
                             if ret_encode and buffer is not None:
                                 yield (b'--frame\r\n'
                                        b'Content-Type: image/jpeg\r\n'
@@ -245,8 +725,8 @@ class CameraStreamManager:
                         except:
                             pass
 
-                # Control frame rate
-                time.sleep(0.04)  # ~25 FPS
+                # Control frame rate - adaptive based on processing time
+                time.sleep(0.033)  # ~30 FPS target (slightly faster to compensate for processing delays)
 
             except Exception as e:
                 logger.error(f"Error in camera stream {stream_id}: {e}")

@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 import face_recognition
 from insightface.app import FaceAnalysis
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple, Dict, Any, Optional
 import threading
 import os
 from save_face import save_face_image
@@ -91,7 +91,7 @@ def init(data_dir: str, ctx: int = -1, det_size: Tuple[int, int] = (640, 640)) -
             raise
 
 
-def process_frame(frame_bgr: np.ndarray, force_process: bool = False) -> Tuple[np.ndarray, List[Dict[str, Any]]]:
+def process_frame(frame_bgr: np.ndarray, force_process: bool = False, stream_id: Optional[str] = None) -> Tuple[np.ndarray, List[Dict[str, Any]]]:
     """Detect + recognize faces in one frame. Returns annotated frame + detections.
     
     Args:
@@ -114,15 +114,16 @@ def process_frame(frame_bgr: np.ndarray, force_process: bool = False) -> Tuple[n
             return frame_bgr, []
 
     # Downscale frame for faster processing while maintaining quality
-    # Process at 640p max width for speed
+    # Reduced max width for better performance during streaming
     original_h, original_w = frame_bgr.shape[:2]
-    max_width = 1280  # Process at max 1280px width for better speed/quality balance
+    max_width = 960  # Reduced from 1280 for better performance (still good quality)
     
     if original_w > max_width:
         scale = max_width / original_w
         new_w = max_width
         new_h = int(original_h * scale)
-        scaled_frame = cv2.resize(frame_bgr, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+        # Use faster interpolation for real-time processing
+        scaled_frame = cv2.resize(frame_bgr, (new_w, new_h), interpolation=cv2.INTER_AREA)
         scale_back = original_w / new_w
     else:
         scaled_frame = frame_bgr
@@ -166,8 +167,8 @@ def process_frame(frame_bgr: np.ndarray, force_process: bool = False) -> Tuple[n
         if face_crop_bgr.size == 0:
             continue
 
-        # Skip very small faces (likely false positives)
-        if (x2 - x1) < 30 or (y2 - y1) < 30:
+        # Skip very small faces (likely false positives) - slightly more lenient for streaming
+        if (x2 - x1) < 25 or (y2 - y1) < 25:
             continue
 
         face_crop_rgb = cv2.cvtColor(face_crop_bgr, cv2.COLOR_BGR2RGB)
@@ -176,11 +177,15 @@ def process_frame(frame_bgr: np.ndarray, force_process: bool = False) -> Tuple[n
         crop_h, crop_w = face_crop_rgb.shape[:2]
         crop_location = [(0, crop_w - 1, crop_h - 1, 0)]
         try:
-            # Use num_jitters=0 for faster encoding (trades slight accuracy for speed)
+            # Use num_jitters=0 and small model for faster encoding (optimized for real-time)
             encs = face_recognition.face_encodings(
-                face_crop_rgb, known_face_locations=crop_location, num_jitters=0, model='small'
+                face_crop_rgb, 
+                known_face_locations=crop_location, 
+                num_jitters=0,  # No jittering for speed
+                model='small'    # Small model for faster processing
             )
-        except Exception:
+        except Exception as e:
+            # Silently skip encoding errors to avoid log spam
             encs = []
 
         name = "Unknown"
@@ -196,10 +201,12 @@ def process_frame(frame_bgr: np.ndarray, force_process: bool = False) -> Tuple[n
                 name = known_names[best_idx]
 
         # Save face crop asynchronously to avoid blocking frame processing
+        # Try to get best frame from buffer for sharp capture
         def _save_face_async():
             try:
                 save_label = name if name != "Unknown" else "unknown"
-                # Pass frame + bbox for robust cropping with padding and expansion
+                
+                # save_face_image will automatically get sharpest frame from buffer if stream_id provided
                 save_face_image(
                     frame_bgr=frame_bgr,
                     bbox=(x1, y1, x2, y2),
@@ -207,10 +214,11 @@ def process_frame(frame_bgr: np.ndarray, force_process: bool = False) -> Tuple[n
                     confidence=conf,
                     min_interval=MIN_SAVE_INTERVAL,
                     source="stream",
-                    expand_factor=0.3,  # 30% expansion for better context (reduced for speed)
-                    target_width=640,   # Higher resolution for better clarity
-                    max_upscale=2.0,    # Allow more upscaling for small faces
-                    jpeg_quality=95     # High quality JPEG (slightly reduced for file size)
+                    expand_factor=0.4,  # 40% expansion for better context
+                    target_width=800,   # Higher resolution for better clarity (increased from 640)
+                    max_upscale=2.5,    # Allow more upscaling for small faces
+                    jpeg_quality=98,    # Very high quality JPEG (increased from 95)
+                    stream_id=stream_id  # Pass stream_id to access frame buffer
                 )
             except Exception as e:
                 print(f"Error saving face in async thread: {e}")
