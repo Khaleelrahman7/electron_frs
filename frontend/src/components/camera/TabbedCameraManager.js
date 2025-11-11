@@ -128,6 +128,8 @@ const TabbedCameraManager = ({ onClose }) => {
           name: editCollectionName.trim(),
           description: editCollectionDescription.trim() || null
         });
+        // Refresh collections and cameras after update
+        await initialize();
         setShowEditCollection(false);
         setEditingCollection(null);
         setEditCollectionName('');

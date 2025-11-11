@@ -219,15 +219,6 @@ const StreamViewer = () => {
                 <div className="video-footer">
                   <span className="camera-ip">{camera.ip}</span>
                   <span className="camera-collection">{camera.collectionId}</span>
-                  <button 
-                    onClick={() => {
-                      const url = `${API_BASE_URL}/api/collections/cameras/${camera.id}/frame?t=${Date.now()}`;
-                      window.open(url, '_blank');
-                    }}
-                    style={{padding: '2px 6px', fontSize: '10px', marginLeft: '8px'}}
-                  >
-                    Open Frame
-                  </button>
                 </div>
               </div>
             ))}

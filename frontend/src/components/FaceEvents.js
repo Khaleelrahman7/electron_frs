@@ -92,21 +92,21 @@ const FaceEvents = () => {
   }, [fromDate, toDate]);
 
   const handleFromDateChange = (date) => {
-    setFromDate(date);
     if (date && toDate && date > toDate) {
-      setError('From date cannot be later than To date');
-    } else {
-      setError(null);
+      setError('From date cannot be later than To date. Please select a valid date range.');
+      return; // Don't update if invalid
     }
+    setFromDate(date);
+    setError(null); // Clear error if valid
   };
 
   const handleToDateChange = (date) => {
-    setToDate(date);
     if (date && fromDate && date < fromDate) {
-      setError('To date cannot be earlier than From date');
-    } else {
-      setError(null);
+      setError('To date cannot be earlier than From date. Please select a valid date range.');
+      return; // Don't update if invalid
     }
+    setToDate(date);
+    setError(null); // Clear error if valid
   };
 
   const getTabOverrides = useCallback((tab) => {

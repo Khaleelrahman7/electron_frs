@@ -25,13 +25,14 @@ const RegistrationWidget = () => {
   const [selectedFolder, setSelectedFolder] = useState('');
   const excelFileInputRef = useRef(null);
 
-  // Ensure age is always 18 or above on component mount and whenever it changes
+  // Ensure age is always 18 or above on component mount
   useEffect(() => {
     const ageNum = parseInt(formData.age, 10);
     if (!formData.age || isNaN(ageNum) || ageNum < 18) {
       setFormData(prev => ({ ...prev, age: '18' }));
+      setAgeError('');
     }
-  }, [formData.age]);
+  }, []);
 
   const handleInputChange = (field, value) => {
     // Validate age - must be 18 or above
@@ -59,10 +60,12 @@ const RegistrationWidget = () => {
         setFormData(prev => ({ ...prev, [field]: '' }));
         return;
       }
-      // Allow only letters, spaces, and common punctuation for category names
+      // Allow only letters, spaces, and common punctuation for category names (no numbers)
       const categoryPattern = /^[a-zA-Z\s\-']+$/;
       if (!categoryPattern.test(categoryValue)) {
-        setCategoryError('Category should only contain letters and spaces (no numbers)');
+        setCategoryError('Category should only contain letters and spaces (no numbers allowed)');
+        // Don't update the field if it contains numbers
+        return;
       } else {
         setCategoryError('');
       }
