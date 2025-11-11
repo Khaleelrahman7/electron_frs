@@ -110,10 +110,6 @@ const TabbedCameraManager = ({ onClose }) => {
   };
 
   const handleEditCollection = (collection) => {
-    if (collection.id === 'default') {
-      alert('Cannot edit the default collection');
-      return;
-    }
     setEditingCollection(collection);
     setEditCollectionName(collection.name);
     setEditCollectionDescription(collection.description || '');

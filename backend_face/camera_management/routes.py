@@ -556,10 +556,6 @@ async def update_collection(
         if not collection:
             raise HTTPException(status_code=404, detail="Collection not found")
         
-        # Check if it's the default collection
-        if collection_id == "default" and request.name and request.name.lower() != "default collection":
-            raise HTTPException(status_code=400, detail="Cannot rename the default collection")
-        
         # Check for duplicate names (excluding current collection)
         if request.name:
             if any(c.name.lower() == request.name.lower() and c.id != collection_id for c in collections):

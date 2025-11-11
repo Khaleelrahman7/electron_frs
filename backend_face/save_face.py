@@ -145,7 +145,8 @@ def save_face_image(
     target_width: int = 512,
     max_upscale: float = 1.5,
     jpeg_quality: int = 98,
-    stream_id: Optional[str] = None  # Optional stream_id to access frame buffer for sharp capture
+    stream_id: Optional[str] = None,  # Optional stream_id to access frame buffer for sharp capture
+    prefer_png: bool = False  # Save PNG instead of JPEG when True
 ) -> Optional[Path]:
     """
     Robust face saving with auto-detected bbox format, smart padding, and limited upscaling.
@@ -227,55 +228,51 @@ def save_face_image(
         if face_crop_bgr.dtype != "uint8":
             face_crop_bgr = (face_crop_bgr * 255).astype("uint8") if face_crop_bgr.max() <= 1.0 else face_crop_bgr.astype("uint8")
         
-        # Apply gentle denoising (reduced strength to preserve details)
-        # Only denoise if image is large enough (small images get too blurry)
+        # Smart resize: maintain aspect ratio.
+        # IMPORTANT: only upscale small crops; never downscale larger-than-target crops.
         h, w = face_crop_bgr.shape[:2]
-        if h > 100 and w > 100:
-            # Use lighter denoising parameters to preserve sharpness
-            face_crop_bgr = cv2.fastNlMeansDenoisingColored(face_crop_bgr, None, 5, 5, 7, 21)
-        
-        # Smart resize: maintain aspect ratio, limit upscaling
         fh, fw = face_crop_bgr.shape[:2]
         aspect = fw / float(fh) if fh != 0 else 1.0
-        desired_w = target_width
-        desired_h = max(1, int(desired_w / aspect))
-        
-        # Limit upscaling to avoid heavy blur (more conservative)
-        max_allowed_w = int(fw * max_upscale)
-        if desired_w > max_allowed_w:
-            desired_w = max_allowed_w
+        if fw < target_width:
+            desired_w = min(int(fw * max_upscale), target_width)
+            desired_w = max(desired_w, fw)  # never shrink
             desired_h = max(1, int(desired_w / aspect))
+            if abs(desired_w - fw) > 2:
+                face_crop_bgr = cv2.resize(
+                    face_crop_bgr, (desired_w, desired_h),
+                    interpolation=cv2.INTER_LANCZOS4
+                )
         
-        # Choose interpolation based on scaling direction
-        if desired_w > fw:
-            # Upscaling - use LANCZOS4 for best quality (slower but much better)
-            interpolation = cv2.INTER_LANCZOS4
-        else:
-            # Downscaling - use area interpolation for best quality
-            interpolation = cv2.INTER_AREA
-        
-        # Only resize if it makes a noticeable difference
-        if abs(desired_w - fw) > 2:
-            face_crop_bgr = cv2.resize(
-                face_crop_bgr, (desired_w, desired_h),
-                interpolation=interpolation
-            )
-        
-        # Apply gentle unsharp mask for clarity (reduced strength to avoid artifacts)
+        # Apply gentle unsharp mask for clarity (very conservative)
         # Only apply if image is large enough
         if fh > 80 and fw > 80:
-            gaussian = cv2.GaussianBlur(face_crop_bgr, (0, 0), 1.5)
-            face_crop_bgr = cv2.addWeighted(face_crop_bgr, 1.3, gaussian, -0.3, 0)
+            gaussian = cv2.GaussianBlur(face_crop_bgr, (0, 0), 1.2)
+            face_crop_bgr = cv2.addWeighted(face_crop_bgr, 1.2, gaussian, -0.2, 0)
         
-        # Apply CLAHE for better contrast (reduced clip limit to avoid over-enhancement)
-        face_crop_bgr = apply_clahe(face_crop_bgr)
+        # Apply CLAHE only when contrast is low to avoid over-sharpened artifacts
+        try:
+            gray = cv2.cvtColor(face_crop_bgr, cv2.COLOR_BGR2GRAY)
+            if gray.std() < 25:  # heuristic threshold
+                face_crop_bgr = apply_clahe(face_crop_bgr)
+        except Exception:
+            pass
         
         # Save
         dir_path = ensure_dirs_for_label(label_s)
         fname = f"{label_s}_{_current_timestamp_str()}.jpg"
         save_path = dir_path / fname
         
-        success = cv2.imwrite(str(save_path), face_crop_bgr, [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality])
+        if prefer_png:
+            save_path = save_path.with_suffix(".png")
+            success = cv2.imwrite(str(save_path), face_crop_bgr, [cv2.IMWRITE_PNG_COMPRESSION, 1])
+        else:
+            # Try to write optimized/progressive JPEG at very high quality
+            params = [cv2.IMWRITE_JPEG_QUALITY, max(1, min(100, int(jpeg_quality)))]
+            try:
+                params += [cv2.IMWRITE_JPEG_OPTIMIZE, 1, cv2.IMWRITE_JPEG_PROGRESSIVE, 1]
+            except Exception:
+                pass
+            success = cv2.imwrite(str(save_path), face_crop_bgr, params)
         if not success:
             print("cv2.imwrite failed for", save_path)
             return None

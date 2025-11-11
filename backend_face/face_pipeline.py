@@ -208,7 +208,7 @@ def process_frame(frame_bgr: np.ndarray, force_process: bool = False, stream_id:
                 
                 # save_face_image will automatically get sharpest frame from buffer if stream_id provided
                 save_face_image(
-                    frame_bgr=frame_bgr,
+                    frame_bgr=frame_bgr.copy(),
                     bbox=(x1, y1, x2, y2),
                     label=save_label,
                     confidence=conf,
@@ -217,8 +217,9 @@ def process_frame(frame_bgr: np.ndarray, force_process: bool = False, stream_id:
                     expand_factor=0.4,  # 40% expansion for better context
                     target_width=800,   # Higher resolution for better clarity (increased from 640)
                     max_upscale=2.5,    # Allow more upscaling for small faces
-                    jpeg_quality=98,    # Very high quality JPEG (increased from 95)
-                    stream_id=stream_id  # Pass stream_id to access frame buffer
+                    jpeg_quality=99,    # Very high quality JPEG
+                    stream_id=stream_id,  # Pass stream_id to access frame buffer
+                    prefer_png=False
                 )
             except Exception as e:
                 print(f"Error saving face in async thread: {e}")
