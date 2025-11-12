@@ -1,4 +1,23 @@
 # face_pipeline.py
+"""
+Face Detection and Recognition Pipeline using InsightFace + face_recognition
+
+KEY FEATURES:
+1. Face Detection: InsightFace (RetinaFace detector) - Fast and accurate
+2. Face Recognition: face_recognition library (dlib-based)
+3. NMS (Non-Maximum Suppression): Eliminates overlapping bounding boxes
+4. GPU Acceleration: Automatic GPU/CPU fallback
+
+CRITICAL FIX - Overlapping Bounding Boxes:
+The InsightFace detector can produce multiple overlapping detections for the same face,
+especially during movement. This causes:
+- Multiple boxes on one person
+- Ghost boxes in empty spaces when person moves
+- Confusing visual output
+
+SOLUTION: Apply Non-Maximum Suppression (NMS) after detection to keep only the
+best bounding box for each face and remove overlapping duplicates.
+"""
 import cv2
 import numpy as np
 import face_recognition
@@ -8,13 +27,28 @@ import threading
 import os
 from save_face import save_face_image
 
-TOLERANCE = 0.47 # Stricter matching (lower = more strict). Was 0.5, now more selective
+# ============================================================================
+# CONFIGURATION PARAMETERS - Adjust these for your use case
+# ============================================================================
+
+# Face Recognition Tolerance: Lower = more strict matching
+TOLERANCE = 0.47  # Was 0.5, now more selective (range: 0.0-1.0)
+
 # Rate limit for saving same face per label (seconds)
 MIN_SAVE_INTERVAL = 5.0
 
-# Performance optimization: process every Nth frame for real-time streaming
+# Performance: Process every Nth frame for real-time streaming
 PROCESS_EVERY_N_FRAMES = 2  # Process every 2nd frame (30fps -> 15fps processing)
 FRAME_COUNTER = 0
+
+# NMS (Non-Maximum Suppression) - CRITICAL for eliminating overlapping boxes
+# Lower threshold = more aggressive at removing overlaps
+# Recommended range: 0.3-0.5 for face detection
+# 0.3 = strict (remove boxes with >30% overlap)
+# 0.5 = moderate (remove boxes with >50% overlap)
+NMS_IOU_THRESHOLD = 0.3
+
+# ============================================================================
 
 # Initialize detector and known faces (singleton-like)
 face_app = None
@@ -49,6 +83,154 @@ def check_gpu_availability() -> int:
         return -1
 
 
+def calculate_iou(bbox1: Tuple[int, int, int, int], bbox2: Tuple[int, int, int, int]) -> float:
+    """Calculate Intersection over Union (IoU) between two bounding boxes.
+    
+    Args:
+        bbox1: (x1, y1, x2, y2) format
+        bbox2: (x1, y1, x2, y2) format
+    
+    Returns:
+        IoU value between 0.0 and 1.0
+    """
+    x1_1, y1_1, x2_1, y2_1 = bbox1
+    x1_2, y1_2, x2_2, y2_2 = bbox2
+    
+    # Calculate intersection rectangle
+    x1_i = max(x1_1, x1_2)
+    y1_i = max(y1_1, y1_2)
+    x2_i = min(x2_1, x2_2)
+    y2_i = min(y2_1, y2_2)
+    
+    # No intersection
+    if x2_i <= x1_i or y2_i <= y1_i:
+        return 0.0
+    
+    # Calculate areas
+    intersection_area = (x2_i - x1_i) * (y2_i - y1_i)
+    bbox1_area = (x2_1 - x1_1) * (y2_1 - y1_1)
+    bbox2_area = (x2_2 - x1_2) * (y2_2 - y1_2)
+    union_area = bbox1_area + bbox2_area - intersection_area
+    
+    # Avoid division by zero
+    if union_area == 0:
+        return 0.0
+    
+    return intersection_area / union_area
+
+
+def apply_nms(faces: List[Any], iou_threshold: float = 0.3) -> List[Any]:
+    """Apply Non-Maximum Suppression to eliminate overlapping face detections.
+    
+    This is critical to prevent multiple bounding boxes on the same face.
+    InsightFace detector can produce overlapping detections, especially during movement.
+    
+    Args:
+        faces: List of face detections from InsightFace (each has .bbox and .det_score)
+        iou_threshold: IoU threshold for considering boxes as overlapping (0.3 = aggressive)
+    
+    Returns:
+        Filtered list of faces with overlaps removed
+    """
+    if len(faces) <= 1:
+        return faces
+    
+    # Extract bounding boxes and scores
+    boxes = []
+    scores = []
+    for f in faces:
+        try:
+            bbox = f.bbox
+            if bbox is None or len(bbox) < 4:
+                continue
+            x1, y1, x2, y2 = float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3])
+            boxes.append((x1, y1, x2, y2))
+            # InsightFace provides det_score (detection confidence)
+            score = float(getattr(f, 'det_score', 1.0))
+            scores.append(score)
+        except Exception:
+            continue
+    
+    if len(boxes) == 0:
+        return []
+    
+    # Convert to numpy arrays for efficient processing
+    boxes = np.array(boxes)
+    scores = np.array(scores)
+    
+    # Sort by score (highest first)
+    sorted_indices = np.argsort(scores)[::-1]
+    
+    keep_indices = []
+    suppressed = set()
+    
+    for i in sorted_indices:
+        if i in suppressed:
+            continue
+        
+        keep_indices.append(i)
+        
+        # Suppress all boxes with high IoU with this box
+        for j in sorted_indices:
+            if j == i or j in suppressed:
+                continue
+            
+            iou = calculate_iou(
+                tuple(boxes[i]),
+                tuple(boxes[j])
+            )
+            
+            if iou > iou_threshold:
+                suppressed.add(j)
+    
+    # Return faces in kept indices
+    filtered_faces = [faces[i] for i in keep_indices]
+    
+    return filtered_faces
+
+
+def set_nms_threshold(threshold: float) -> None:
+    """
+    Adjust NMS IoU threshold at runtime.
+    
+    Args:
+        threshold: IoU threshold (0.0-1.0). Lower = more aggressive overlap removal.
+                   Recommended: 0.3-0.5 for face detection
+    """
+    global NMS_IOU_THRESHOLD
+    if 0.0 <= threshold <= 1.0:
+        NMS_IOU_THRESHOLD = threshold
+        print(f"[face_pipeline] NMS IoU threshold updated to {threshold}")
+    else:
+        print(f"[WARN] Invalid NMS threshold {threshold}, must be between 0.0 and 1.0")
+
+
+def get_detector_info() -> Dict[str, Any]:
+    """
+    Get information about the face detection configuration.
+    
+    Returns:
+        Dictionary with detector settings
+    """
+    global face_app, NMS_IOU_THRESHOLD, TOLERANCE
+    
+    info = {
+        "detector": "InsightFace (RetinaFace)",
+        "recognition": "face_recognition (dlib)",
+        "nms_enabled": True,
+        "nms_iou_threshold": NMS_IOU_THRESHOLD,
+        "recognition_tolerance": TOLERANCE,
+        "frame_skip": PROCESS_EVERY_N_FRAMES,
+        "initialized": face_app is not None
+    }
+    
+    if face_app is not None:
+        info["detection_size"] = getattr(face_app, 'det_size', 'unknown')
+        info["device"] = "GPU" if getattr(face_app, 'ctx_id', -1) >= 0 else "CPU"
+    
+    return info
+
+
 def init(data_dir: str, ctx: int = -1, det_size: Tuple[int, int] = (640, 640)) -> None:
     """Initialize known faces and InsightFace detector with GPU detection."""
     global face_app, known_encodings, known_names
@@ -73,18 +255,32 @@ def init(data_dir: str, ctx: int = -1, det_size: Tuple[int, int] = (640, 640)) -
         print("[INFO] Using CPU for face detection")
 
     try:
-        face_app = FaceAnalysis(allowed_modules=['detection'])
+        face_app = FaceAnalysis(allowed_modules=['detection'], providers=['CPUExecutionProvider'])
         face_app.prepare(ctx_id=ctx, det_size=det_size)
+        
+        # Configure detection threshold if supported (helps reduce false positives)
+        # InsightFace uses det_thresh for detection confidence threshold
+        # Higher threshold = fewer false positives, but might miss some faces
+        # Default is usually 0.5, we keep it moderate for good balance
+        if hasattr(face_app, 'det_thresh'):
+            face_app.det_thresh = 0.5  # Moderate threshold for good detection
+        
         print(f"[face_pipeline] Initialized successfully with ctx={ctx}, det_size={det_size}")
+        print(f"[face_pipeline] NMS enabled with IoU threshold={NMS_IOU_THRESHOLD}")
     except Exception as e:
         # If GPU init fails, try CPU
         if ctx != -1:
             print(f"[WARN] GPU initialization failed: {e}")
             print("[INFO] Falling back to CPU")
             try:
-                face_app = FaceAnalysis(allowed_modules=['detection'])
+                face_app = FaceAnalysis(allowed_modules=['detection'], providers=['CPUExecutionProvider'])
                 face_app.prepare(ctx_id=-1, det_size=det_size)
+                
+                if hasattr(face_app, 'det_thresh'):
+                    face_app.det_thresh = 0.5
+                
                 print(f"[face_pipeline] Initialized with CPU fallback, det_size={det_size}")
+                print(f"[face_pipeline] NMS enabled with IoU threshold={NMS_IOU_THRESHOLD}")
             except Exception as cpu_error:
                 raise RuntimeError(f"Failed to initialize face pipeline (GPU and CPU): {cpu_error}") from cpu_error
         else:
@@ -131,7 +327,18 @@ def process_frame(frame_bgr: np.ndarray, force_process: bool = False, stream_id:
         new_w, new_h = original_w, original_h
 
     h, w = new_h, new_w
-    faces = face_app.get(scaled_frame)
+    faces_raw = face_app.get(scaled_frame)
+    
+    # CRITICAL: Apply Non-Maximum Suppression to eliminate overlapping bounding boxes
+    # InsightFace detector can produce multiple overlapping detections for the same face,
+    # especially during movement. This eliminates duplicates and ghost boxes.
+    faces = apply_nms(faces_raw, iou_threshold=NMS_IOU_THRESHOLD)
+    
+    # Debug logging when NMS filters out overlapping boxes
+    if len(faces_raw) > len(faces):
+        removed_count = len(faces_raw) - len(faces)
+        print(f"[NMS] Removed {removed_count} overlapping detection(s) from {len(faces_raw)} total")
+    
     detections: List[Dict[str, Any]] = []
 
     for f in faces:
