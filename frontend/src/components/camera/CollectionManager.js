@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useCameras } from './CameraManager';
 import { API_BASE_URL } from '../../utils/apiConfig';
 import './CollectionManager.css';
@@ -6,208 +6,84 @@ import './CollectionManager.css';
 import { Edit, Trash, Video, Monitor, Play, Square } from 'lucide-react';
 // import DraggableVideoCell from './DraggableVideoCell'; // Temporarily disabled due to missing dependencies
 
-// WebRTC StreamPlayer component for RTSP streaming
+// MJPEG StreamPlayer component for real camera streaming
 const StreamPlayer = ({ cameraId, cameraName, rtspUrl, isStreaming, onStreamStart, onStreamError }) => {
   const [streamError, setStreamError] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [streamStarted, setStreamStarted] = useState(false);
-  const [connectionState, setConnectionState] = useState('new');
+  const [streamUrl, setStreamUrl] = useState(null);
+  const imgRef = useRef(null);
 
-  const videoRef = useRef(null);
-  const canvasRef = useRef(null);
-  const animationRef = useRef(null);
+  const startMJPEGStream = useCallback(async () => {
+    try {
+      console.log(`✓ Starting MJPEG stream for camera ${cameraId}`);
+      setIsLoading(true);
+      setStreamError(false);
+
+      // Use the enhanced stream endpoint for camera management cameras
+      const enhancedStreamUrl = `${API_BASE_URL}/api/collections/cameras/${cameraId}/stream`;
+      setStreamUrl(enhancedStreamUrl);
+      setStreamStarted(true);
+      setIsLoading(false);
+      onStreamStart();
+      console.log(`✓ MJPEG stream started successfully for camera ${cameraId}: ${enhancedStreamUrl}`);
+
+    } catch (error) {
+      console.error('✗ Error starting MJPEG stream:', error);
+      setStreamError(true);
+      setIsLoading(false);
+      setStreamStarted(false);
+      onStreamError();
+    }
+  }, [cameraId, API_BASE_URL, onStreamStart, onStreamError]);
+
+  const stopMJPEGStream = useCallback(() => {
+    console.log(`✓ Stopping MJPEG stream for camera ${cameraId}`);
+    setStreamUrl(null);
+    setStreamStarted(false);
+    setIsLoading(false);
+  }, [cameraId]);
 
   useEffect(() => {
     console.log(`StreamPlayer useEffect: isStreaming=${isStreaming}, streamStarted=${streamStarted}, cameraId=${cameraId}`);
 
     if (isStreaming && !streamStarted && !streamError) {
-      console.log('Starting WebRTC stream...');
-      startWebRTCStream();
+      console.log('Starting MJPEG stream...');
+      startMJPEGStream();
     } else if (!isStreaming && streamStarted) {
-      console.log('Stopping WebRTC stream...');
-      stopWebRTCStream();
+      console.log('Stopping MJPEG stream...');
+      stopMJPEGStream();
     }
 
     return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
-      stopWebRTCStream();
+      stopMJPEGStream();
     };
-  }, [isStreaming, cameraId]);
+  }, [isStreaming, streamStarted, streamError, cameraId, startMJPEGStream, stopMJPEGStream]);
 
-  const startWebRTCStream = async () => {
-    try {
-      console.log(`✓ Starting WebRTC stream for camera ${cameraId}`);
-      setIsLoading(true);
-      setStreamError(false);
-      setConnectionState('connecting');
-
-      // Create canvas-based stream
-      const success = await startCanvasStream();
-
-      if (success) {
-        console.log(`✓ WebRTC stream started successfully for camera ${cameraId}`);
-        setIsLoading(false);
-        setStreamStarted(true);
-        setConnectionState('connected');
-        onStreamStart();
-      } else {
-        throw new Error('Failed to create canvas stream');
-      }
-
-    } catch (error) {
-      console.error('✗ Error starting WebRTC stream:', error);
-      setStreamError(true);
-      setIsLoading(false);
-      setStreamStarted(false);
-      setConnectionState('failed');
-      onStreamError();
-    }
-  };
-
-  const startCanvasStream = async () => {
-    try {
-      console.log('Creating canvas stream...');
-
-      // Create a canvas for demo stream
-      const canvas = document.createElement('canvas');
-      canvas.width = 640;
-      canvas.height = 480;
-      const ctx = canvas.getContext('2d');
-
-      if (!ctx) {
-        throw new Error('Failed to get canvas context');
-      }
-
-      // Store canvas reference for cleanup
-      canvasRef.current = canvas;
-
-      // Create a MediaStream from canvas
-      const stream = canvas.captureStream(30); // 30 FPS
-      console.log('Canvas stream created:', stream);
-
-      // Set the stream to video element
-      if (!videoRef.current) {
-        throw new Error('Video element not available');
-      }
-
-      videoRef.current.srcObject = stream;
-      console.log('Stream assigned to video element');
-
-      // Animate the canvas with demo content
-      let frameCount = 0;
-      const startTime = Date.now();
-      let isAnimating = true;
-
-      const animate = () => {
-        if (!isAnimating) return;
-
-        try {
-          // Clear canvas
-          ctx.fillStyle = '#1a1a1a';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-          // Create gradient background
-          const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-          gradient.addColorStop(0, '#2563eb');
-          gradient.addColorStop(0.5, '#7c3aed');
-          gradient.addColorStop(1, '#dc2626');
-          ctx.fillStyle = gradient;
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-          // Add camera info
-          ctx.fillStyle = 'white';
-          ctx.font = 'bold 24px Arial';
-          ctx.fillText(`LIVE CAMERA ${cameraId}`, 50, 60);
-
-          ctx.font = '16px Arial';
-          const currentTime = new Date().toLocaleTimeString();
-          ctx.fillText(`Time: ${currentTime}`, 50, 100);
-          ctx.fillText(`Frame: ${frameCount}`, 50, 130);
-          ctx.fillText(`WebRTC Stream`, 50, 160);
-
-          // Add moving elements
-          const elapsed = (Date.now() - startTime) / 1000;
-          const circleX = 320 + 200 * Math.sin(elapsed);
-          const circleY = 240 + 100 * Math.cos(elapsed * 1.5);
-
-          ctx.fillStyle = '#00ff00';
-          ctx.beginPath();
-          ctx.arc(circleX, circleY, 20, 0, 2 * Math.PI);
-          ctx.fill();
-
-          // Add RTSP URL info
-          ctx.fillStyle = '#ffff00';
-          ctx.font = '14px Arial';
-          ctx.fillText('RTSP Source:', 50, 400);
-          ctx.fillText(rtspUrl.replace(/admin:Admin@123@/, 'admin:***@'), 50, 420);
-
-          // Add status indicator
-          ctx.fillStyle = '#00ff00';
-          ctx.beginPath();
-          ctx.arc(600, 50, 10, 0, 2 * Math.PI);
-          ctx.fill();
-          ctx.fillStyle = 'white';
-          ctx.font = '12px Arial';
-          ctx.fillText('LIVE', 570, 75);
-
-          frameCount++;
-          animationRef.current = requestAnimationFrame(animate);
-        } catch (animError) {
-          console.error('Animation error:', animError);
-          isAnimating = false;
-        }
-      };
-
-      // Start animation
-      animate();
-      console.log('Canvas animation started');
-
-      return true; // Success
-
-    } catch (error) {
-      console.error('✗ Error creating canvas stream:', error);
-      return false; // Failure
-    }
-  };
-
-  const stopWebRTCStream = () => {
-    console.log(`✓ Stopping WebRTC stream for camera ${cameraId}`);
-
-    // Stop animation
-    if (animationRef.current) {
-      cancelAnimationFrame(animationRef.current);
-      animationRef.current = null;
-    }
-
-    // Stop video stream
-    if (videoRef.current && videoRef.current.srcObject) {
-      const stream = videoRef.current.srcObject;
-      const tracks = stream.getTracks();
-      tracks.forEach(track => track.stop());
-      videoRef.current.srcObject = null;
-    }
-
-    // Clean up canvas
-    if (canvasRef.current) {
-      canvasRef.current = null;
-    }
-
-    setStreamStarted(false);
+  const handleImageLoad = () => {
+    console.log(`✅ MJPEG stream loaded successfully for camera ${cameraId}`);
     setIsLoading(false);
-    setConnectionState('closed');
+    setStreamError(false);
+  };
+
+  const handleImageError = (event) => {
+    console.error(`❌ MJPEG stream error for camera ${cameraId}:`, event.target?.src);
+    setStreamError(true);
+    setIsLoading(false);
+    if (onStreamError) {
+      onStreamError('Stream connection failed');
+    }
   };
 
   const retryStream = () => {
-    console.log(`Retrying WebRTC stream for camera ${cameraId}`);
+    console.log(`Retrying MJPEG stream for camera ${cameraId}`);
     setStreamError(false);
     setStreamStarted(false);
-    stopWebRTCStream();
+    stopMJPEGStream();
 
     // Restart stream after a short delay
     setTimeout(() => {
-      startWebRTCStream();
+      startMJPEGStream();
     }, 500);
   };
 
@@ -215,39 +91,39 @@ const StreamPlayer = ({ cameraId, cameraName, rtspUrl, isStreaming, onStreamStar
     return (
       <div className="video-placeholder error">
         <Monitor size={48} />
-        <p>WebRTC Stream Unavailable</p>
-        <small>Failed to establish WebRTC connection</small>
+        <p>Stream Unavailable</p>
+        <small>Failed to establish stream connection</small>
         <div className="stream-error-actions">
           <button className="retry-stream-btn" onClick={retryStream}>
             Retry Connection
           </button>
         </div>
         <div className="stream-info">
-          <small>{rtspUrl.replace(/admin:Admin@123@/, 'admin:***@')}</small>
-          <small>State: {connectionState}</small>
+          <small>{rtspUrl ? rtspUrl.replace(/admin:Admin@123@/, 'admin:***@') : 'No RTSP URL'}</small>
         </div>
       </div>
     );
   }
 
-  if (isLoading) {
+  if (isLoading || !streamUrl) {
     return (
       <div className="video-placeholder loading">
         <Monitor size={48} />
-        <p>Establishing WebRTC Connection...</p>
-        <small>State: {connectionState}</small>
+        <p>Connecting to Stream...</p>
+        <small>Camera: {cameraName}</small>
       </div>
     );
   }
 
   return (
     <div className="stream-container">
-      <video
-        ref={videoRef}
+      <img
+        ref={imgRef}
+        src={streamUrl}
+        alt={`Camera ${cameraName}`}
         className="video-stream"
-        autoPlay
-        muted
-        playsInline
+        onLoad={handleImageLoad}
+        onError={handleImageError}
         style={{
           width: '100%',
           height: '100%',
@@ -258,7 +134,7 @@ const StreamPlayer = ({ cameraId, cameraName, rtspUrl, isStreaming, onStreamStar
       {streamStarted && (
         <div className="stream-overlay">
           <div className="stream-status-indicator live"></div>
-          <span className="stream-status-text">LIVE WebRTC</span>
+          <span className="stream-status-text">LIVE</span>
         </div>
       )}
     </div>

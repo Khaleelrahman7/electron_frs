@@ -3,12 +3,13 @@ from pydantic import BaseModel
 import os
 import shutil
 import re
-from typing import List, Optional
+from typing import List, Optional, Dict
 from datetime import datetime
 import logging
 import face_recognition
 import cv2
 import numpy as np
+import json
 from .config import KNOWN_FACES_DIR, UNKNOWN_FACES_DIR
 
 # API base URL for constructing image URLs
@@ -52,6 +53,25 @@ def convert_file_path_to_url(file_path: str) -> str:
 router = APIRouter()
 
 logger = logging.getLogger(__name__)
+
+def load_collection_name_map() -> Dict[str, str]:
+    """Load collections and create a mapping from collection ID to collection name."""
+    try:
+        # Get the data directory path
+        backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        collections_file = os.path.join(backend_dir, "data", "camera_management", "collections.json")
+        
+        if os.path.exists(collections_file):
+            with open(collections_file, 'r') as f:
+                collections = json.load(f)
+                # Create mapping from collection ID to collection name
+                return {collection.get('id', ''): collection.get('name', 'Unknown') 
+                       for collection in collections if isinstance(collection, dict)}
+    except Exception as e:
+        logger.warning(f"Error loading collections for name mapping: {e}")
+    
+    # Return default mapping if file doesn't exist or error occurs
+    return {"default": "Default Collection"}
 
 class FaceEvent(BaseModel):
     name: str
@@ -248,9 +268,32 @@ async def filter_faces(
                 })
         return faces
 
+    # Load collection name mapping to resolve collection IDs to names
+    collection_name_map = load_collection_name_map()
+    
     matching_faces = []
     matching_faces.extend(process_directory(KNOWN_FACES_DIR, "known"))
     matching_faces.extend(process_directory(UNKNOWN_FACES_DIR, "unknown"))
+    
+    # Resolve collection names from collection IDs
+    for face in matching_faces:
+        camera_id = face.get("camera", "default")
+        # If camera_id is a collection ID, replace it with collection name
+        if camera_id in collection_name_map:
+            face["camera"] = collection_name_map[camera_id]
+        # If camera_id is not found in map, try to find it (case-insensitive)
+        else:
+            # Try case-insensitive lookup
+            found = False
+            for coll_id, coll_name in collection_name_map.items():
+                if coll_id.lower() == camera_id.lower():
+                    face["camera"] = coll_name
+                    found = True
+                    break
+            # If still not found and it's "default", use default collection name
+            if not found and camera_id.lower() == "default":
+                face["camera"] = collection_name_map.get("default", "Default Collection")
+    
     matching_faces.sort(key=lambda item: item["timestamp"], reverse=True)
     return matching_faces
 

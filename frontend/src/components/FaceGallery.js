@@ -91,16 +91,6 @@ const FaceGallery = () => {
 
   return (
     <div className="gallery-container">
-      <div style={{ padding: '10px', backgroundColor: '#fff3cd', borderRadius: '5px', marginBottom: '10px' }}>
-        <strong>FaceGallery Component Loaded!</strong>
-        <br />
-        Loading: {loading ? 'Yes' : 'No'}
-        <br />
-        Error: {error || 'None'}
-        <br />
-        Gallery Data Keys: {Object.keys(galleryData).length}
-      </div>
-
       <div className="gallery-controls">
         <button onClick={loadGallery} className="refresh-btn">
           Refresh Gallery

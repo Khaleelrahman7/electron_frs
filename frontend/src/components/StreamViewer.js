@@ -96,31 +96,6 @@ const StreamViewer = () => {
     console.error(`Stream error for camera ${camera.name}:`, error);
     // You could add a fallback here or show error state
   };
-  
-  // Test stream URL accessibility
-  const testStreamUrl = async (cameraId) => {
-    try {
-      const streamUrl = `${API_BASE_URL}/api/collections/cameras/${cameraId}/frame`;
-      console.log('Testing frame URL:', streamUrl);
-      
-      // Create an abort controller for timeout
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
-      
-      const response = await fetch(streamUrl, {
-        method: 'GET', // Use GET instead of HEAD for frame endpoint
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      console.log('Frame URL response:', response.status, response.statusText);
-      console.log('Response content-type:', response.headers.get('content-type'));
-      return response.ok;
-    } catch (error) {
-      console.error('Frame URL test failed:', error);
-      return false;
-    }
-  };
 
   const currentLayout = gridLayouts[gridLayout];
   const displayCameras = activeCameras.slice(0, currentLayout.maxStreams);
@@ -244,21 +219,6 @@ const StreamViewer = () => {
                 <div className="video-footer">
                   <span className="camera-ip">{camera.ip}</span>
                   <span className="camera-collection">{camera.collectionId}</span>
-                  <button 
-                    onClick={() => testStreamUrl(camera.id)}
-                    style={{padding: '2px 6px', fontSize: '10px', marginLeft: '8px'}}
-                  >
-                    Test Frame
-                  </button>
-                  <button 
-                    onClick={() => {
-                      const url = `${API_BASE_URL}/api/collections/cameras/${camera.id}/frame?t=${Date.now()}`;
-                      window.open(url, '_blank');
-                    }}
-                    style={{padding: '2px 6px', fontSize: '10px', marginLeft: '4px'}}
-                  >
-                    Open Frame
-                  </button>
                 </div>
               </div>
             ))}
