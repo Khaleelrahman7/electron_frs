@@ -51,7 +51,21 @@
     "location": "EAGLE",
     "status": "inactive",
     "created_at": "2025-11-07 11:45:06.182602",
-    "last_seen": "2025-11-07 11:45:09.198257",
+    "last_seen": "2025-11-17 14:02:39.863703",
+    "error_count": 0,
+    "is_active": false
+  },
+  {
+    "id": 7,
+    "name": "web",
+    "rtsp_url": "1",
+    "collection_id": "default",
+    "collection_name": "Default Collection",
+    "ip_address": "1",
+    "location": "ground",
+    "status": "inactive",
+    "created_at": "2025-11-17 14:09:14.720911",
+    "last_seen": "2025-11-17 14:09:55.136085",
     "error_count": 0,
     "is_active": false
   }

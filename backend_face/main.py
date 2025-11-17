@@ -423,7 +423,12 @@ class SimpleRTSPStream:
                     logger.info(f"Connecting to RTSP stream: {self.rtsp_url}")
                     # Handle camera index (0, 1, 2, etc.) vs RTSP URL
                     if isinstance(self.rtsp_url, str) and self.rtsp_url.isdigit():
-                        self.cap = cv2.VideoCapture(int(self.rtsp_url))
+                        import platform
+                        # On Windows, use DirectShow for USB cameras to avoid MSMF errors
+                        if platform.system() == 'Windows':
+                            self.cap = cv2.VideoCapture(int(self.rtsp_url), cv2.CAP_DSHOW)
+                        else:
+                            self.cap = cv2.VideoCapture(int(self.rtsp_url))
                     else:
                         self.cap = cv2.VideoCapture(self.rtsp_url)
 

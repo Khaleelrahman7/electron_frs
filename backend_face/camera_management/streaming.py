@@ -11,6 +11,7 @@ import numpy as np
 from queue import Queue, Empty
 from collections import deque
 import os
+import platform
 
 logger = logging.getLogger(__name__)
 
@@ -38,26 +39,74 @@ class CameraStreamManager:
         # Suppress FFmpeg stderr output for H.264 errors (they're handled gracefully)
         os.environ['OPENCV_LOG_LEVEL'] = 'ERROR'
     
+    def _open_camera_capture(self, rtsp_url: str, retry_backends: bool = True):
+        """Open camera capture with appropriate backend, trying multiple backends if needed"""
+        is_camera_index = isinstance(rtsp_url, str) and rtsp_url.isdigit()
+        camera_index = int(rtsp_url) if is_camera_index else None
+        
+        # For camera indices on Windows, prefer DirectShow over MSMF
+        if is_camera_index and platform.system() == 'Windows':
+            backends_to_try = [
+                (cv2.CAP_DSHOW, "DirectShow"),
+                (cv2.CAP_ANY, "Default"),
+            ]
+        elif is_camera_index:
+            # Linux/Mac - try default first
+            backends_to_try = [
+                (cv2.CAP_ANY, "Default"),
+                (cv2.CAP_V4L2, "V4L2"),  # Linux
+            ]
+        else:
+            # RTSP URL - use FFMPEG
+            backends_to_try = [
+                (cv2.CAP_FFMPEG, "FFMPEG"),
+            ]
+        
+        last_error = None
+        for backend, backend_name in backends_to_try:
+            try:
+                if is_camera_index:
+                    cap = cv2.VideoCapture(camera_index, backend)
+                else:
+                    cap = cv2.VideoCapture(rtsp_url, backend)
+                
+                if cap.isOpened():
+                    # Try to read a test frame to verify it works
+                    ret, frame = cap.read()
+                    if ret and frame is not None:
+                        logger.info(f"Successfully opened camera with {backend_name} backend")
+                        return cap
+                    else:
+                        cap.release()
+                        logger.warning(f"Camera opened with {backend_name} but cannot read frames")
+                else:
+                    if cap:
+                        cap.release()
+            except Exception as e:
+                last_error = e
+                logger.debug(f"Failed to open camera with {backend_name}: {e}")
+                continue
+        
+        # If all backends failed, raise informative error
+        error_msg = f"Cannot connect to camera"
+        if is_camera_index:
+            error_msg += f" (index {camera_index})"
+            error_msg += ". Camera may be in use by another application, disconnected, or index may be incorrect."
+        else:
+            error_msg += f" (URL: {rtsp_url})"
+        
+        if last_error:
+            error_msg += f" Last error: {str(last_error)}"
+        
+        raise Exception(error_msg)
+    
     def start_stream(self, camera_id: int, rtsp_url: str) -> str:
         """Start a new camera stream"""
         stream_id = str(uuid.uuid4())
         
         try:
-            # Test the RTSP connection (handle camera index vs RTSP URL)
-            if isinstance(rtsp_url, str) and rtsp_url.isdigit():
-                cap = cv2.VideoCapture(int(rtsp_url))
-            else:
-                cap = cv2.VideoCapture(rtsp_url)
-            
-            if not cap.isOpened():
-                raise HTTPException(status_code=400, detail="Cannot connect to camera stream")
-            
-            # Read a test frame
-            ret, frame = cap.read()
-            if not ret:
-                cap.release()
-                raise HTTPException(status_code=400, detail="Cannot read from camera stream")
-            
+            # Test the camera connection with appropriate backend
+            cap = self._open_camera_capture(rtsp_url)
             cap.release()
             
             # Store stream info
@@ -73,9 +122,12 @@ class CameraStreamManager:
             logger.info(f"Started stream {stream_id} for camera {camera_id}")
             return stream_id
             
+        except HTTPException:
+            raise
         except Exception as e:
-            logger.error(f"Error starting stream for camera {camera_id}: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to start stream: {str(e)}")
+            error_detail = str(e) if str(e) else "Unknown error occurred"
+            logger.error(f"Error starting stream for camera {camera_id}: {error_detail}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Failed to start stream: {error_detail}")
     
     def stop_stream(self, stream_id: str) -> bool:
         """Stop a camera stream"""
@@ -180,17 +232,13 @@ class CameraStreamManager:
         rtsp_url = stream_info['rtsp_url']
         logger.info(f"Starting MJPEG stream generation for {stream_id}")
 
-        # Try to connect to real camera first
+        # Try to connect to real camera first and reuse the connection
         cap = None
         camera_accessible = False
 
         try:
-            # Handle camera index (0, 1, 2, etc.) vs RTSP URL
-            if isinstance(rtsp_url, str) and rtsp_url.isdigit():
-                cap = cv2.VideoCapture(int(rtsp_url))
-            else:
-                # Use FFMPEG backend for RTSP streams
-                cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
+            # Use helper method to open camera with appropriate backend
+            cap = self._open_camera_capture(rtsp_url, retry_backends=False)
                 
             if cap.isOpened():
                 # Test with multiple frames to ensure stable connection
@@ -207,9 +255,6 @@ class CameraStreamManager:
                 else:
                     logger.warning(f"Camera unstable for stream {stream_id} ({test_frames_count}/3 test frames)")
 
-            if cap:
-                cap.release()
-                cap = None
         except Exception as e:
             logger.warning(f"Error testing camera for stream {stream_id}: {e}")
             if cap:
@@ -220,9 +265,13 @@ class CameraStreamManager:
         # This allows for cameras that take time to initialize
         if not camera_accessible:
             logger.warning(f"Camera initial test failed for stream {stream_id}, but will attempt real stream anyway")
+            # If test failed, release the cap and let _generate_real_camera_stream open a new one
+            if cap:
+                cap.release()
+                cap = None
 
-        # Real camera streaming with improved stability
-        yield from self._generate_real_camera_stream(stream_id, stream_info, rtsp_url)
+        # Real camera streaming with improved stability - reuse the connection if available
+        yield from self._generate_real_camera_stream(stream_id, stream_info, rtsp_url, pre_opened_cap=cap)
 
     def _focus_measure(self, gray: np.ndarray) -> float:
         """Calculate sharpness using variance of Laplacian (improved for better detection)"""
@@ -343,9 +392,11 @@ class CameraStreamManager:
         except Exception as e:
             logger.error(f"Face processing worker exited for {stream_id}: {e}")
     
-    def _generate_real_camera_stream(self, stream_id: str, stream_info: Dict, rtsp_url: str):
+    def _generate_real_camera_stream(self, stream_id: str, stream_info: Dict, rtsp_url: str, pre_opened_cap=None):
         """Generate stream from real camera with enhanced stability and async face processing"""
-        cap = None
+        cap = pre_opened_cap  # Use pre-opened capture if provided
+        is_reusing_connection = pre_opened_cap is not None and pre_opened_cap.isOpened()
+        connection_logged = is_reusing_connection
         consecutive_failures = 0
         max_failures = 10
         frame_count = 0
@@ -375,60 +426,78 @@ class CameraStreamManager:
         # Keep retrying as long as stream is active - no demo fallback
         while self._is_stream_active(stream_id):
             try:
-                # Connect to camera
+                # Connect to camera (only if not already connected)
                 if cap is None or not cap.isOpened():
-                    logger.info(f"Connecting to camera for stream {stream_id}")
-                    # Handle camera index (0, 1, 2, etc.) vs RTSP URL
-                    if isinstance(rtsp_url, str) and rtsp_url.isdigit():
-                        cap = cv2.VideoCapture(int(rtsp_url))
+                    connection_logged = False
+                    if pre_opened_cap is not None and pre_opened_cap.isOpened():
+                        # Reuse pre-opened connection
+                        cap = pre_opened_cap
+                        logger.info(f"Reusing existing camera connection for stream {stream_id}")
                     else:
-                        # Use FFMPEG backend for RTSP streams to better handle H.264
-                        cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
-
-                    if cap.isOpened():
-                        # Optimize capture settings to reduce H.264 errors
-                        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimal buffering to reduce latency
-                        cap.set(cv2.CAP_PROP_FPS, 25)  # Target 25 FPS
-                        
-                        # Enhanced GPU acceleration for Tesla T4 (NVDEC hardware decoding)
-                        if not isinstance(rtsp_url, str) or not rtsp_url.isdigit():
-                            try:
-                                # Optimized for Tesla T4: Full GPU acceleration for video decoding
-                                # This uses NVDEC on NVIDIA GPUs for hardware-accelerated decoding
-                                os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = (
-                                    'rtsp_transport;tcp|'
-                                    'fflags;nobuffer|'
-                                    'flags;low_delay|'
-                                    'strict;experimental|'
-                                    'err_detect;ignore_err|'
-                                    'hwaccel;nvdec|'  # NVIDIA hardware acceleration
-                                    'hwaccel_device;0|'
-                                    'hwaccel_output_format;cuda|'  # Keep frames on GPU when possible
-                                    'c:v;h264_cuvid'  # Explicit CUDA decoder for H.264
-                                )
-                                logger.info(f"Enabled NVDEC GPU acceleration for stream {stream_id}")
-                            except Exception as gpu_err:
-                                logger.warning(f"GPU acceleration setup failed for stream {stream_id}: {gpu_err}")
-                                pass
-                            
-                            try:
-                                # Try to set MJPG codec preference (less errors than H264)
-                                fourcc = cv2.VideoWriter_fourcc(*'MJPG')
-                                cap.set(cv2.CAP_PROP_FOURCC, fourcc)
-                            except:
-                                pass  # Some cameras don't support codec change
-                        
-                        # Set timeouts
+                        logger.info(f"Connecting to camera for stream {stream_id}")
+                        # Use helper method to open camera with appropriate backend
                         try:
-                            cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 30000)  # 30 seconds
-                            cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000)   # 5 seconds
-                        except:
-                            pass  # Some backends don't support timeouts
+                            cap = self._open_camera_capture(rtsp_url, retry_backends=True)
+                        except Exception as open_error:
+                            logger.error(f"Failed to open camera for stream {stream_id}: {open_error}")
+                            consecutive_failures += 1
+                            if consecutive_failures >= max_failures:
+                                reconnect_attempts += 1
+                                if reconnect_attempts >= max_reconnect_attempts:
+                                    logger.error(f"Max reconnection attempts reached for stream {stream_id}")
+                                    break
+                                time.sleep(2)
+                            continue
 
+                if cap.isOpened():
+                    # Optimize capture settings to reduce H.264 errors
+                    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimal buffering to reduce latency
+                    cap.set(cv2.CAP_PROP_FPS, 25)  # Target 25 FPS
+                    
+                    # Enhanced GPU acceleration for Tesla T4 (NVDEC hardware decoding)
+                    if not isinstance(rtsp_url, str) or not rtsp_url.isdigit():
+                        try:
+                            # Optimized for Tesla T4: Full GPU acceleration for video decoding
+                            # This uses NVDEC on NVIDIA GPUs for hardware-accelerated decoding
+                            os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = (
+                                'rtsp_transport;tcp|'
+                                'fflags;nobuffer|'
+                                'flags;low_delay|'
+                                'strict;experimental|'
+                                'err_detect;ignore_err|'
+                                'hwaccel;nvdec|'  # NVIDIA hardware acceleration
+                                'hwaccel_device;0|'
+                                'hwaccel_output_format;cuda|'  # Keep frames on GPU when possible
+                                'c:v;h264_cuvid'  # Explicit CUDA decoder for H.264
+                            )
+                            logger.info(f"Enabled NVDEC GPU acceleration for stream {stream_id}")
+                        except Exception as gpu_err:
+                            logger.warning(f"GPU acceleration setup failed for stream {stream_id}: {gpu_err}")
+                            pass
+                        
+                        try:
+                            # Try to set MJPG codec preference (less errors than H264)
+                            fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+                            cap.set(cv2.CAP_PROP_FOURCC, fourcc)
+                        except:
+                            pass  # Some cameras don't support codec change
+                    
+                    # Set timeouts
+                    try:
+                        cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 30000)  # 30 seconds
+                        cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000)   # 5 seconds
+                    except:
+                        pass  # Some backends don't support timeouts
+
+                    if not connection_logged:
                         logger.info(f"Successfully connected to camera for stream {stream_id}")
-                        consecutive_failures = 0
-                    else:
-                        raise Exception("Failed to open camera")
+                        connection_logged = True
+                    consecutive_failures = 0
+                    # Clear pre_opened_cap after first use to prevent reuse on reconnection
+                    pre_opened_cap = None
+                    is_reusing_connection = False
+                else:
+                    raise Exception("Failed to open camera")
 
                 # Use grab()/retrieve() pattern to avoid FFmpeg backlogs
                 if not cap.grab():
@@ -558,6 +627,7 @@ class CameraStreamManager:
                         if cap:
                             cap.release()
                             cap = None
+                            connection_logged = False
                         consecutive_failures = 0  # Reset for next reconnection attempt
                         time.sleep(2)  # Wait before reconnecting
                         continue
@@ -590,6 +660,7 @@ class CameraStreamManager:
                 if cap:
                     cap.release()
                     cap = None
+                    connection_logged = False
                 consecutive_failures += 1
                 time.sleep(2)  # Wait before retrying
 

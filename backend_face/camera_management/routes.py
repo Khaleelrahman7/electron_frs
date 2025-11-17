@@ -277,7 +277,15 @@ async def get_camera_frame(
 
         # Try to get frame from real camera with ultra-fast settings
         try:
-            cap = cv2.VideoCapture(camera.rtsp_url)
+            import platform
+            # Use DirectShow on Windows for camera indices to avoid MSMF errors
+            if isinstance(camera.rtsp_url, str) and camera.rtsp_url.isdigit():
+                if platform.system() == 'Windows':
+                    cap = cv2.VideoCapture(int(camera.rtsp_url), cv2.CAP_DSHOW)
+                else:
+                    cap = cv2.VideoCapture(int(camera.rtsp_url))
+            else:
+                cap = cv2.VideoCapture(camera.rtsp_url)
             if cap.isOpened():
                 # Optimized settings for minimum latency
                 cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimal buffer
@@ -312,7 +320,13 @@ async def get_camera_frame(
             for retry in range(3):
                 try:
                     time.sleep(0.1)  # Short delay before retry
-                    cap = cv2.VideoCapture(camera.rtsp_url)
+                    if isinstance(camera.rtsp_url, str) and camera.rtsp_url.isdigit():
+                        if platform.system() == 'Windows':
+                            cap = cv2.VideoCapture(int(camera.rtsp_url), cv2.CAP_DSHOW)
+                        else:
+                            cap = cv2.VideoCapture(int(camera.rtsp_url))
+                    else:
+                        cap = cv2.VideoCapture(camera.rtsp_url)
                     if cap.isOpened():
                         cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
                         ret, frame = cap.read()
