@@ -31,12 +31,7 @@ class CameraStreamManager:
         self.frame_validation_enabled = True
         # Frame buffer for sharp face capture (stores raw frames with timestamps)
         self.frame_buffers: Dict[str, deque] = {}  # Buffer of raw frames for best capture
-        self.max_frame_buffer_size = 10  # Keep 10 frames for sharpness selection (increased for better quality)
-        
-        # Temporal tracking for stable bounding boxes (per stream)
-        self.tracked_detections: Dict[str, List[Dict]] = {}  # Store tracked detections per stream
-        self.tracking_max_age = 5  # Max frames to keep a detection without update
-        self.tracking_iou_threshold = 0.3  # IoU threshold for matching detections
+        self.max_frame_buffer_size = 20  # Optimized for Tesla T4: More frames = better sharpness selection
         
         # Set FFmpeg environment variables to suppress H.264 error messages and handle errors better
         os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = 'rtsp_transport;tcp|fflags;nobuffer|flags;low_delay|strict;experimental|err_detect;ignore_err'
@@ -110,8 +105,6 @@ class CameraStreamManager:
                 del self.last_good_frames[stream_id]
             if stream_id in self.frame_buffers:
                 del self.frame_buffers[stream_id]
-            if stream_id in self.tracked_detections:
-                del self.tracked_detections[stream_id]
             
             with self.stream_lock:
                 if stream_id in self.active_streams:
@@ -296,107 +289,15 @@ class CameraStreamManager:
         
         return best_frame
     
-    def _calculate_iou(self, bbox1: Tuple[int, int, int, int], bbox2: Tuple[int, int, int, int]) -> float:
-        """Calculate Intersection over Union (IoU) between two bounding boxes"""
-        x1_1, y1_1, x2_1, y2_1 = bbox1
-        x1_2, y1_2, x2_2, y2_2 = bbox2
-        
-        # Calculate intersection
-        x1_i = max(x1_1, x1_2)
-        y1_i = max(y1_1, y1_2)
-        x2_i = min(x2_1, x2_2)
-        y2_i = min(y2_1, y2_2)
-        
-        if x2_i <= x1_i or y2_i <= y1_i:
-            return 0.0
-        
-        intersection = (x2_i - x1_i) * (y2_i - y1_i)
-        area1 = (x2_1 - x1_1) * (y2_1 - y1_1)
-        area2 = (x2_2 - x1_2) * (y2_2 - y1_2)
-        union = area1 + area2 - intersection
-        
-        if union == 0:
-            return 0.0
-        
-        return intersection / union
-    
-    def _match_detections(self, new_detections: List[Dict], tracked_detections: List[Dict]) -> List[Dict]:
-        """Match new detections with tracked detections using IoU and update tracking"""
-        matched = [False] * len(new_detections)
-        updated_tracked = []
-        
-        # Age existing tracked detections
-        for track in tracked_detections:
-            track['age'] = track.get('age', 0) + 1
-        
-        # Try to match new detections with existing tracks
-        for i, new_det in enumerate(new_detections):
-            best_match_idx = -1
-            best_iou = 0.0
-            
-            for j, track in enumerate(tracked_detections):
-                if track.get('matched', False):
-                    continue
-                
-                iou = self._calculate_iou(new_det['bbox'], track['bbox'])
-                if iou > best_iou and iou >= self.tracking_iou_threshold:
-                    best_iou = iou
-                    best_match_idx = j
-            
-            if best_match_idx >= 0:
-                # Match found - update track with new detection (smooth position)
-                track = tracked_detections[best_match_idx]
-                old_bbox = track['bbox']
-                new_bbox = new_det['bbox']
-                
-                # Exponential smoothing for bbox position (alpha = 0.7 for stability)
-                alpha = 0.7
-                smoothed_bbox = (
-                    int(old_bbox[0] * (1 - alpha) + new_bbox[0] * alpha),
-                    int(old_bbox[1] * (1 - alpha) + new_bbox[1] * alpha),
-                    int(old_bbox[2] * (1 - alpha) + new_bbox[2] * alpha),
-                    int(old_bbox[3] * (1 - alpha) + new_bbox[3] * alpha)
-                )
-                
-                # Update track
-                track['bbox'] = smoothed_bbox
-                track['name'] = new_det['name']  # Update name/confidence
-                track['conf'] = new_det['conf']
-                track['age'] = 0  # Reset age
-                track['matched'] = True
-                matched[i] = True
-                updated_tracked.append(track)
-            else:
-                # New detection - add as new track
-                new_track = {
-                    'bbox': new_det['bbox'],
-                    'name': new_det['name'],
-                    'conf': new_det['conf'],
-                    'age': 0,
-                    'matched': True
-                }
-                updated_tracked.append(new_track)
-                matched[i] = True
-        
-        # Keep unmatched tracks that haven't aged too much
-        for track in tracked_detections:
-            if not track.get('matched', False) and track.get('age', 0) < self.tracking_max_age:
-                track['matched'] = False  # Reset for next frame
-                updated_tracked.append(track)
-        
-        return updated_tracked
-    
     def _face_processing_worker(self, stream_id: str):
-        """Background worker thread for async face processing with temporal smoothing"""
+        """Background worker thread for async face processing"""
         queue = self.processing_queues.get(stream_id)
         if not queue:
             return
         
         frame_counter = 0
-        PROCESS_EVERY_N_FRAMES = 2  # Process every 2nd frame for performance
-        # Initialize tracked detections for this stream
-        if stream_id not in self.tracked_detections:
-            self.tracked_detections[stream_id] = []
+        # Optimized for Tesla T4: Process every frame for maximum quality and low latency
+        PROCESS_EVERY_N_FRAMES = 1  # Process every frame (Tesla T4 can handle it)
         
         try:
             while self._is_stream_active(stream_id):
@@ -413,64 +314,17 @@ class CameraStreamManager:
                     
                     # Skip processing for some frames to maintain frame rate
                     if frame_counter % PROCESS_EVERY_N_FRAMES != 0:
-                        # Use raw frame but still add to buffer
+                        # Use raw frame without processing
                         processed_frame = frame.copy()
-                        # Use tracked detections for temporal smoothing (stable boxes)
-                        tracked = self.tracked_detections.get(stream_id, [])
-                        detections = [
-                            {'name': t['name'], 'conf': t['conf'], 'bbox': t['bbox']}
-                            for t in tracked if t.get('age', 0) < self.tracking_max_age
-                        ]
                     else:
                         # Process frame for face detection
                         try:
                             from face_pipeline import process_frame as face_process_frame
-                            # Use per-stream frame counter, pass stream_id for frame buffer access
                             # Get frame with detections drawn (face_pipeline draws them)
-                            processed_frame_with_detections, new_detections = face_process_frame(frame, force_process=True, stream_id=stream_id)
-                            
-                            # Match new detections with tracked detections for stability
-                            tracked = self.tracked_detections.get(stream_id, [])
-                            # Reset matched flags
-                            for t in tracked:
-                                t['matched'] = False
-                            
-                            # Match and update tracked detections
-                            updated_tracked = self._match_detections(new_detections, tracked)
-                            self.tracked_detections[stream_id] = updated_tracked
-                            
-                            # Convert tracked detections back to detection format
-                            detections = [
-                                {'name': t['name'], 'conf': t['conf'], 'bbox': t['bbox']}
-                                for t in updated_tracked if t.get('age', 0) < self.tracking_max_age
-                            ]
-                            
-                            # Use original frame and draw tracked (stable) detections on it
-                            # This ensures smooth boxes without flickering
-                            processed_frame = frame.copy()
-                            for det in detections:
-                                x1, y1, x2, y2 = det['bbox']
-                                cv2.rectangle(processed_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                                label = f"{det['name']} ({det['conf']:.2f})"
-                                label_y = y1 - 10 if y1 - 10 > 10 else y1 + 10
-                                cv2.putText(
-                                    processed_frame,
-                                    label,
-                                    (x1, label_y),
-                                    cv2.FONT_HERSHEY_SIMPLEX,
-                                    0.5,
-                                    (255, 255, 255),
-                                    2,
-                                )
+                            processed_frame, _ = face_process_frame(frame, force_process=True, stream_id=stream_id)
                         except Exception as face_error:
                             logger.debug(f"Face processing error for stream {stream_id}: {face_error}")
                             processed_frame = frame.copy()
-                            # Use existing tracked detections even on error
-                            tracked = self.tracked_detections.get(stream_id, [])
-                            detections = [
-                                {'name': t['name'], 'conf': t['conf'], 'bbox': t['bbox']}
-                                for t in tracked if t.get('age', 0) < self.tracking_max_age
-                            ]
                     
                     # Add to processed frames buffer (thread-safe)
                     if stream_id not in self.processed_frames:
@@ -499,8 +353,8 @@ class CameraStreamManager:
         reconnect_attempts = 0
         max_reconnect_attempts = 5
 
-        # JPEG encoding parameters - slightly lower quality for better performance
-        encode_params = [cv2.IMWRITE_JPEG_QUALITY, 80]
+        # JPEG encoding parameters - Optimized for Tesla T4: High quality for clear streams
+        encode_params = [cv2.IMWRITE_JPEG_QUALITY, 95]
         
         # Initialize processing queue and thread for this stream
         if stream_id not in self.processing_queues:
@@ -536,11 +390,11 @@ class CameraStreamManager:
                         cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimal buffering to reduce latency
                         cap.set(cv2.CAP_PROP_FPS, 25)  # Target 25 FPS
                         
-                        # Try hardware acceleration if available (NVDEC for NVIDIA GPUs)
+                        # Enhanced GPU acceleration for Tesla T4 (NVDEC hardware decoding)
                         if not isinstance(rtsp_url, str) or not rtsp_url.isdigit():
                             try:
-                                # Try to enable hardware acceleration via environment
-                                # This uses NVDEC on NVIDIA GPUs if available
+                                # Optimized for Tesla T4: Full GPU acceleration for video decoding
+                                # This uses NVDEC on NVIDIA GPUs for hardware-accelerated decoding
                                 os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = (
                                     'rtsp_transport;tcp|'
                                     'fflags;nobuffer|'
@@ -548,9 +402,13 @@ class CameraStreamManager:
                                     'strict;experimental|'
                                     'err_detect;ignore_err|'
                                     'hwaccel;nvdec|'  # NVIDIA hardware acceleration
-                                    'hwaccel_device;0'
+                                    'hwaccel_device;0|'
+                                    'hwaccel_output_format;cuda|'  # Keep frames on GPU when possible
+                                    'c:v;h264_cuvid'  # Explicit CUDA decoder for H.264
                                 )
-                            except:
+                                logger.info(f"Enabled NVDEC GPU acceleration for stream {stream_id}")
+                            except Exception as gpu_err:
+                                logger.warning(f"GPU acceleration setup failed for stream {stream_id}: {gpu_err}")
                                 pass
                             
                             try:

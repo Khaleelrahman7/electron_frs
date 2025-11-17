@@ -13,7 +13,8 @@ TOLERANCE = 0.47 # Stricter matching (lower = more strict). Was 0.5, now more se
 MIN_SAVE_INTERVAL = 5.0
 
 # Performance optimization: process every Nth frame for real-time streaming
-PROCESS_EVERY_N_FRAMES = 2  # Process every 2nd frame (30fps -> 15fps processing)
+# Optimized for Tesla T4 GPU: Process every frame for maximum quality and low latency
+PROCESS_EVERY_N_FRAMES = 1  # Process every frame (Tesla T4 can handle it)
 FRAME_COUNTER = 0
 
 # Initialize detector and known faces (singleton-like)
@@ -113,10 +114,10 @@ def process_frame(frame_bgr: np.ndarray, force_process: bool = False, stream_id:
             # Return frame without processing but keep detections from last processed frame
             return frame_bgr, []
 
-    # Downscale frame for faster processing while maintaining quality
-    # Reduced max width for better performance during streaming
+    # Optimized for Tesla T4 GPU: Process at full HD resolution for maximum quality
+    # Tesla T4 can handle full resolution processing efficiently
     original_h, original_w = frame_bgr.shape[:2]
-    max_width = 960  # Reduced from 1280 for better performance (still good quality)
+    max_width = 1920  # Process full HD resolution (Tesla T4 optimized)
     
     if original_w > max_width:
         scale = max_width / original_w
@@ -215,7 +216,7 @@ def process_frame(frame_bgr: np.ndarray, force_process: bool = False, stream_id:
                     min_interval=MIN_SAVE_INTERVAL,
                     source="stream",
                     expand_factor=0.4,  # 40% expansion for better context
-                    target_width=800,   # Higher resolution for better clarity (increased from 640)
+                    target_width=1024,   # Optimized for Tesla T4: Higher resolution for maximum clarity
                     max_upscale=2.5,    # Allow more upscaling for small faces
                     jpeg_quality=99,    # Very high quality JPEG
                     stream_id=stream_id,  # Pass stream_id to access frame buffer
