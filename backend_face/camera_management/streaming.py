@@ -44,10 +44,11 @@ class CameraStreamManager:
         is_camera_index = isinstance(rtsp_url, str) and rtsp_url.isdigit()
         camera_index = int(rtsp_url) if is_camera_index else None
         
-        # For camera indices on Windows, prefer DirectShow over MSMF
+        # For camera indices on Windows, prefer DirectShow, then MediaFoundation, then default
         if is_camera_index and platform.system() == 'Windows':
             backends_to_try = [
                 (cv2.CAP_DSHOW, "DirectShow"),
+                (cv2.CAP_MSMF, "MediaFoundation"),
                 (cv2.CAP_ANY, "Default"),
             ]
         elif is_camera_index:
@@ -71,9 +72,22 @@ class CameraStreamManager:
                     cap = cv2.VideoCapture(rtsp_url, backend)
                 
                 if cap.isOpened():
-                    # Try to read a test frame to verify it works
-                    ret, frame = cap.read()
-                    if ret and frame is not None:
+                    # Minimize buffering and warm up a few grabs/retrieves to stabilize Windows drivers
+                    try:
+                        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                    except:
+                        pass
+
+                    success_reads = 0
+                    attempts = 5
+                    for _ in range(attempts):
+                        if cap.grab():
+                            ret, frame = cap.retrieve()
+                            if ret and frame is not None and frame.size > 0:
+                                success_reads += 1
+                        time.sleep(0.05)
+
+                    if success_reads >= 1:
                         logger.info(f"Successfully opened camera with {backend_name} backend")
                         return cap
                     else:
@@ -241,19 +255,27 @@ class CameraStreamManager:
             cap = self._open_camera_capture(rtsp_url, retry_backends=False)
                 
             if cap.isOpened():
-                # Test with multiple frames to ensure stable connection
-                test_frames_count = 0
-                for _ in range(3):
-                    ret, test_frame = cap.read()
-                    if ret and test_frame is not None and test_frame.size > 0:
-                        test_frames_count += 1
-                    time.sleep(0.1)
+                # Reduce buffering for test and perform warm-up with grab/retrieve
+                try:
+                    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                except:
+                    pass
 
-                if test_frames_count >= 2:  # At least 2 successful frames
+                # Test with multiple frames to ensure stable connection (allow warm-up)
+                test_frames_count = 0
+                attempts = 10
+                for _ in range(attempts):
+                    if cap.grab():
+                        ret, test_frame = cap.retrieve()
+                        if ret and test_frame is not None and test_frame.size > 0:
+                            test_frames_count += 1
+                    time.sleep(0.05)
+
+                if test_frames_count >= 3:  # At least 3 successful frames
                     camera_accessible = True
-                    logger.info(f"Camera accessible for stream {stream_id} ({test_frames_count}/3 test frames)")
+                    logger.info(f"Camera accessible for stream {stream_id} ({test_frames_count}/{attempts} test frames)")
                 else:
-                    logger.warning(f"Camera unstable for stream {stream_id} ({test_frames_count}/3 test frames)")
+                    logger.warning(f"Camera unstable for stream {stream_id} ({test_frames_count}/{attempts} test frames)")
 
         except Exception as e:
             logger.warning(f"Error testing camera for stream {stream_id}: {e}")
