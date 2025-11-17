@@ -144,9 +144,9 @@ mount_services()
 # Initialize face pipeline (non-disruptive; skips if unavailable)
 # Try GPU first (ctx=0), will auto-fallback to CPU if GPU unavailable
 try:
-    # Use smaller detection size for better performance: (640, 640) is good balance
-    # For better quality but slower: (832, 832) or (1024, 1024)
-    init_face_pipeline(os.path.join(os.path.dirname(__file__), "data"), ctx=0, det_size=(640, 640))
+    # Optimized for Tesla T4 GPU: Higher detection size for better accuracy
+    # (1024, 1024) provides excellent quality while Tesla T4 can handle it efficiently
+    init_face_pipeline(os.path.join(os.path.dirname(__file__), "data"), ctx=0, det_size=(1024, 1024))
     FACE_PIPELINE_READY = True
     logger.info("✓ Face pipeline initialized")
 except Exception as e:
@@ -428,10 +428,10 @@ class SimpleRTSPStream:
                         self.cap = cv2.VideoCapture(self.rtsp_url)
 
                     if self.cap.isOpened():
-                        # Optimize capture settings for higher quality
-                        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-                        self.cap.set(cv2.CAP_PROP_FPS, 25)
-                        # Try to maximize resolution
+                        # Optimized for Tesla T4: High quality capture settings
+                        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimal buffering for low latency
+                        self.cap.set(cv2.CAP_PROP_FPS, 30)  # Higher FPS for smoother streams
+                        # Maximize resolution for Tesla T4
                         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
                         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
                         logger.info(f"Successfully connected to RTSP stream")
@@ -472,7 +472,7 @@ class SimpleRTSPStream:
         with self.lock:
             if self.last_frame is not None:
                 try:
-                    # Encode frame as JPEG with higher quality
+                    # Optimized for Tesla T4: Encode frame as JPEG with maximum quality
                     _, buffer = cv2.imencode('.jpg', self.last_frame, [cv2.IMWRITE_JPEG_QUALITY, 95])
                     return buffer.tobytes()
                 except Exception as e:
