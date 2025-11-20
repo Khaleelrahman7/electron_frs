@@ -5,8 +5,31 @@ const axios = require('axios');
 const FormData = require('form-data');
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
+function loadEnvVariables() {
+  try {
+    const envPath = path.join(__dirname, '.env');
+    if (fs.existsSync(envPath)) {
+      const envContent = fs.readFileSync(envPath, 'utf-8');
+      const lines = envContent.split('\n');
+      for (const line of lines) {
+        if (line && !line.startsWith('#')) {
+          const [key, value] = line.split('=');
+          if (key && value) {
+            process.env[key.trim()] = value.trim();
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error loading .env file:', error);
+  }
+}
+
+loadEnvVariables();
+
 // API Base URL - defaults to localhost, can be overridden via environment variable
 const API_BASE_URL = process.env.API_BASE_URL || process.env.REACT_APP_API_BASE_URL || 'http://localhost:8005';
+console.log('[Electron] API_BASE_URL configured as:', API_BASE_URL);
 
 function loadFallbackPage(mainWindow) {
   const fallbackHtml = `
@@ -557,21 +580,50 @@ ipcMain.handle('register-single', async (event, formData) => {
   }
 });
 
-ipcMain.handle('register-bulk', async (event, formData) => {
+ipcMain.handle('register-bulk', async (event, excelBuffer, imageFileInfos) => {
+  const FormDataLocal = require('form-data');
+  let tempExcelPath = null;
+  
   try {
-    const response = await axios.post(`${API_BASE_URL}/api/registration/bulk`, formData, {
-      headers: formData.getHeaders ? formData.getHeaders() : { 'Content-Type': 'multipart/form-data' },
+    const os = require('os');
+    const formData = new FormDataLocal();
+    
+    tempExcelPath = path.join(os.tmpdir(), `temp_excel_${Date.now()}.xlsx`);
+    const bufferData = Buffer.from(excelBuffer);
+    fs.writeFileSync(tempExcelPath, bufferData);
+    
+    formData.append('excel_file', fs.createReadStream(tempExcelPath), 'data.xlsx');
+    
+    for (const fileInfo of imageFileInfos) {
+      if (fs.existsSync(fileInfo.fullPath)) {
+        const stream = fs.createReadStream(fileInfo.fullPath);
+        formData.append('image_files', stream, fileInfo.relativePath);
+      }
+    }
+    
+    const response = await axios.post(`${API_BASE_URL}/api/registration/register/bulk`, formData, {
+      headers: formData.getHeaders(),
       timeout: 60000
     });
+    
     return {
       success: true,
       data: response.data
     };
   } catch (error) {
+    console.error('Bulk registration error:', error);
     return {
       success: false,
       error: error.message
     };
+  } finally {
+    if (tempExcelPath) {
+      try {
+        fs.unlinkSync(tempExcelPath);
+      } catch (e) {
+        console.error('Error deleting temp Excel file:', e);
+      }
+    }
   }
 });
 
@@ -631,6 +683,51 @@ ipcMain.handle('select-folder', async () => {
     return {
       success: true,
       folderPath: result.filePaths[0]
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
+ipcMain.handle('scan-folder-for-images', async (event, folderPath) => {
+  try {
+    const validExtensions = ['.jpg', '.jpeg', '.png'];
+    const files = [];
+
+    const scanDirectory = (dirPath, relativePrefix = '') => {
+      try {
+        const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+        
+        for (const entry of entries) {
+          const fullPath = path.join(dirPath, entry.name);
+          const relativePath = path.join(relativePrefix, entry.name);
+          
+          if (entry.isDirectory()) {
+            scanDirectory(fullPath, relativePath);
+          } else if (entry.isFile()) {
+            const ext = path.extname(entry.name).toLowerCase();
+            if (validExtensions.includes(ext)) {
+              files.push({
+                fullPath: fullPath,
+                relativePath: relativePath
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`Error scanning directory ${dirPath}:`, error);
+      }
+    };
+
+    scanDirectory(folderPath);
+    
+    return {
+      success: true,
+      files: files,
+      count: files.length
     };
   } catch (error) {
     return {

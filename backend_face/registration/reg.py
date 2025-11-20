@@ -547,17 +547,10 @@ async def register_single(
 @app.post("/register/bulk", response_model=List[RegistrationResponse])
 async def register_bulk(
     excel_file: UploadFile = File(...),
-    data_dir: str = Form(...)
+    image_files: List[UploadFile] = File(...),
 ):
-    """Register multiple people using Excel file and data directory"""
+    """Register multiple people using Excel file and uploaded image files"""
     try:
-        # Validate data directory exists
-        if not os.path.exists(data_dir):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Data directory not found: {data_dir}"
-            )
-
         # Create temporary directory for processing
         temp_dir = os.path.join(DATA_DIR, "temp_bulk")
         os.makedirs(temp_dir, exist_ok=True)
@@ -567,11 +560,59 @@ async def register_bulk(
         excel_content = await excel_file.read()
         with open(excel_path, "wb") as f:
             f.write(excel_content)
+        
+        # Read Excel file to get list of valid names
+        df = pd.read_excel(excel_path)
+        if 'name' not in df.columns:
+            raise ValueError("Excel file must have a 'name' column")
+        
+        # Clean up the data
+        df['name'] = df['name'].str.strip()
+        df = df.dropna(subset=['name'])
+        
+        # Create a temporary data directory structure from uploaded files
+        temp_data_dir = os.path.join(temp_dir, "uploaded_data")
+        os.makedirs(temp_data_dir, exist_ok=True)
+        
+        # Process and organize uploaded files
+        # Match files based on filename to person name in Excel
+        for uploaded_file in image_files:
+            if not uploaded_file.filename:
+                continue
+            
+            file_content = await uploaded_file.read()
+            image_filename = uploaded_file.filename.replace("\\", "/")
+            
+            # Get just the filename (last part of path after any /)
+            actual_filename = image_filename.split("/")[-1]
+            
+            # Extract person name from filename (without extension)
+            filename_without_ext = os.path.splitext(actual_filename)[0]
+            
+            # Check if this filename matches a person in Excel
+            person_name = None
+            for name in df['name'].values:
+                if filename_without_ext == name or filename_without_ext.lower() == str(name).lower():
+                    person_name = name
+                    break
+            
+            if not person_name:
+                print(f"Skipping {actual_filename} - no matching person '{filename_without_ext}' in Excel")
+                continue
+            
+            # Create person directory
+            person_dir = os.path.join(temp_data_dir, person_name)
+            os.makedirs(person_dir, exist_ok=True)
+            
+            # Save image file
+            image_path = os.path.join(person_dir, actual_filename)
+            with open(image_path, "wb") as f:
+                f.write(file_content)
 
-        # Process bulk registration using the provided data directory
+        # Process bulk registration using the uploaded data directory
         results, augmented_images = FaceProcessor.process_bulk_registration(
             excel_path=excel_path,
-            root_data_dir=data_dir,
+            root_data_dir=temp_data_dir,
             output_base_dir=DATA_DIR
         )
 
