@@ -316,61 +316,54 @@ const RegistrationWidget = () => {
               <div className="form-row">
                 <div className="form-group">
                   <label>Age</label>
-                  <input
-                    type="number"
-                    defaultValue="18"
-                    value={(() => {
-                      const ageValue = formData.age || '18';
-                      const ageNum = parseInt(ageValue, 10);
-                      const finalValue = (isNaN(ageNum) || ageNum < 18) ? '18' : String(ageNum);
-                      return finalValue;
-                    })()}
-                    onChange={(e) => {
-                      const newValue = e.target.value;
-                      // If empty or invalid, set to 18
-                      if (newValue === '' || newValue === null || newValue === undefined) {
-                        setFormData(prev => ({ ...prev, age: '18' }));
-                        return;
-                      }
-                      const ageNum = parseInt(newValue, 10);
-                      // If less than 18, set to 18 immediately
-                      if (isNaN(ageNum) || ageNum < 18) {
-                        setFormData(prev => ({ ...prev, age: '18' }));
-                      } else {
-                        setFormData(prev => ({ ...prev, age: String(ageNum) }));
-                      }
-                    }}
-                    onKeyDown={(e) => {
-                      // Prevent typing values less than 18
-                      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-                        const currentValue = parseInt(formData.age || '18', 10);
-                        if (e.key === 'ArrowDown' && currentValue <= 18) {
-                          e.preventDefault();
-                        }
-                      }
-                    }}
-                    onFocus={(e) => {
-                      // Ensure value is at least 18 when focused
-                      const currentValue = parseInt(e.target.value || '18', 10);
-                      if (isNaN(currentValue) || currentValue < 18) {
-                        e.target.value = '18';
-                        setFormData(prev => ({ ...prev, age: '18' }));
-                      }
-                    }}
-                    onBlur={(e) => {
-                      // Ensure value is at least 18 when field loses focus
-                      const currentValue = parseInt(e.target.value || '18', 10);
-                      if (isNaN(currentValue) || currentValue < 18) {
-                        e.target.value = '18';
-                        setFormData(prev => ({ ...prev, age: '18' }));
-                      }
-                    }}
-                    placeholder="Age (must be 18+)"
-                    min={18}
-                    max={120}
-                    step={1}
-                    disabled={isLoading}
-                  />
+                  <div className="age-stepper">
+                    <button
+                      type="button"
+                      className="step-btn"
+                      onClick={() => {
+                        const current = parseInt(formData.age || '18', 10);
+                        const next = isNaN(current) ? 18 : Math.max(18, current - 1);
+                        setAgeError('');
+                        setFormData(prev => ({ ...prev, age: String(next) }));
+                      }}
+                      disabled={isLoading || (() => {
+                        const v = parseInt(formData.age || '18', 10);
+                        return !isFinite(v) || v <= 18;
+                      })()}
+                    >
+                      −
+                    </button>
+                    <input
+                      type="number"
+                      value={(() => {
+                        const ageValue = formData.age || '18';
+                        const ageNum = parseInt(ageValue, 10);
+                        const finalValue = (isNaN(ageNum) || ageNum < 18) ? '18' : String(Math.min(120, ageNum));
+                        return finalValue;
+                      })()}
+                      readOnly
+                      min={18}
+                      max={120}
+                      step={1}
+                      disabled={isLoading}
+                    />
+                    <button
+                      type="button"
+                      className="step-btn"
+                      onClick={() => {
+                        const current = parseInt(formData.age || '18', 10);
+                        const next = isNaN(current) ? 18 : Math.min(120, current + 1);
+                        setAgeError('');
+                        setFormData(prev => ({ ...prev, age: String(next) }));
+                      }}
+                      disabled={isLoading || (() => {
+                        const v = parseInt(formData.age || '18', 10);
+                        return !isFinite(v) || v >= 120;
+                      })()}
+                    >
+                      +
+                    </button>
+                  </div>
                   {ageError && <span className="field-error">{ageError}</span>}
                 </div>
                 <div className="form-group">
@@ -400,13 +393,23 @@ const RegistrationWidget = () => {
                 {categoryError && <span className="field-error">{categoryError}</span>}
               </div>
             </div>
-
-            <div className="form-section">
-              <h3>Photo Upload</h3>
+            <div className="form-actions">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={resetForm}
+                disabled={isLoading}
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+          <div className="right-panel">
+            <div className="form-section upload-section">
+              <h3>Upload Photo</h3>
               <div
                 className="image-upload-area"
                 onClick={() => {
-                  console.log('Image upload area clicked');
                   if (!isLoading) fileInputRef.current?.click();
                 }}
                 style={{ cursor: isLoading ? 'not-allowed' : 'pointer' }}
@@ -445,16 +448,7 @@ const RegistrationWidget = () => {
                 />
               </div>
             </div>
-
             <div className="form-actions">
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={resetForm}
-                disabled={isLoading}
-              >
-                Reset
-              </button>
               <button
                 type="button"
                 className="btn-primary"

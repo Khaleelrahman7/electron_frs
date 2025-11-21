@@ -5,6 +5,7 @@
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   max-width: 2000px;
   margin: 0 auto;
+  height: 100%;
 }
 
 .registration-header {
@@ -68,8 +69,18 @@
 
 .single-registration {
   display: grid;
-  grid-template-columns: 1fr 300px;
+  grid-template-columns: 1.3fr 1fr;
   gap: 24px;
+  align-items: start;
+}
+
+.right-panel .form-actions {
+  display: flex;
+  justify-content: center;
+}
+
+.right-panel .btn-primary {
+  width: 100%;
 }
 
 .registration-form {
@@ -121,7 +132,34 @@
   border-radius: 6px;
   font-size: 0.9rem;
   transition: border-color 0.2s ease;
-  width: 30%;
+  width: 100%;
+}
+
+.age-stepper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.age-stepper input {
+  width: 80px;
+  text-align: center;
+}
+
+.step-btn {
+  background-color: #f7fafc;
+  color: #4a5568;
+  border: 1px solid #e2e8f0;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.step-btn:disabled {
+  background-color: #f7fafc;
+  color: #a0aec0;
+  cursor: not-allowed;
 }
 
 .form-group input:focus,
@@ -151,13 +189,22 @@
 .image-upload-area {
   position: relative;
   width: 100%;
-  height: 200px;
+  height: 300px;
   border: 2px dashed #cbd5e0;
   border-radius: 8px;
   cursor: pointer;
   transition: border-color 0.2s ease;
   cursor: pointer;
   background-color: #f7fafc;
+}
+
+.upload-section {
+  background-color: #f9fbff;
+  border: 1px solid #e2e8f0;
+}
+
+.upload-section h3 {
+  margin-top: 0;
 }
 
 .image-upload-area:hover {
@@ -186,12 +233,17 @@
   height: 100%;
   border-radius: 6px;
   overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #000;
 }
 
 .image-preview img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center;
 }
 
 .remove-image {

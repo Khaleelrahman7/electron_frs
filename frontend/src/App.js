@@ -25,9 +25,9 @@ function App() {
 
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: <DashboardIcon /> },
+    { id: 'registration', label: 'Registration', icon: <RegistrationIcon /> },
     { id: 'gallery', label: 'Gallery', icon: <GalleryIcon /> },
     { id: 'events', label: 'Events', icon: <EventsIcon /> },
-    { id: 'registration', label: 'Registration', icon: <RegistrationIcon /> },
     { id: 'matching', label: 'Face Matching', icon: <FaceMatchingIcon /> },
     { id: 'video', label: 'Video Processing', icon: <VideoIcon /> },
     { id: 'camera', label: 'Camera Management', icon: <CameraIcon /> },
