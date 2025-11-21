@@ -321,7 +321,8 @@ async def get_analytics_overview():
             for row in reader:
                 if len(row) < 6:
                     continue
-                filename, person, timestamp, path, confidence, source = row
+                filename, label, timestamp, path, confidence, source = row
+                person = label  # Use label as person identifier
                 total_faces += 1
 
                 try:
@@ -373,7 +374,8 @@ async def get_face_detection_trend(days: int = 7):
             for row in reader:
                 if len(row) < 6:
                     continue
-                filename, person, timestamp, path, confidence, source = row
+                filename, label, timestamp, path, confidence, source = row
+                person = label  # Use label as person identifier
 
                 try:
                     timestamp_dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
@@ -426,7 +428,8 @@ async def get_confidence_distribution():
             for row in reader:
                 if len(row) < 6:
                     continue
-                filename, person, timestamp, path, confidence, source = row
+                filename, label, timestamp, path, confidence, source = row
+                person = label  # Use label as person identifier
 
                 try:
                     confidence_val = float(confidence)
@@ -467,7 +470,8 @@ async def get_person_frequency(limit: int = 10):
             for row in reader:
                 if len(row) < 6:
                     continue
-                filename, person, timestamp, path, confidence, source = row
+                filename, label, timestamp, path, confidence, source = row
+                person = label  # Use label as person identifier
 
                 if person != 'unknown':
                     person_freq[person] += 1
@@ -503,7 +507,8 @@ async def get_hourly_activity():
             for row in reader:
                 if len(row) < 6:
                     continue
-                filename, person, timestamp, path, confidence, source = row
+                filename, label, timestamp, path, confidence, source = row
+                person = label  # Use label as person identifier
 
                 try:
                     timestamp_dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
@@ -543,7 +548,8 @@ async def get_camera_activity():
             for row in reader:
                 if len(row) < 6:
                     continue
-                filename, person, timestamp, path, confidence, source = row
+                filename, label, timestamp, path, confidence, source = row
+                person = label  # Use label as person identifier
 
                 camera_activity[source] += 1
 
