@@ -44,7 +44,7 @@ logger.info(f"Data Directory: {DATA_DIR}")
 logger.info(f"Model Path: {MODEL_PATH}")
 
 # Define captured faces directory
-CAPTURED_FACES_DIR = r"C:\Users\e629\Desktop\GUI_Face\backend_face\captured_faces"
+CAPTURED_FACES_DIR = r"C:\python_programs\backend_face\captured_faces"
 KNOWN_FACES_DIR = os.path.join(CAPTURED_FACES_DIR, "known")
 UNKNOWN_FACES_DIR = os.path.join(CAPTURED_FACES_DIR, "unknown")
 
@@ -160,6 +160,9 @@ class CameraService:
         self.camera_width = 640  # Reduced for better performance
         self.camera_height = 480  # Reduced for better performance
         self.camera_fps = 20  # Increased slightly for smoother display
+        self.camera_buffer_size=1
+        self.camera_bitrate=2000
+        self.camera_timeout=5
        
         # Configure face detection parameters
         self.face_conf_threshold = 0.3  # YOLO confidence threshold
@@ -172,6 +175,7 @@ class CameraService:
         self.max_reconnection_attempts = 5  # Maximum number of reconnection attempts
         self.reconnection_cooldown = 60  # Cooldown period between reconnection attempts in seconds
         self.health_check_interval = 10  # Health check interval in seconds
+        self.active_cameras:Dict[int,bool]={}
        
         # Configure 24/7 operation parameters
         self.continuous_operation = True  # Flag for continuous operation
@@ -179,6 +183,9 @@ class CameraService:
         self.last_maintenance_time = time.time()
         self.error_threshold = 10  # Maximum consecutive errors before maintenance
         self.error_counts: Dict[int, int] = {}  # Track error counts per camera
+        self.consecutive_error_limits=5
+        self.max_consecutive_errors=5
+        self.max_consecutive_errors_per_stream=5
        
         # Configure processing parameters
         self.process_every_n_frames = 2  # Process every other frame
@@ -186,6 +193,11 @@ class CameraService:
         self.max_queue_size = 2  # Reduced queue size for lower latency
         self.processing_frames = {}  # Track which cameras are being processed
         self.frame_skip = {}  # Track frame skipping per camera
+        self.frame_timestamps={}
+        self.retry_intervals={}
+        self.active_streams={}
+        self.camera_ids:list[int]=[]
+
        
         # Configure buffer settings
         self.buffer_size = 1  # Minimize frame buffer
@@ -196,6 +208,9 @@ class CameraService:
         self.thread_pool = ThreadPoolExecutor(max_workers=self.num_workers * 2)
         self.frame_queues: Dict[int, Queue] = {}  # Queue for each camera's frames
         self.processing_queues: Dict[int, Queue] = {}  # Queue for processing results
+        self.active_streams:Dict[int,bool]={}
+        self.max_retry_interval=30
+        self.max_consecutive_errors=5
        
         # Initialize components
         self.initialize_yolo()

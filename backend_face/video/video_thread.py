@@ -635,9 +635,11 @@ def process_video_task(task_id: str, video_id: str, options: Dict[str, Any]):
             frame_count += 1
             frame_time = frame_count / fps  # Time in seconds
             
-            # Skip even frames for faster processing
+            # Skip even frames for faster processing (process only odd frames)
             if frame_count % 2 == 0:
+                logger.debug(f"Skipping even frame {frame_count}")
                 continue
+            logger.debug(f"Processing odd frame {frame_count}")
             
             # Update progress more frequently (every 10 frames)
             if frame_count - last_progress_update >= 10:
@@ -719,6 +721,7 @@ def process_video_task(task_id: str, video_id: str, options: Dict[str, Any]):
                                 best_match_index = np.argmin(face_distances)
                                 if matches[best_match_index]:
                                     confidence = (1 - face_distances[best_match_index]) * 100
+                                    logger.debug(f"Frame {frame_count}: Face distance: {face_distances[best_match_index]:.3f}, confidence: {confidence:.1f}%")
                                     if confidence > 53:
                                         name = known_faces["names"][best_match_index]
                                         detected_names.add(name)
@@ -766,105 +769,117 @@ def process_video_task(task_id: str, video_id: str, options: Dict[str, Any]):
                             })
                     
                     if face_data:  # Only store frames with valid detections
+                        logger.debug(f"Frame {frame_count}: Adding {len(face_data)} faces to detections")
                         results["face_detections"].append({
                             "frame": frame_count,
                             "timestamp": frame_time,
                             "faces": face_data
                         })
+                    else:
+                        if face_locations:
+                            logger.debug(f"Frame {frame_count}: {len(face_locations)} faces detected but confidence too low or processing skipped")
+        
+        logger.info(f"Frame processing loop ended - total frames processed: {frame_count}, face_detections collected: {len(results['face_detections'])}")
+        
+        # Process final appearances after frame loop completes
+        # Check for ended appearances (persons no longer in frame)
+        for name in list(current_appearances.keys()):
+            # Person has disappeared at end of video
+            appearance = current_appearances.pop(name)
+            if name not in results["person_appearances"]:
+                results["person_appearances"][name] = []
             
-            # Check for ended appearances (persons no longer in frame)
-            for name in list(current_appearances.keys()):
-                if name not in detected_names:
-                    # Person has disappeared
-                    appearance = current_appearances.pop(name)
-                    if name not in results["person_appearances"]:
-                        results["person_appearances"][name] = []
-                    
-                    # Add the appearance interval
-                    results["person_appearances"][name].append({
-                        "start_time": appearance["start"],
-                        "end_time": appearance.get("last_seen", appearance["start"]),
-                        "confidence": appearance["confidence"]
-                    })
-            
-            # Handle any remaining appearances at end of video
-            for name, appearance in current_appearances.items():
-                if name not in results["person_appearances"]:
-                    results["person_appearances"][name] = []
-                results["person_appearances"][name].append({
-                    "start_time": appearance["start"],
-                    "end_time": appearance.get("last_seen", appearance["start"]),
-                    "confidence": appearance["confidence"]
-                })
-            
-            # Calculate total duration for each person
-            for name in results["person_appearances"]:
-                total_duration = sum(
-                    app["end_time"] - app["start_time"]
-                    for app in results["person_appearances"][name]
-                )
-                if name not in results["person_tracking"]:
-                    results["person_tracking"][name] = {}
-                results["person_tracking"][name]["total_duration"] = total_duration
-                results["person_tracking"][name]["appearances"] = results["person_appearances"][name]
-            
-            # Calculate summary statistics for frontend compatibility
-            total_faces = 0
-            known_faces_count = 0
-            unknown_faces_count = 0
-            detected_persons = []
-
-            if results["face_detections"]:
-                for detection in results["face_detections"]:
-                    total_faces += len(detection["faces"])
-                    for face in detection["faces"]:
-                        if face["name"] and face["name"] != "Unknown":
-                            known_faces_count += 1
-                        else:
-                            unknown_faces_count += 1
-
-            # Create detected persons summary
-            for person_name, tracking_data in results["person_tracking"].items():
-                if person_name and person_name != "Unknown":
-                    # Count total detections for this person
-                    person_detections = sum(
-                        len([f for f in detection["faces"] if f["name"] == person_name])
-                        for detection in (results["face_detections"] or [])
-                    )
-                    detected_persons.append({
-                        "name": person_name,
-                        "count": person_detections,
-                        "total_duration": tracking_data.get("total_duration", 0)
-                    })
-
-            # Calculate processing time
-            processing_time = (datetime.now() - start_time).total_seconds()
-
-            # Add frontend-compatible fields
-            results.update({
-                "total_faces": total_faces,
-                "known_faces": known_faces_count,
-                "unknown_faces": unknown_faces_count,
-                "detected_persons": detected_persons,
-                "processing_time": f"{processing_time:.2f}s",
-                "processing_time_seconds": processing_time
+            # Add the appearance interval
+            results["person_appearances"][name].append({
+                "start_time": appearance["start"],
+                "end_time": appearance.get("last_seen", appearance["start"]),
+                "confidence": appearance["confidence"]
             })
+        
+        # Calculate total duration for each person
+        for name in results["person_appearances"]:
+            total_duration = sum(
+                app["end_time"] - app["start_time"]
+                for app in results["person_appearances"][name]
+            )
+            if name not in results["person_tracking"]:
+                results["person_tracking"][name] = {}
+            results["person_tracking"][name]["total_duration"] = total_duration
+            results["person_tracking"][name]["appearances"] = results["person_appearances"][name]
+        
+        # Calculate summary statistics for frontend compatibility
+        total_faces = 0
+        known_faces_count = 0
+        unknown_faces_count = 0
+        detected_persons = []
+        
+        logger.info(f"Before summary calculation:")
+        logger.info(f"  Face detections count: {len(results['face_detections']) if results['face_detections'] else 0}")
+        logger.info(f"  Person tracking: {list(results['person_tracking'].keys())}")
+        logger.info(f"  Person appearances: {list(results['person_appearances'].keys())}")
+        if results['face_detections']:
+            logger.info(f"  First detection: {len(results['face_detections'][0]['faces']) if results['face_detections'] else 0} faces")
 
-            # Final status update
-            if task_id in TASKS and TASKS[task_id]["status"] != "cancelled":
-                TASKS[task_id]["status"] = "completed"
-                TASKS[task_id]["progress"] = 100
-                TASKS[task_id]["message"] = "Processing completed successfully"
-                TASKS[task_id]["updated_at"] = datetime.now()
-                TASKS[task_id]["results"] = results
+        if results["face_detections"]:
+            for detection in results["face_detections"]:
+                total_faces += len(detection["faces"])
+                for face in detection["faces"]:
+                    if face["name"] and face["name"] != "Unknown":
+                        known_faces_count += 1
+                    else:
+                        unknown_faces_count += 1
 
-                # Log final summary
-                logger.info(f"Processing completed for task {task_id}:")
-                logger.info(f"  Total faces detected: {total_faces}")
-                logger.info(f"  Known faces: {known_faces_count}")
-                logger.info(f"  Unknown faces: {unknown_faces_count}")
-                logger.info(f"  Detected persons: {len(detected_persons)}")
-                logger.info(f"  Processing time: {processing_time:.2f}s")
+        # Create detected persons summary
+        for person_name, tracking_data in results["person_tracking"].items():
+            if person_name and person_name != "Unknown":
+                # Count total detections for this person
+                person_detections = sum(
+                    len([f for f in detection["faces"] if f["name"] == person_name])
+                    for detection in (results["face_detections"] or [])
+                )
+                detected_persons.append({
+                    "name": person_name,
+                    "count": person_detections,
+                    "total_duration": tracking_data.get("total_duration", 0)
+                })
+
+        # Calculate processing time
+        processing_time = (datetime.now() - start_time).total_seconds()
+
+        # Add frontend-compatible fields
+        results.update({
+            "total_faces": total_faces,
+            "known_faces": known_faces_count,
+            "unknown_faces": unknown_faces_count,
+            "detected_persons": detected_persons,
+            "processing_time": f"{processing_time:.2f}s",
+            "processing_time_seconds": processing_time
+        })
+        
+        logger.info(f"Results summary - total: {total_faces}, known: {known_faces_count}, unknown: {unknown_faces_count}, persons: {len(detected_persons)}")
+
+        # Final status update
+        if task_id in TASKS and TASKS[task_id]["status"] != "cancelled":
+            logger.info(f"Finalizing results for task {task_id}")
+            TASKS[task_id]["status"] = "completed"
+            TASKS[task_id]["progress"] = 100
+            TASKS[task_id]["message"] = "Processing completed successfully"
+            TASKS[task_id]["updated_at"] = datetime.now()
+            TASKS[task_id]["results"] = results
+            
+            logger.info(f"Results stored in task - verification:")
+            logger.info(f"  Task in TASKS: {task_id in TASKS}")
+            logger.info(f"  Results in task: {'results' in TASKS[task_id]}")
+            logger.info(f"  Results total_faces: {TASKS[task_id]['results'].get('total_faces')}")
+
+            # Log final summary
+            logger.info(f"Processing completed for task {task_id}:")
+            logger.info(f"  Total faces detected: {total_faces}")
+            logger.info(f"  Known faces: {known_faces_count}")
+            logger.info(f"  Unknown faces: {unknown_faces_count}")
+            logger.info(f"  Detected persons: {len(detected_persons)}")
+            logger.info(f"  Processing time: {processing_time:.2f}s")
+            logger.info(f"  Detected persons: {detected_persons}")
             
     except Exception as e:
         logger.error(f"Error processing video: {e}")
@@ -943,11 +958,14 @@ async def get_task_status(task_id: str):
             raise HTTPException(status_code=404, detail="Task not found")
         
         task = TASKS[task_id]
-        logger.info(f"Task {task_id} status: {task['status']}, progress: {task['progress']}%")
+        logger.debug(f"Task {task_id} status: {task['status']}, progress: {task['progress']}%")
+        
         return task
         
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error getting task status: {str(e)}")
+        logger.error(f"Error getting task status: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Error getting task status: {str(e)}"
@@ -962,6 +980,8 @@ async def get_task_result(task_id: str):
             raise HTTPException(status_code=404, detail="Task not found")
         
         task = TASKS[task_id]
+        logger.info(f"Getting results for task {task_id}, status: {task['status']}")
+        
         if task["status"] != "completed":
             logger.warning(f"Task {task_id} is not completed. Current status: {task['status']}")
             raise HTTPException(
@@ -974,11 +994,21 @@ async def get_task_result(task_id: str):
             logger.error(f"Results not found for task {task_id}")
             raise HTTPException(status_code=404, detail="Results not found")
             
-        logger.info(f"Retrieved results for task {task_id}")
-        return task["results"]
+        results = task["results"]
+        logger.info(f"Returning results for task {task_id}:")
+        logger.info(f"  Type: {type(results)}")
+        logger.info(f"  Total faces: {results.get('total_faces', 'MISSING')}")
+        logger.info(f"  Known faces: {results.get('known_faces', 'MISSING')}")
+        logger.info(f"  Unknown faces: {results.get('unknown_faces', 'MISSING')}")
+        logger.info(f"  Processing time: {results.get('processing_time', 'MISSING')}")
+        logger.info(f"  Face detections: {len(results.get('face_detections', []))} frames")
+        logger.info(f"  Detected persons: {len(results.get('detected_persons', []))}")
+        return results
         
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error retrieving results: {str(e)}")
+        logger.error(f"Error retrieving results: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Error retrieving results: {str(e)}"
@@ -1092,6 +1122,8 @@ async def upload_video(file: UploadFile):
             "upload_time": datetime.now()
         }
         
+        logger.info(f"Video uploaded: {file.filename} -> {file_id}, size: {len(file_data)} bytes")
+        
         return {
             "filename": file_id,
             "size": len(file_data),
@@ -1099,8 +1131,10 @@ async def upload_video(file: UploadFile):
             "status": "processed"
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Upload error: {str(e)}")
+        logger.error(f"Upload error: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=str(e)

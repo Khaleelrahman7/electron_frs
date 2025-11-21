@@ -13,7 +13,6 @@ TOLERANCE = 0.47 # Stricter matching (lower = more strict). Was 0.5, now more se
 MIN_SAVE_INTERVAL = 5.0
 
 # Performance optimization: process every Nth frame for real-time streaming
-# Optimized for Tesla T4 GPU: Process every frame for maximum quality and low latency
 PROCESS_EVERY_N_FRAMES = 1  # Process every frame (Tesla T4 can handle it)
 FRAME_COUNTER = 0
 

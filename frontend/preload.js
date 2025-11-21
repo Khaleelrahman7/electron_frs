@@ -32,12 +32,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // Registration APIs
   registerSingle: (formData) => ipcRenderer.invoke('register-single', formData),
-  registerBulk: (formData) => ipcRenderer.invoke('register-bulk', formData),
+  registerBulk: (excelFile, imageFileInfos) => ipcRenderer.invoke('register-bulk', excelFile, imageFileInfos),
   getRegisteredFaces: () => ipcRenderer.invoke('get-registered-faces'),
   
   // File system APIs
   selectFile: (options) => ipcRenderer.invoke('select-file', options),
   selectFolder: () => ipcRenderer.invoke('select-folder'),
+  scanFolderForImages: (folderPath) => ipcRenderer.invoke('scan-folder-for-images', folderPath),
   
   // Utility APIs
   showMessageBox: (options) => ipcRenderer.invoke('show-message-box', options),

@@ -366,36 +366,26 @@ class CameraStreamManager:
         if not queue:
             return
         
-        frame_counter = 0
-        # Optimized for Tesla T4: Process every frame for maximum quality and low latency
-        PROCESS_EVERY_N_FRAMES = 1  # Process every frame (Tesla T4 can handle it)
-        
         try:
             while self._is_stream_active(stream_id):
                 try:
                     # Get frame from queue (with timeout to allow checking stream status)
                     frame_data = queue.get(timeout=0.5)
-                    
+
                     # None signals stop
                     if frame_data is None:
                         break
-                    
+
                     frame, frame_num = frame_data
-                    frame_counter += 1
-                    
-                    # Skip processing for some frames to maintain frame rate
-                    if frame_counter % PROCESS_EVERY_N_FRAMES != 0:
-                        # Use raw frame without processing
+
+                    # Process every frame continuously for face detection and capture
+                    try:
+                        from face_pipeline import process_frame as face_process_frame
+                        # Get frame with detections drawn (face_pipeline draws them)
+                        processed_frame, _ = face_process_frame(frame, force_process=True, stream_id=stream_id)
+                    except Exception as face_error:
+                        logger.debug(f"Face processing error for stream {stream_id}: {face_error}")
                         processed_frame = frame.copy()
-                    else:
-                        # Process frame for face detection
-                        try:
-                            from face_pipeline import process_frame as face_process_frame
-                            # Get frame with detections drawn (face_pipeline draws them)
-                            processed_frame, _ = face_process_frame(frame, force_process=True, stream_id=stream_id)
-                        except Exception as face_error:
-                            logger.debug(f"Face processing error for stream {stream_id}: {face_error}")
-                            processed_frame = frame.copy()
                     
                     # Add to processed frames buffer (thread-safe)
                     if stream_id not in self.processed_frames:

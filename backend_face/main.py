@@ -282,9 +282,284 @@ async def root():
             "status": "/api/status",
             "health": "/api/health",
             "collections": "/api/collections",
+            "analytics": "/api/analytics",
             "capture": "/capture_face_upload or /capture_face_b64"
         }
     }
+
+# ============= ANALYTICS ENDPOINTS =============
+
+@app.get("/api/analytics/overview", tags=["Analytics"])
+async def get_analytics_overview():
+    """Get overall analytics overview"""
+    try:
+        import csv
+        import os
+        from datetime import datetime
+        from collections import defaultdict
+
+        # Read capture log
+        log_file = os.path.join(BASE_DIR, "captured_faces", "capture_log.csv")
+        if not os.path.exists(log_file):
+            return {
+                "total_faces": 0,
+                "known_faces": 0,
+                "unknown_faces": 0,
+                "recognition_rate": 0,
+                "avg_confidence": 0,
+                "unique_persons": 0
+            }
+
+        total_faces = 0
+        known_faces = 0
+        unknown_faces = 0
+        total_confidence = 0
+        unique_persons = set()
+
+        with open(log_file, 'r') as f:
+            reader = csv.reader(f)
+            for row in reader:
+                if len(row) < 6:
+                    continue
+                filename, label, timestamp, path, confidence, source = row
+                person = label  # Use label as person identifier
+                total_faces += 1
+
+                try:
+                    confidence_val = float(confidence)
+                    total_confidence += confidence_val
+                except ValueError:
+                    confidence_val = 0
+
+                if person != 'unknown':
+                    known_faces += 1
+                    unique_persons.add(person)
+                else:
+                    unknown_faces += 1
+
+        recognition_rate = (known_faces / total_faces * 100) if total_faces > 0 else 0
+        avg_confidence = total_confidence / total_faces if total_faces > 0 else 0
+
+        return {
+            "total_faces": total_faces,
+            "known_faces": known_faces,
+            "unknown_faces": unknown_faces,
+            "recognition_rate": round(recognition_rate, 2),
+            "avg_confidence": round(avg_confidence, 3),
+            "unique_persons": len(unique_persons)
+        }
+    except Exception as e:
+        logger.error(f"Error getting analytics overview: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/analytics/face-detection-trend", tags=["Analytics"])
+async def get_face_detection_trend(days: int = 7):
+    """Get face detection trends over time"""
+    try:
+        import csv
+        import os
+        from datetime import datetime, timedelta
+        from collections import defaultdict
+
+        log_file = os.path.join(BASE_DIR, "captured_faces", "capture_log.csv")
+        if not os.path.exists(log_file):
+            return {"labels": [], "known": [], "unknown": []}
+
+        # Read and filter data
+        cutoff_date = datetime.now() - timedelta(days=days)
+        daily_stats = defaultdict(lambda: defaultdict(int))
+
+        with open(log_file, 'r') as f:
+            reader = csv.reader(f)
+            for row in reader:
+                if len(row) < 6:
+                    continue
+                filename, label, timestamp, path, confidence, source = row
+                person = label  # Use label as person identifier
+
+                try:
+                    timestamp_dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                    if timestamp_dt >= cutoff_date:
+                        date_str = timestamp_dt.date().isoformat()
+                        daily_stats[date_str][person] += 1
+                except ValueError:
+                    continue
+
+        # Prepare data for chart
+        dates = sorted(daily_stats.keys())
+        known_data = []
+        unknown_data = []
+
+        for date in dates:
+            stats = daily_stats[date]
+            known_count = sum(count for person, count in stats.items() if person != 'unknown')
+            unknown_count = stats.get('unknown', 0)
+            known_data.append(known_count)
+            unknown_data.append(unknown_count)
+
+        return {
+            "labels": dates,
+            "known": known_data,
+            "unknown": unknown_data
+        }
+    except Exception as e:
+        logger.error(f"Error getting face detection trend: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/analytics/confidence-distribution", tags=["Analytics"])
+async def get_confidence_distribution():
+    """Get confidence score distribution"""
+    try:
+        import csv
+        import os
+        from collections import defaultdict
+
+        log_file = os.path.join(BASE_DIR, "captured_faces", "capture_log.csv")
+        if not os.path.exists(log_file):
+            return {"labels": [], "data": []}
+
+        # Create bins for confidence scores
+        bins = [0, 0.2, 0.4, 0.6, 0.8, 1.0]
+        labels = ['0-0.2', '0.2-0.4', '0.4-0.6', '0.6-0.8', '0.8-1.0']
+        distribution = defaultdict(int)
+
+        with open(log_file, 'r') as f:
+            reader = csv.reader(f)
+            for row in reader:
+                if len(row) < 6:
+                    continue
+                filename, label, timestamp, path, confidence, source = row
+                person = label  # Use label as person identifier
+
+                try:
+                    confidence_val = float(confidence)
+                    # Find appropriate bin
+                    for i, bin_edge in enumerate(bins[1:], 1):
+                        if confidence_val <= bin_edge:
+                            distribution[labels[i-1]] += 1
+                            break
+                    else:
+                        distribution[labels[-1]] += 1
+                except ValueError:
+                    continue
+
+        return {
+            "labels": labels,
+            "data": [distribution[label] for label in labels]
+        }
+    except Exception as e:
+        logger.error(f"Error getting confidence distribution: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/analytics/person-frequency", tags=["Analytics"])
+async def get_person_frequency(limit: int = 10):
+    """Get most frequently recognized persons"""
+    try:
+        import csv
+        import os
+        from collections import defaultdict
+
+        log_file = os.path.join(BASE_DIR, "captured_faces", "capture_log.csv")
+        if not os.path.exists(log_file):
+            return {"labels": [], "data": []}
+
+        person_freq = defaultdict(int)
+
+        with open(log_file, 'r') as f:
+            reader = csv.reader(f)
+            for row in reader:
+                if len(row) < 6:
+                    continue
+                filename, label, timestamp, path, confidence, source = row
+                person = label  # Use label as person identifier
+
+                if person != 'unknown':
+                    person_freq[person] += 1
+
+        # Sort by frequency and get top N
+        sorted_persons = sorted(person_freq.items(), key=lambda x: x[1], reverse=True)[:limit]
+
+        return {
+            "labels": [person for person, count in sorted_persons],
+            "data": [count for person, count in sorted_persons]
+        }
+    except Exception as e:
+        logger.error(f"Error getting person frequency: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/analytics/hourly-activity", tags=["Analytics"])
+async def get_hourly_activity():
+    """Get face detection activity by hour of day"""
+    try:
+        import csv
+        import os
+        from datetime import datetime
+        from collections import defaultdict
+
+        log_file = os.path.join(BASE_DIR, "captured_faces", "capture_log.csv")
+        if not os.path.exists(log_file):
+            return {"labels": [], "data": []}
+
+        hourly_activity = defaultdict(int)
+
+        with open(log_file, 'r') as f:
+            reader = csv.reader(f)
+            for row in reader:
+                if len(row) < 6:
+                    continue
+                filename, label, timestamp, path, confidence, source = row
+                person = label  # Use label as person identifier
+
+                try:
+                    timestamp_dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                    hour = timestamp_dt.hour
+                    hourly_activity[hour] += 1
+                except ValueError:
+                    continue
+
+        # Fill missing hours with 0
+        all_hours = range(24)
+        hourly_data = [hourly_activity.get(hour, 0) for hour in all_hours]
+
+        return {
+            "labels": [f"{h:02d}:00" for h in all_hours],
+            "data": hourly_data
+        }
+    except Exception as e:
+        logger.error(f"Error getting hourly activity: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/analytics/camera-activity", tags=["Analytics"])
+async def get_camera_activity():
+    """Get face detection activity by camera/source"""
+    try:
+        import csv
+        import os
+        from collections import defaultdict
+
+        log_file = os.path.join(BASE_DIR, "captured_faces", "capture_log.csv")
+        if not os.path.exists(log_file):
+            return {"labels": [], "data": []}
+
+        camera_activity = defaultdict(int)
+
+        with open(log_file, 'r') as f:
+            reader = csv.reader(f)
+            for row in reader:
+                if len(row) < 6:
+                    continue
+                filename, label, timestamp, path, confidence, source = row
+                person = label  # Use label as person identifier
+
+                camera_activity[source] += 1
+
+        return {
+            "labels": list(camera_activity.keys()),
+            "data": list(camera_activity.values())
+        }
+    except Exception as e:
+        logger.error(f"Error getting camera activity: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ============= FACE CAPTURE ENDPOINTS =============
 

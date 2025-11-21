@@ -23,6 +23,7 @@ const RegistrationWidget = () => {
   // Bulk registration with Excel + Folder
   const [excelFile, setExcelFile] = useState(null);
   const [selectedFolder, setSelectedFolder] = useState('');
+  const [imageFilesForBulk, setImageFilesForBulk] = useState([]);
   const excelFileInputRef = useRef(null);
 
   // Ensure age is always 18 or above on component mount
@@ -201,11 +202,24 @@ const RegistrationWidget = () => {
       const result = await window.electronAPI.selectFolder();
       if (result.success && result.folderPath) {
         setSelectedFolder(result.folderPath);
-        showMessage(`Folder selected: ${result.folderPath}`, 'success');
+        showMessage('Scanning folder for images...', 'success');
+        
+        const scanResult = await window.electronAPI.scanFolderForImages(result.folderPath);
+        if (scanResult.success && scanResult.count > 0) {
+          setImageFilesForBulk(scanResult.files);
+          showMessage(`Folder selected: ${scanResult.count} image(s) found`, 'success');
+        } else if (scanResult.success && scanResult.count === 0) {
+          showMessage('Folder selected but no image files found', 'error');
+          setImageFilesForBulk([]);
+        } else {
+          showMessage('Failed to scan folder', 'error');
+          setImageFilesForBulk([]);
+        }
       }
     } catch (error) {
       console.error('Error selecting folder:', error);
       showMessage('Failed to select folder', 'error');
+      setImageFilesForBulk([]);
     }
   };
 
@@ -215,8 +229,8 @@ const RegistrationWidget = () => {
       return;
     }
 
-    if (!selectedFolder) {
-      showMessage('Please select a data folder first', 'error');
+    if (imageFilesForBulk.length === 0) {
+      showMessage('Please select a data folder with image files first', 'error');
       return;
     }
 
@@ -224,35 +238,35 @@ const RegistrationWidget = () => {
     setMessage('Processing bulk registration...');
 
     try {
-      const formData = new FormData();
-      formData.append('excel_file', excelFile);
-      formData.append('data_dir', selectedFolder);
-
-      const response = await fetch(`${BASE_URL}/api/registration/register/bulk`, {
-        method: 'POST',
-        body: formData,
+      const excelBuffer = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(new Uint8Array(e.target.result));
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(excelFile);
       });
 
-      const result = await response.json();
+      const result = await window.electronAPI.registerBulk(
+        Array.from(excelBuffer),
+        imageFilesForBulk
+      );
 
-      if (response.ok) {
-        const successCount = result.filter(r => r.status === 'success').length;
-        const totalCount = result.length;
+      if (result.success) {
+        const successCount = result.data.filter(r => r.status === 'success').length;
+        const totalCount = result.data.length;
         showMessage(`Bulk registration completed: ${successCount}/${totalCount} successful`, 'success');
 
-        // Reset form
         setExcelFile(null);
         setSelectedFolder('');
+        setImageFilesForBulk([]);
         if (excelFileInputRef.current) {
           excelFileInputRef.current.value = '';
         }
       } else {
-        const errorMessage = result.detail || 'Bulk registration failed';
-        showMessage(errorMessage, 'error');
+        showMessage(result.error || 'Bulk registration failed', 'error');
       }
     } catch (error) {
       console.error('Bulk registration error:', error);
-      showMessage('Failed to connect to server. Please ensure the backend is running.', 'error');
+      showMessage('Failed to process bulk registration. Please ensure the backend is running.', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -462,8 +476,8 @@ const RegistrationWidget = () => {
             <ul>
               <li>Excel file must have a 'name' column (required)</li>
               <li>Optional columns: 'age', 'gender', 'category'</li>
-              <li>Data folder should contain subfolders named after each person</li>
-              <li>Each person's subfolder should contain their images (JPG, PNG, JPEG)</li>
+              <li>Data folder should contain images named of each person</li>
+              {/* <li>Each person's subfolder should contain their image (JPG, PNG, JPEG)</li> */}
               <li>Valid categories: criminal, offender, chain snatching, eve teasing, unknown, eagle employee</li>
             </ul>
           </div>
@@ -505,7 +519,7 @@ const RegistrationWidget = () => {
                   <div className="upload-placeholder">
                     <div className="upload-icon">📂</div>
                     <p>{selectedFolder || 'Click to select data folder'}</p>
-                    <small>Folder containing person subfolders</small>
+                    <small>Folder containing person images</small>
                   </div>
                 </div>
               </div>

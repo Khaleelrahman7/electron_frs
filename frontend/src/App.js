@@ -5,6 +5,7 @@ import EventsWidget from './components/EventsWidget';
 import RegistrationWidget from './components/RegistrationWidget';
 import VideoWidget from './components/VideoWidget';
 import FaceMatching from './components/FaceMatching';
+import Dashboard from './components/dashboard/Dashboard';
 import { CameraProvider } from './components/camera/CameraManager';
 import SimpleCameraManager from './components/camera/SimpleCameraManager';
 import StreamViewer from './components/StreamViewer';
@@ -17,11 +18,13 @@ import { ReactComponent as FaceMatchingIcon } from './icon/face_matching.svg';
 import { ReactComponent as VideoIcon } from './icon/video_processing.svg';
 import { ReactComponent as CameraIcon } from './icon/camera.svg';
 import { ReactComponent as StreamViewerIcon } from './icon/stream_viewer.svg';
+import { ReactComponent as DashboardIcon } from './icon/dashboard.svg';
 
 function App() {
-  const [activeTab, setActiveTab] = useState('gallery');
+  const [activeTab, setActiveTab] = useState('dashboard');
 
   const tabs = [
+    { id: 'dashboard', label: 'Dashboard', icon: <DashboardIcon /> },
     { id: 'gallery', label: 'Gallery', icon: <GalleryIcon /> },
     { id: 'events', label: 'Events', icon: <EventsIcon /> },
     { id: 'registration', label: 'Registration', icon: <RegistrationIcon /> },
@@ -33,6 +36,8 @@ function App() {
 
   const renderActiveComponent = () => {
     switch (activeTab) {
+      case 'dashboard':
+        return <Dashboard />;
       case 'gallery':
         return <FaceGallery />;
       case 'events':
@@ -54,7 +59,7 @@ function App() {
       case 'webrtc-test':
         return <WebRTCTest />;
       default:
-        return <FaceGallery />;
+        return <Dashboard />;
     }
   };
 
