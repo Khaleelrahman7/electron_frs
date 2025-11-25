@@ -163,6 +163,7 @@ class CameraService:
         self.camera_buffer_size=1
         self.camera_bitrate=2000
         self.camera_timeout=5
+        self.camera_resolution=(640,480)
        
         # Configure face detection parameters
         self.face_conf_threshold = 0.3  # YOLO confidence threshold
@@ -230,11 +231,18 @@ class CameraService:
         self.max_retry_interval = 30  # Maximum seconds between retry attempts
         self.min_retry_interval = 5   # Minimum seconds between retry attempts
         self.camera_retry_times: Dict[int, float] = {}  # Track last retry times
+        self.camera_consecutive_errors:Dict[int,int]={}
+    
+        # Configure logging levels based on environment variables
        
         # Start streaming and monitoring
         self.initialize_all_cameras()
         self.start_health_monitoring()
         self.start_maintenance_monitoring()
+        self.start_processing_threads()
+        self.start_health_monitoring()
+
+        
        
     def configure_gpu(self) -> bool:
         """Enhanced GPU configuration with better error handling"""
@@ -274,6 +282,10 @@ class CameraService:
             self.yolo_model.iou = 0.45   # Lower IOU threshold for better detection
             self.yolo_model.max_det = 5   # Limit detections per image
             self.yolo_model.verbose = False
+            self.yolo_model.fuse()
+            self.model_evaluate()
+            logger.info("Yolo model set to evaluation mode")
+            logger.info(f"Using device:{device}")
            
             logger.info(f"YOLO model configured with conf={self.yolo_model.conf}, iou={self.yolo_model.iou}")
            
@@ -382,6 +394,7 @@ class CameraService:
             logger.error(f"Error loading known faces: {e}")
             self.known_faces = {"encodings": [], "names": []}
 
+
     def _process_face_image(self, image_path: str, person_name: str):
         """Process a single face image and return encoding and name"""
         try:
@@ -418,10 +431,12 @@ class CameraService:
                     return None
                
                 x1, y1, x2, y2 = map(int, best_box.xyxy[0])
+                logger.debug(f"detected face with confidence{confidence:.2f} at ({x1},{y1},{x2},{y2}) in image:{image_path}")
                
                 # Instead of cropping, use the full image with face locations
                 face_locations = [(y1, x2, y2, x1)]  # Convert to face_recognition format (top, right, bottom, left)
                 face_encodings = face_recognition.face_encodings(rgb_image, face_locations)
+                logger.debug(f"generated {len(face_encodings)} face encodings using yolo detection for image:{image_path}")
                
                 if not face_encodings:
                     logger.warning(f"Could not generate face encoding for detected face in: {image_path}")
@@ -433,6 +448,7 @@ class CameraService:
             else:
                 # Fallback to face_recognition library
                 face_locations = face_recognition.face_locations(rgb_image)
+                logger.debug(f"decteted {len(face_locations)} faces using face recognition in image:{image_path}")
                 if not face_locations:
                     logger.warning(f"No faces detected by face_recognition in image: {image_path}")
                     return None
@@ -516,6 +532,8 @@ class CameraService:
                         'reconnection_attempts': self.reconnection_attempts.get(camera_id, 0),
                         'status': 'healthy' if frame_age <= self.max_frame_age else 'stale'
                     }
+                    if self.stream_health[camera_id][status]=='stale':
+                        self._attempt_stream_recovery(camera_id)
 
                 # Sleep for health check interval
                 time.sleep(self.health_check_interval)
@@ -536,6 +554,7 @@ class CameraService:
 
             # Increment attempt counter
             self.reconnection_attempts[camera_id] = current_attempts + 1
+            logger.info(f"Attempting to rrecover camera {camera_id} stream (attempt {self.reconnection_attempts[camera_id]})")
            
             # Stop existing stream
             self.stop_camera_stream(camera_id)
@@ -707,6 +726,7 @@ class CameraService:
         try:
             if camera_id not in self.video_captures:
                 return False
+
            
             cap = self.video_captures[camera_id]
             if not cap.isOpened():
@@ -761,6 +781,8 @@ class CameraService:
             
             # Reset error count
             self.error_counts[camera_id] = 0
+            self.camera_consecutive_errors[camera_id]=0
+
             
             # Continue streaming while active
             while self.active_cameras.get(camera_id, False):
@@ -799,6 +821,7 @@ class CameraService:
                     self.stream_health[camera_id]['status'] = 'streaming'
                     self.stream_health[camera_id]['frame_count'] += 1
                     self.stream_health[camera_id]['last_frame_time'] = time.time()
+
                     
                     # Calculate FPS every 30 frames
                     if self.stream_health[camera_id]['frame_count'] % 30 == 0:
@@ -860,6 +883,7 @@ class CameraService:
             self.camera_error_states[camera_id]['last_error_time'] = current_time
             self.camera_error_states[camera_id]['error_count'] += 1
             self.camera_error_states[camera_id]['current_error'] = error_message
+            self.camera_consecutive_errors[camera_id]+=1
 
         # Update stream health
         self.stream_health[camera_id] = {
@@ -1008,6 +1032,8 @@ class CameraService:
             # Update status and timestamps
             self.last_frame_time[camera_id] = time.time()
             self._update_camera_status(camera_id, "running")
+            self.active_cameras[camera_id]=True
+            self.camera_consecutive_errors[camera_id]=0
            
             # Start streaming thread if not already running
             if not self.stream_threads.get(camera_id, {}).get('active', False):

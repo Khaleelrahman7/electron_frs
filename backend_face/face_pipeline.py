@@ -4,6 +4,7 @@ import numpy as np
 import face_recognition
 from insightface.app import FaceAnalysis
 from typing import List, Tuple, Dict, Any, Optional
+from collections import defaultdict
 import threading
 import os
 from save_face import save_face_image
@@ -12,46 +13,63 @@ TOLERANCE = 0.47 # Stricter matching (lower = more strict). Was 0.5, now more se
 # Rate limit for saving same face per label (seconds)
 MIN_SAVE_INTERVAL = 5.0
 
-# Performance optimization: process every Nth frame for real-time streaming
-PROCESS_EVERY_N_FRAMES = 1  # Process every frame (Tesla T4 can handle it)
-FRAME_COUNTER = 0
+# Frame skipping removed - process every frame for maximum face capture quality
+# Tesla T4 GPU can handle full frame processing efficiently
 
 # Initialize detector and known faces (singleton-like)
-face_app = None
+# Support for multiple GPUs: maintain separate face_app instances per GPU
+face_apps: Dict[int, Any] = {}  # GPU ID -> FaceAnalysis instance
+face_app = None  # Default/fallback instance
 known_encodings: List[np.ndarray] = []
 known_names: List[str] = []
+available_gpus: List[int] = []  # List of available GPU IDs
 
 
-def check_gpu_availability() -> int:
-    """Check if GPU is available for InsightFace/ONNXRuntime."""
+def check_gpu_availability() -> List[int]:
+    """Check available GPUs for InsightFace/ONNXRuntime. Returns list of GPU IDs."""
+    available = []
     try:
         import onnxruntime as ort
         providers = ort.get_available_providers()
         if 'CUDAExecutionProvider' in providers:
-            # Try to create a simple session to verify CUDA works
+            # Check how many GPUs are available
             try:
-                # Check if CUDA libraries are accessible
-                test_providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
-                print(f"[INFO] ONNX providers available: {providers}")
-                return 0  # GPU device ID
-            except Exception as e:
-                print(f"[WARN] CUDA provider available but may have library issues: {e}")
-                print("[INFO] Falling back to CPU")
-                return -1
+                import subprocess
+                result = subprocess.run(['nvidia-smi', '--list-gpus'], 
+                                      capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    # Count GPUs from nvidia-smi output
+                    gpu_count = len([line for line in result.stdout.strip().split('\n') if line.strip()])
+                    for gpu_id in range(gpu_count):
+                        available.append(gpu_id)
+                    print(f"[INFO] Detected {gpu_count} GPU(s) via nvidia-smi")
+                else:
+                    # Fallback: try GPU 0
+                    available.append(0)
+                    print(f"[INFO] ONNX providers available: {providers}, assuming GPU 0")
+            except Exception:
+                # Fallback: try GPU 0
+                available.append(0)
+                print(f"[INFO] ONNX providers available: {providers}, using GPU 0")
         else:
             print(f"[INFO] CUDA provider not available. Available providers: {providers}")
-            return -1
     except ImportError:
         print("[WARN] onnxruntime not available")
-        return -1
     except Exception as e:
         print(f"[WARN] Error checking GPU availability: {e}")
-        return -1
+    return available
 
 
-def init(data_dir: str, ctx: int = -1, det_size: Tuple[int, int] = (640, 640)) -> None:
-    """Initialize known faces and InsightFace detector with GPU detection."""
-    global face_app, known_encodings, known_names
+def init(data_dir: str, ctx: int = -1, det_size: Tuple[int, int] = (640, 640), use_dual_gpu: bool = True) -> None:
+    """Initialize known faces and InsightFace detector with GPU detection.
+    
+    Args:
+        data_dir: Directory containing known face images
+        ctx: GPU context ID (-1 for CPU, 0+ for GPU). If -1 and use_dual_gpu=True, auto-detects GPUs
+        det_size: Detection size for InsightFace
+        use_dual_gpu: If True, automatically initialize all available GPUs (up to 2)
+    """
+    global face_app, face_apps, known_encodings, known_names, available_gpus
 
     # Reuse your function from fr1.py
     try:
@@ -61,34 +79,92 @@ def init(data_dir: str, ctx: int = -1, det_size: Tuple[int, int] = (640, 640)) -
 
     known_encodings, known_names = load_known_faces(data_dir)
 
-    # Auto-detect GPU if ctx is 0 but GPU might not be available
-    if ctx == 0:
-        detected_ctx = check_gpu_availability()
-        if detected_ctx == -1:
-            print("[WARN] GPU requested but not available, using CPU")
-            ctx = -1
-        else:
-            print("[INFO] Using GPU for face detection")
-    elif ctx == -1:
-        print("[INFO] Using CPU for face detection")
+    # Clear existing instances
+    face_apps = {}
+    face_app = None
+    available_gpus = []
 
-    try:
-        face_app = FaceAnalysis(allowed_modules=['detection'])
-        face_app.prepare(ctx_id=ctx, det_size=det_size)
-        print(f"[face_pipeline] Initialized successfully with ctx={ctx}, det_size={det_size}")
-    except Exception as e:
-        # If GPU init fails, try CPU
-        if ctx != -1:
-            print(f"[WARN] GPU initialization failed: {e}")
-            print("[INFO] Falling back to CPU")
-            try:
-                face_app = FaceAnalysis(allowed_modules=['detection'])
-                face_app.prepare(ctx_id=-1, det_size=det_size)
-                print(f"[face_pipeline] Initialized with CPU fallback, det_size={det_size}")
-            except Exception as cpu_error:
-                raise RuntimeError(f"Failed to initialize face pipeline (GPU and CPU): {cpu_error}") from cpu_error
+    # Auto-detect and initialize multiple GPUs if requested
+    if use_dual_gpu and ctx == -1:
+        detected_gpus = check_gpu_availability()
+        if detected_gpus:
+            print(f"[INFO] Detected {len(detected_gpus)} GPU(s): {detected_gpus}")
+            # Initialize up to 2 GPUs for optimal performance
+            for gpu_id in detected_gpus[:2]:
+                try:
+                    app = FaceAnalysis(allowed_modules=['detection'])
+                    app.prepare(ctx_id=gpu_id, det_size=det_size)
+                    face_apps[gpu_id] = app
+                    available_gpus.append(gpu_id)
+                    print(f"[face_pipeline] Initialized GPU {gpu_id} successfully, det_size={det_size}")
+                except Exception as e:
+                    print(f"[WARN] Failed to initialize GPU {gpu_id}: {e}")
+            
+            if face_apps:
+                # Set default to first GPU
+                face_app = face_apps[available_gpus[0]]
+                print(f"[INFO] Using {len(face_apps)} GPU(s) for face detection")
+            else:
+                print("[WARN] All GPU initializations failed, falling back to CPU")
+                ctx = -1
         else:
-            raise
+            print("[INFO] No GPUs detected, using CPU")
+            ctx = -1
+
+    # Initialize single GPU or CPU if dual GPU not used or failed
+    if not face_apps:
+        if ctx == 0:
+            detected_gpus = check_gpu_availability()
+            if detected_gpus:
+                ctx = detected_gpus[0]
+                print(f"[INFO] Using GPU {ctx} for face detection")
+            else:
+                print("[WARN] GPU requested but not available, using CPU")
+                ctx = -1
+        elif ctx == -1:
+            print("[INFO] Using CPU for face detection")
+
+        try:
+            face_app = FaceAnalysis(allowed_modules=['detection'])
+            face_app.prepare(ctx_id=ctx, det_size=det_size)
+            if ctx >= 0:
+                face_apps[ctx] = face_app
+                available_gpus.append(ctx)
+            print(f"[face_pipeline] Initialized successfully with ctx={ctx}, det_size={det_size}")
+        except Exception as e:
+            # If GPU init fails, try CPU
+            if ctx != -1:
+                print(f"[WARN] GPU initialization failed: {e}")
+                print("[INFO] Falling back to CPU")
+                try:
+                    face_app = FaceAnalysis(allowed_modules=['detection'])
+                    face_app.prepare(ctx_id=-1, det_size=det_size)
+                    print(f"[face_pipeline] Initialized with CPU fallback, det_size={det_size}")
+                except Exception as cpu_error:
+                    raise RuntimeError(f"Failed to initialize face pipeline (GPU and CPU): {cpu_error}") from cpu_error
+            else:
+                raise
+
+
+def _get_face_app_for_stream(stream_id: Optional[str] = None):
+    """Get appropriate face_app instance for a stream (distributes across GPUs)."""
+    global face_app, face_apps, available_gpus
+    
+    if not face_apps:
+        return face_app
+    
+    if not available_gpus:
+        return face_app
+    
+    # Distribute streams across available GPUs using stream_id hash
+    if stream_id:
+        # Use hash of stream_id to consistently assign to same GPU
+        gpu_idx = hash(stream_id) % len(available_gpus)
+        selected_gpu = available_gpus[gpu_idx]
+        return face_apps[selected_gpu]
+    else:
+        # Round-robin for streams without ID
+        return face_apps[available_gpus[0]]
 
 
 def process_frame(frame_bgr: np.ndarray, force_process: bool = False, stream_id: Optional[str] = None) -> Tuple[np.ndarray, List[Dict[str, Any]]]:
@@ -96,22 +172,21 @@ def process_frame(frame_bgr: np.ndarray, force_process: bool = False, stream_id:
     
     Args:
         frame_bgr: Input BGR frame
-        force_process: If True, process this frame regardless of frame skipping
+        force_process: Deprecated - all frames are now processed (kept for backward compatibility)
+        stream_id: Optional stream ID for frame buffer access and GPU assignment
     """
-    global face_app, known_encodings, known_names, FRAME_COUNTER
+    global known_encodings, known_names
 
-    if face_app is None:
+    # Get appropriate face_app instance (distributed across GPUs if multiple available)
+    current_face_app = _get_face_app_for_stream(stream_id)
+    
+    if current_face_app is None:
         raise RuntimeError("Face pipeline not initialized. Call init() first.")
 
     if frame_bgr is None:
         return frame_bgr, []
 
-    # Frame skipping for performance: only process every Nth frame
-    if not force_process:
-        FRAME_COUNTER += 1
-        if FRAME_COUNTER % PROCESS_EVERY_N_FRAMES != 0:
-            # Return frame without processing but keep detections from last processed frame
-            return frame_bgr, []
+    # Process every frame - no skipping for maximum face capture quality
 
     # Optimized for Tesla T4 GPU: Process at full HD resolution for maximum quality
     # Tesla T4 can handle full resolution processing efficiently
@@ -131,7 +206,7 @@ def process_frame(frame_bgr: np.ndarray, force_process: bool = False, stream_id:
         new_w, new_h = original_w, original_h
 
     h, w = new_h, new_w
-    faces = face_app.get(scaled_frame)
+    faces = current_face_app.get(scaled_frame)
     detections: List[Dict[str, Any]] = []
 
     for f in faces:
@@ -190,15 +265,30 @@ def process_frame(frame_bgr: np.ndarray, force_process: bool = False, stream_id:
 
         name = "Unknown"
         conf = 0.0
+        
+        # Get InsightFace detection confidence (how confident the detector is that it found a face)
+        det_conf = getattr(f, "det_score", None) or getattr(f, "score", None)
+        if det_conf is None:
+            det_conf = 0.0
+        else:
+            det_conf = float(det_conf)
 
         if encs and len(known_encodings) > 0:
             enc = encs[0]
             distances = face_recognition.face_distance(known_encodings, enc)
             best_idx = int(np.argmin(distances))
             best_dist = float(distances[best_idx])
-            conf = max(0.0, 1.0 - best_dist)
+            recog_conf = max(0.0, 1.0 - best_dist)
             if best_dist <= TOLERANCE:
                 name = known_names[best_idx]
+                # For known faces, use recognition confidence (how well it matches)
+                conf = recog_conf
+            else:
+                # For unknown faces that were checked, use detection confidence
+                conf = det_conf
+        else:
+            # No encoding or no known faces - use detection confidence
+            conf = det_conf
 
         # Save face crop asynchronously to avoid blocking frame processing
         # Try to get best frame from buffer for sharp capture
@@ -207,6 +297,7 @@ def process_frame(frame_bgr: np.ndarray, force_process: bool = False, stream_id:
                 save_label = name if name != "Unknown" else "unknown"
                 
                 # save_face_image will automatically get sharpest frame from buffer if stream_id provided
+                # Save with more context (like original frame) - no aggressive cropping/upscaling
                 save_face_image(
                     frame_bgr=frame_bgr.copy(),
                     bbox=(x1, y1, x2, y2),
@@ -214,10 +305,10 @@ def process_frame(frame_bgr: np.ndarray, force_process: bool = False, stream_id:
                     confidence=conf,
                     min_interval=MIN_SAVE_INTERVAL,
                     source="stream",
-                    expand_factor=0.4,  # 40% expansion for better context
-                    target_width=1024,   # Optimized for Tesla T4: Higher resolution for maximum clarity
-                    max_upscale=2.5,    # Allow more upscaling for small faces
-                    jpeg_quality=99,    # Very high quality JPEG
+                    expand_factor=1.0,   # 100% expansion - capture full context like original frame
+                    target_width=None,  # No forced upscaling - preserve natural resolution
+                    max_upscale=1.2,   # Minimal upscaling only for very small faces (max 20%)
+                    jpeg_quality=95,   # High quality JPEG without over-compression
                     stream_id=stream_id,  # Pass stream_id to access frame buffer
                     prefer_png=False
                 )

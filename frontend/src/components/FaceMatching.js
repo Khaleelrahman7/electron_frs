@@ -216,7 +216,7 @@ const FaceMatching = () => {
             ) : (
               <div className="image-placeholder">
                 <span>📷</span>
-                <p>Select an image to find matches</p>
+                <p>Select an image to find Known matches</p>
               </div>
             )}
             <input

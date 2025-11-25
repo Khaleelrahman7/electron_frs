@@ -84,6 +84,67 @@ const FindOccurrence = () => {
     }
   };
 
+  const findUnknownMatches = async (retryCount = 0) => {
+    if (!selectedImage) {
+      setError('Please select an image first.');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setMatchingFaces([]);
+
+    try {
+      const formData = new FormData();
+      formData.append('image', selectedImage);
+
+      console.log('Finding unknown matches for image:', selectedImage.name);
+      setError('Processing image... This may take up to 2 minutes for large datasets.');
+
+      const response = await axios.post(`${API_BASE_URL}/match-face-unknown`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        timeout: 120000, // 2 minutes
+        onUploadProgress: (progressEvent) => {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setError(`Uploading image... ${percentCompleted}%`);
+        }
+      });
+
+      console.log('Unknown match response:', response.data);
+      setMatchingFaces(response.data);
+      setError(null);
+    } catch (err) {
+      console.error('Find unknown matches error:', err);
+      let errorMessage = 'Failed to find unknown matches';
+
+      if (err.code === 'ECONNABORTED') {
+        if (retryCount < 2) {
+          setError(`Request timed out. Retrying... (${retryCount + 1}/3)`);
+          setTimeout(() => findUnknownMatches(retryCount + 1), 2000);
+          return;
+        } else {
+          errorMessage = 'Request timed out after multiple attempts. The dataset might be very large. Please try with a smaller image or contact support.';
+        }
+      } else if (err.response?.status === 400) {
+        errorMessage = err.response.data.detail || 'Invalid image or no face detected';
+      } else if (err.response?.status === 500) {
+        errorMessage = 'Server error occurred. Please try again or contact support if the problem persists.';
+      } else if (err.response) {
+        errorMessage = `Server error: ${err.response.status} - ${err.response.data?.detail || err.response.statusText}`;
+      } else if (err.request) {
+        errorMessage = `Cannot connect to backend server. Please ensure the server is running on ${BASE_URL}`;
+      } else {
+        errorMessage = `Error: ${err.message}`;
+      }
+
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="find-occurrence">
       <div className="image-selection">
@@ -118,7 +179,15 @@ const FindOccurrence = () => {
             disabled={!selectedImage || loading}
             className="find-btn"
           >
-            {loading ? 'Searching...' : 'Find Matches'}
+            {loading ? 'Searching...' : 'Find Known Matches'}
+          </button>
+
+          <button 
+            onClick={findUnknownMatches} 
+            disabled={!selectedImage || loading}
+            className="find-btn"
+          >
+            {loading ? 'Searching...' : 'Find Unknown Matches'}
           </button>
         </div>
       </div>

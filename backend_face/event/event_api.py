@@ -387,3 +387,91 @@ async def match_face(image: UploadFile = File(...)):
     except Exception as e:
         logger.error(f"Error matching face: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/match-face-unknown")
+async def match_face_unknown(image: UploadFile = File(...)):
+    """Match a face against the database of unknown faces."""
+    try:
+        # Read and process the uploaded image
+        contents = await image.read()
+        nparr = np.frombuffer(contents, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if img is None:
+            raise HTTPException(status_code=400, detail="Invalid image file")
+            
+        # Convert to RGB for face recognition
+        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        
+        # Get face encodings
+        face_locations = face_recognition.face_locations(img_rgb)
+        if not face_locations:
+            raise HTTPException(status_code=400, detail="No face detected in the image")
+            
+        face_encoding = face_recognition.face_encodings(img_rgb, face_locations)[0]
+        
+        # Find matching faces
+        matching_faces = []
+        
+        # Walk through unknown faces directory
+        for root, dirs, files in os.walk(UNKNOWN_FACES_DIR):
+            for file in files:
+                if file.lower().endswith(('.jpg', '.jpeg', '.png')):
+                    try:
+                        # Load and process each image
+                        img_path = os.path.join(root, file)
+                        unknown_img = cv2.imread(img_path)
+                        if unknown_img is None:
+                            continue
+                            
+                        unknown_img_rgb = cv2.cvtColor(unknown_img, cv2.COLOR_BGR2RGB)
+                        unknown_face_locations = face_recognition.face_locations(unknown_img_rgb)
+                        
+                        if unknown_face_locations:
+                            unknown_face_encodings = face_recognition.face_encodings(unknown_img_rgb, unknown_face_locations)
+                            
+                            # Compare with uploaded face
+                            for unknown_face_encoding in unknown_face_encodings:
+                                # Compare faces
+                                matches = face_recognition.compare_faces([face_encoding], unknown_face_encoding, tolerance=0.5)
+                                if matches[0]:
+                                    # Calculate face distance (lower is better)
+                                    face_distance = face_recognition.face_distance([face_encoding], unknown_face_encoding)[0]
+                                    confidence = 1 - face_distance
+                                    
+                                    # Only include matches with confidence >= 50%
+                                    if confidence >= 0.53:
+                                        # Get camera name from directory structure (if available)
+                                        relative_path = os.path.relpath(img_path, UNKNOWN_FACES_DIR)
+                                        parts = relative_path.split(os.sep)
+                                        camera_name = parts[0] if len(parts) >= 2 else "default"
+                                        
+                                        # Get timestamp from filename
+                                        timestamp_str = file.split('_', 1)[1].rsplit('.', 1)[0] if '_' in file else None
+                                        try:
+                                            if timestamp_str:
+                                                timestamp = datetime.strptime(timestamp_str, "%Y%m%d_%H%M%S")
+                                            else:
+                                                timestamp = datetime.fromtimestamp(os.path.getctime(img_path))
+                                        except ValueError:
+                                            timestamp = datetime.fromtimestamp(os.path.getctime(img_path))
+                                        
+                                        matching_faces.append(FaceMatch(
+                                            image_path=convert_file_path_to_url(img_path),
+                                            name="Unknown",
+                                            confidence=float(confidence),
+                                            timestamp=timestamp.isoformat()
+                                        ))
+                                    break  # Found a match for this image, move to next
+                                    
+                    except Exception as e:
+                        logger.error(f"Error processing {file}: {str(e)}")
+                        continue
+        
+        # Sort matching faces by confidence (highest first)
+        matching_faces.sort(key=lambda x: x.confidence, reverse=True)
+        
+        return matching_faces
+        
+    except Exception as e:
+        logger.error(f"Error matching face against unknown faces: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))

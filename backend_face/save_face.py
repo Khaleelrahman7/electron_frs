@@ -17,7 +17,7 @@ KNOWN_DIRNAME = "known"
 UNKNOWN_DIRNAME = "unknown"
 LOG_CSV = BASE_DIR / "capture_log.csv"
 # Minimum seconds between saves for same label (to avoid duplicates)
-DEFAULT_MIN_SAVE_INTERVAL_SECONDS = 5.0
+DEFAULT_MIN_SAVE_INTERVAL_SECONDS = 8.0
 
 # Internal state for rate-limiting and thread-safety
 _last_saved_time: Dict[str, float] = {}
@@ -141,10 +141,10 @@ def save_face_image(
     confidence: Optional[float] = None,
     min_interval: float = DEFAULT_MIN_SAVE_INTERVAL_SECONDS,
     source: str = "stream",
-    expand_factor: float = 0.5,
-    target_width: int = 512,
-    max_upscale: float = 1.5,
-    jpeg_quality: int = 98,
+    expand_factor: float = 1.0,  # Default to 100% expansion for more context
+    target_width: Optional[int] = None,  # None = no forced resizing, preserve natural resolution
+    max_upscale: float = 1.2,  # Minimal upscaling to preserve quality
+    jpeg_quality: int = 95,
     stream_id: Optional[str] = None,  # Optional stream_id to access frame buffer for sharp capture
     prefer_png: bool = False  # Save PNG instead of JPEG when True
 ) -> Optional[Path]:
@@ -163,8 +163,8 @@ def save_face_image(
     label = label or "unknown"
     label_s = sanitize_label(label)
 
-    # rate limit
-    if not _should_save(label_s, min_interval):
+    # Check face confidence before saving (must be > 70% for quality)
+    if confidence is not None and confidence < 0.7:
         return None
 
     try:
@@ -223,39 +223,37 @@ def save_face_image(
                 )
             
             face_crop_bgr = face
+
         
         # Ensure dtype is uint8
         if face_crop_bgr.dtype != "uint8":
             face_crop_bgr = (face_crop_bgr * 255).astype("uint8") if face_crop_bgr.max() <= 1.0 else face_crop_bgr.astype("uint8")
         
-        # Smart resize: maintain aspect ratio.
-        # IMPORTANT: only upscale small crops; never downscale larger-than-target crops.
-        h, w = face_crop_bgr.shape[:2]
+        # Preserve natural resolution - minimal processing to maintain quality
+        # Only apply minimal upscaling for very small faces, and only if target_width is specified
         fh, fw = face_crop_bgr.shape[:2]
-        aspect = fw / float(fh) if fh != 0 else 1.0
-        if fw < target_width:
-            desired_w = min(int(fw * max_upscale), target_width)
-            desired_w = max(desired_w, fw)  # never shrink
-            desired_h = max(1, int(desired_w / aspect))
-            if abs(desired_w - fw) > 2:
-                face_crop_bgr = cv2.resize(
-                    face_crop_bgr, (desired_w, desired_h),
-                    interpolation=cv2.INTER_LANCZOS4
-                )
         
-        # Apply gentle unsharp mask for clarity (very conservative)
-        # Only apply if image is large enough
-        if fh > 80 and fw > 80:
-            gaussian = cv2.GaussianBlur(face_crop_bgr, (0, 0), 1.2)
-            face_crop_bgr = cv2.addWeighted(face_crop_bgr, 1.2, gaussian, -0.2, 0)
+        # Only resize if target_width is specified AND face is very small
+        if target_width is not None and fw < target_width:
+            # Only upscale if face is very small (less than 50% of target)
+            # This prevents quality degradation from excessive upscaling
+            if fw < (target_width * 0.5):
+                aspect = fw / float(fh) if fh != 0 else 1.0
+                # Limit upscaling to max_upscale factor to preserve quality
+                max_allowed_w = int(fw * max_upscale)
+                desired_w = min(max_allowed_w, target_width)
+                desired_w = max(desired_w, fw)  # never shrink
+                desired_h = max(1, int(desired_w / aspect))
+                if abs(desired_w - fw) > 2:
+                    # Use high-quality interpolation only when necessary
+                    face_crop_bgr = cv2.resize(
+                        face_crop_bgr, (desired_w, desired_h),
+                        interpolation=cv2.INTER_LANCZOS4
+                    )
         
-        # Apply CLAHE only when contrast is low to avoid over-sharpened artifacts
-        try:
-            gray = cv2.cvtColor(face_crop_bgr, cv2.COLOR_BGR2GRAY)
-            if gray.std() < 25:  # heuristic threshold
-                face_crop_bgr = apply_clahe(face_crop_bgr)
-        except Exception:
-            pass
+        # Remove aggressive image processing to preserve natural quality
+        # No unsharp mask or CLAHE - these can degrade image quality
+        # Save images as captured to maintain original quality
         
         # Save
         dir_path = ensure_dirs_for_label(label_s)
