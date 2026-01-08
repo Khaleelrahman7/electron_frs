@@ -7,6 +7,7 @@ from typing import List, Tuple, Dict, Any, Optional
 from collections import defaultdict
 import threading
 import os
+import time
 from save_face import save_face_image
 
 TOLERANCE = 0.47 # Stricter matching (lower = more strict). Was 0.5, now more selective
@@ -23,6 +24,23 @@ face_app = None  # Default/fallback instance
 known_encodings: List[np.ndarray] = []
 known_names: List[str] = []
 available_gpus: List[int] = []  # List of available GPU IDs
+
+# Person tracking across frames: stream_id -> track_id -> tracking_info
+# tracking_info: {
+#   'name': str,  # Persisted name (once recognized, never changes to Unknown)
+#   'bbox': (x1, y1, x2, y2),  # Last known bbox
+#   'last_seen': float,  # Timestamp of last detection
+#   'frame_count': int,  # Frames since first seen
+#   'encoding': np.ndarray  # Face encoding for matching
+# }
+person_tracking: Dict[str, Dict[int, Dict[str, Any]]] = defaultdict(dict)
+track_id_counter: Dict[str, int] = defaultdict(int)  # Per-stream track ID counter
+tracking_lock = threading.Lock()  # Thread-safe access to tracking data
+
+# Tracking parameters
+IOU_THRESHOLD = 0.3  # Minimum IoU to match detections to tracked persons
+MAX_TRACK_AGE_FRAMES = 30  # Remove tracks not seen for this many frames
+MAX_TRACK_AGE_SECONDS = 2.0  # Remove tracks not seen for this many seconds
 
 
 def check_gpu_availability() -> List[int]:
@@ -167,6 +185,98 @@ def _get_face_app_for_stream(stream_id: Optional[str] = None):
         return face_apps[available_gpus[0]]
 
 
+def _calculate_iou(bbox1: Tuple[int, int, int, int], bbox2: Tuple[int, int, int, int]) -> float:
+    """Calculate Intersection over Union (IoU) between two bounding boxes.
+    
+    Args:
+        bbox1: (x1, y1, x2, y2)
+        bbox2: (x1, y1, x2, y2)
+    
+    Returns:
+        IoU value between 0 and 1
+    """
+    x1_1, y1_1, x2_1, y2_1 = bbox1
+    x1_2, y1_2, x2_2, y2_2 = bbox2
+    
+    # Calculate intersection
+    x1_i = max(x1_1, x1_2)
+    y1_i = max(y1_1, y1_2)
+    x2_i = min(x2_1, x2_2)
+    y2_i = min(y2_1, y2_2)
+    
+    if x2_i <= x1_i or y2_i <= y1_i:
+        return 0.0
+    
+    intersection = (x2_i - x1_i) * (y2_i - y1_i)
+    
+    # Calculate union
+    area1 = (x2_1 - x1_1) * (y2_1 - y1_1)
+    area2 = (x2_2 - x1_2) * (y2_2 - y1_2)
+    union = area1 + area2 - intersection
+    
+    if union == 0:
+        return 0.0
+    
+    return intersection / union
+
+
+def _match_detection_to_track(bbox: Tuple[int, int, int, int], 
+                               tracks: Dict[int, Dict[str, Any]]) -> Optional[int]:
+    """Match a detection to an existing track based on IoU.
+    
+    Args:
+        bbox: Current detection bounding box (x1, y1, x2, y2)
+        tracks: Dictionary of existing tracks (track_id -> tracking_info)
+    
+    Returns:
+        track_id if match found, None otherwise
+    """
+    best_iou = 0.0
+    best_track_id = None
+    
+    for track_id, track_info in tracks.items():
+        track_bbox = track_info.get('bbox')
+        if track_bbox is None:
+            continue
+        
+        iou = _calculate_iou(bbox, track_bbox)
+        if iou > best_iou and iou >= IOU_THRESHOLD:
+            best_iou = iou
+            best_track_id = track_id
+    
+    return best_track_id
+
+
+def _cleanup_old_tracks(stream_id: str, current_frame_count: int, current_time: float):
+    """Remove tracks that haven't been seen for too long.
+    
+    Args:
+        stream_id: Stream identifier
+        current_frame_count: Current frame number
+        current_time: Current timestamp
+    """
+    global person_tracking
+    
+    if stream_id not in person_tracking:
+        return
+    
+    tracks_to_remove = []
+    tracks = person_tracking[stream_id]
+    
+    for track_id, track_info in tracks.items():
+        last_seen = track_info.get('last_seen', 0)
+        frame_count = track_info.get('frame_count', 0)
+        frames_since_seen = current_frame_count - frame_count
+        seconds_since_seen = current_time - last_seen
+        
+        # Remove if not seen for too long
+        if frames_since_seen > MAX_TRACK_AGE_FRAMES or seconds_since_seen > MAX_TRACK_AGE_SECONDS:
+            tracks_to_remove.append(track_id)
+    
+    for track_id in tracks_to_remove:
+        del tracks[track_id]
+
+
 def process_frame(frame_bgr: np.ndarray, force_process: bool = False, stream_id: Optional[str] = None) -> Tuple[np.ndarray, List[Dict[str, Any]]]:
     """Detect + recognize faces in one frame. Returns annotated frame + detections.
     
@@ -175,8 +285,8 @@ def process_frame(frame_bgr: np.ndarray, force_process: bool = False, stream_id:
         force_process: Deprecated - all frames are now processed (kept for backward compatibility)
         stream_id: Optional stream ID for frame buffer access and GPU assignment
     """
-    global known_encodings, known_names
-
+    global known_encodings, known_names, person_tracking, track_id_counter
+    
     # Get appropriate face_app instance (distributed across GPUs if multiple available)
     current_face_app = _get_face_app_for_stream(stream_id)
     
@@ -185,6 +295,28 @@ def process_frame(frame_bgr: np.ndarray, force_process: bool = False, stream_id:
 
     if frame_bgr is None:
         return frame_bgr, []
+
+    # Initialize tracking for this stream if needed
+    if stream_id:
+        if stream_id not in person_tracking:
+            person_tracking[stream_id] = {}
+        if stream_id not in track_id_counter:
+            track_id_counter[stream_id] = 0
+    
+    # Track frame count and time for cleanup
+    current_time = time.time()
+    frame_count_key = f"{stream_id}_frame_count" if stream_id else "default_frame_count"
+    if not hasattr(process_frame, '_frame_counts'):
+        process_frame._frame_counts = {}
+    if frame_count_key not in process_frame._frame_counts:
+        process_frame._frame_counts[frame_count_key] = 0
+    process_frame._frame_counts[frame_count_key] += 1
+    current_frame_count = process_frame._frame_counts[frame_count_key]
+    
+    # Cleanup old tracks periodically
+    if stream_id and current_frame_count % 10 == 0:  # Every 10 frames
+        with tracking_lock:
+            _cleanup_old_tracks(stream_id, current_frame_count, current_time)
 
     # Process every frame - no skipping for maximum face capture quality
 
@@ -208,6 +340,16 @@ def process_frame(frame_bgr: np.ndarray, force_process: bool = False, stream_id:
     h, w = new_h, new_w
     faces = current_face_app.get(scaled_frame)
     detections: List[Dict[str, Any]] = []
+    
+    # Get tracks for this stream (ensure it exists)
+    if stream_id:
+        if stream_id not in person_tracking:
+            with tracking_lock:
+                if stream_id not in person_tracking:
+                    person_tracking[stream_id] = {}
+        tracks = person_tracking[stream_id]
+    else:
+        tracks = {}
 
     for f in faces:
         # InsightFace bbox order: [x1, y1, x2, y2]
@@ -263,7 +405,30 @@ def process_frame(frame_bgr: np.ndarray, force_process: bool = False, stream_id:
             # Silently skip encoding errors to avoid log spam
             encs = []
 
-        name = "Unknown"
+        # Get current bounding box
+        current_bbox = (x1, y1, x2, y2)
+        
+        # Try to match this detection to an existing track
+        matched_track_id = None
+        persisted_name = None
+        
+        if stream_id and tracks:
+            with tracking_lock:
+                # Make a copy of track IDs to iterate safely
+                track_ids = list(tracks.keys())
+                matched_track_id = _match_detection_to_track(current_bbox, tracks)
+                if matched_track_id is not None:
+                    # Found a match - get persisted name
+                    track_info = tracks[matched_track_id]
+                    persisted_name = track_info.get('name')
+        
+        # Initialize name: use persisted name if it's a known person, otherwise "Unknown"
+        # Once a person is recognized as known, we keep that name
+        if persisted_name and persisted_name != "Unknown":
+            name = persisted_name
+        else:
+            name = "Unknown"
+        
         conf = 0.0
         
         # Get InsightFace detection confidence (how confident the detector is that it found a face)
@@ -273,22 +438,59 @@ def process_frame(frame_bgr: np.ndarray, force_process: bool = False, stream_id:
         else:
             det_conf = float(det_conf)
 
+        # Try to recognize the face
+        recognized_name = None
+        face_encoding = None
+        
         if encs and len(known_encodings) > 0:
             enc = encs[0]
+            face_encoding = enc  # Store for tracking
             distances = face_recognition.face_distance(known_encodings, enc)
             best_idx = int(np.argmin(distances))
             best_dist = float(distances[best_idx])
             recog_conf = max(0.0, 1.0 - best_dist)
             if best_dist <= TOLERANCE:
-                name = known_names[best_idx]
-                # For known faces, use recognition confidence (how well it matches)
-                conf = recog_conf
+                recognized_name = known_names[best_idx]
+                # If we recognized a known person, use that name (this overrides "Unknown" but not existing known names)
+                if recognized_name and recognized_name != "Unknown":
+                    name = recognized_name
+                    # For known faces, use recognition confidence (how well it matches)
+                    conf = recog_conf
+                else:
+                    # Shouldn't happen, but handle it
+                    conf = det_conf
             else:
-                # For unknown faces that were checked, use detection confidence
+                # Recognition failed - keep current name (persisted known name or "Unknown")
                 conf = det_conf
         else:
-            # No encoding or no known faces - use detection confidence
+            # No encoding or no known faces - keep current name (persisted known name or "Unknown")
             conf = det_conf
+        
+        # Update or create tracking entry
+        if stream_id:
+            with tracking_lock:
+                if matched_track_id is not None:
+                    # Update existing track
+                    track_info = tracks[matched_track_id]
+                    track_info['bbox'] = current_bbox
+                    track_info['last_seen'] = current_time
+                    # Update name only if we recognized a known person (never change from known to Unknown)
+                    if recognized_name and recognized_name != "Unknown":
+                        track_info['name'] = recognized_name
+                    # Update encoding if available
+                    if face_encoding is not None:
+                        track_info['encoding'] = face_encoding
+                else:
+                    # Create new track
+                    track_id = track_id_counter[stream_id]
+                    track_id_counter[stream_id] += 1
+                    tracks[track_id] = {
+                        'name': name,  # Can be "Unknown" initially, but will be updated if recognized
+                        'bbox': current_bbox,
+                        'last_seen': current_time,
+                        'frame_count': current_frame_count,
+                        'encoding': face_encoding if face_encoding is not None else None
+                    }
 
         # Save face crop asynchronously to avoid blocking frame processing
         # Try to get best frame from buffer for sharp capture

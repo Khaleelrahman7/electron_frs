@@ -348,7 +348,7 @@ async def get_camera_frame(
         encode_params = [
             cv2.IMWRITE_JPEG_QUALITY, 70,  # Slightly lower quality for speed
             cv2.IMWRITE_JPEG_PROGRESSIVE, 0,  # Baseline JPEG for fastest decode
-            cv2.IMWRITE_JPEG_OPTIMIZE, 0   # Skip optimization for speed
+            cv2.IMWRITE_JPEG_OPTIMIZE, 0  
         ]
         
         ret, buffer = cv2.imencode('.jpg', frame, encode_params)

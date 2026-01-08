@@ -160,6 +160,9 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 GALLERY_DIR = os.path.join(DATA_DIR, "gallery")
 CAPTURED_FACES_DIR = os.path.join(BASE_DIR, "captured_faces")
 
+# API base URL for constructing image URLs
+API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8005")
+
 # Create directories if they don't exist
 os.makedirs(GALLERY_DIR, exist_ok=True)
 os.makedirs(CAPTURED_FACES_DIR, exist_ok=True)
@@ -560,6 +563,263 @@ async def get_camera_activity():
     except Exception as e:
         logger.error(f"Error getting camera activity: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/analytics/persons-list", tags=["Analytics"])
+async def get_persons_list():
+    """Get list of all persons with their profile images and basic stats"""
+    try:
+        import csv
+        import os
+        from collections import defaultdict
+        from datetime import datetime
+
+        log_file = os.path.join(BASE_DIR, "captured_faces", "capture_log.csv")
+        persons_data = defaultdict(lambda: {
+            "count": 0,
+            "avg_confidence": 0.0,
+            "last_seen": None,
+            "first_seen": None,
+            "total_confidence": 0.0,
+            "image_url": None
+        })
+
+        # Get person stats from log
+        if os.path.exists(log_file):
+            with open(log_file, 'r') as f:
+                reader = csv.reader(f)
+                for row in reader:
+                    if len(row) < 6:
+                        continue
+                    filename, label, timestamp, path, confidence, source = row
+                    person = label
+                    
+                    if person == 'unknown':
+                        continue
+                    
+                    persons_data[person]["count"] += 1
+                    try:
+                        conf_val = float(confidence)
+                        persons_data[person]["total_confidence"] += conf_val
+                    except ValueError:
+                        pass
+                    
+                    try:
+                        ts = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                        if persons_data[person]["last_seen"] is None or ts > persons_data[person]["last_seen"]:
+                            persons_data[person]["last_seen"] = ts
+                        if persons_data[person]["first_seen"] is None or ts < persons_data[person]["first_seen"]:
+                            persons_data[person]["first_seen"] = ts
+                    except ValueError:
+                        pass
+
+        # Calculate averages and get profile images
+        result = []
+        for person_name, data in persons_data.items():
+            if data["count"] > 0:
+                data["avg_confidence"] = round(data["total_confidence"] / data["count"], 3)
+            
+            # Try to get profile image from gallery
+            profile_image = None
+            gallery_person_dir = os.path.join(GALLERY_DIR, person_name)
+            if os.path.exists(gallery_person_dir):
+                for img_file in os.listdir(gallery_person_dir):
+                    if img_file.lower().endswith(('.jpg', '.jpeg', '.png')):
+                        profile_image = f"{API_BASE_URL}/api/gallery/image/{person_name}/{img_file}"
+                        break
+            
+            # If no gallery image, try to get latest captured image
+            if not profile_image:
+                captured_person_dir = os.path.join(CAPTURED_FACES_DIR, "known")
+                for root, dirs, files in os.walk(captured_person_dir):
+                    for file in files:
+                        if file.lower().endswith(('.jpg', '.jpeg', '.png')) and person_name in root:
+                            relative_path = os.path.relpath(os.path.join(root, file), captured_person_dir)
+                            parts = relative_path.split(os.sep)
+                            if len(parts) >= 2:
+                                profile_image = f"{API_BASE_URL}/api/captured/image/known/{parts[0]}/{person_name}/{file}"
+                                break
+                    if profile_image:
+                        break
+
+            result.append({
+                "name": person_name,
+                "count": data["count"],
+                "avg_confidence": data["avg_confidence"],
+                "last_seen": data["last_seen"].isoformat() if data["last_seen"] else None,
+                "first_seen": data["first_seen"].isoformat() if data["first_seen"] else None,
+                "profile_image": profile_image
+            })
+
+        # Sort by count (most frequent first)
+        result.sort(key=lambda x: x["count"], reverse=True)
+        return result
+    except Exception as e:
+        logger.error(f"Error getting persons list: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/analytics/person/{person_name}", tags=["Analytics"])
+async def get_person_analytics(person_name: str):
+    """Get detailed analytics for a specific person"""
+    try:
+        import csv
+        import os
+        from datetime import datetime, timedelta
+        from collections import defaultdict
+
+        log_file = os.path.join(BASE_DIR, "captured_faces", "capture_log.csv")
+        if not os.path.exists(log_file):
+            return {
+                "name": person_name,
+                "total_detections": 0,
+                "avg_confidence": 0,
+                "dynamic_recognition": 0,
+                "output_intensity": 0,
+                "output_volume": 0,
+                "basic_info": 0,
+                "hourly_distribution": [],
+                "daily_distribution": [],
+                "camera_distribution": {},
+                "recent_images": []
+            }
+
+        total_detections = 0
+        total_confidence = 0.0
+        hourly_dist = defaultdict(int)
+        daily_dist = defaultdict(int)
+        camera_dist = defaultdict(int)
+        recent_images = []
+        last_7_days = datetime.now() - timedelta(days=7)
+
+        with open(log_file, 'r') as f:
+            reader = csv.reader(f)
+            for row in reader:
+                if len(row) < 6:
+                    continue
+                filename, label, timestamp, path, confidence, source = row
+                
+                if label != person_name:
+                    continue
+                
+                total_detections += 1
+                try:
+                    conf_val = float(confidence)
+                    total_confidence += conf_val
+                except ValueError:
+                    pass
+
+                try:
+                    ts = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                    hour = ts.hour
+                    date_str = ts.date().isoformat()
+                    hourly_dist[hour] += 1
+                    daily_dist[date_str] += 1
+                    
+                    if ts >= last_7_days:
+                        # Get image URL
+                        img_url = convert_file_path_to_url(path) if path else None
+                        if img_url:
+                            recent_images.append({
+                                "url": img_url,
+                                "timestamp": ts.isoformat(),
+                                "confidence": float(confidence) if confidence else 0
+                            })
+                except ValueError:
+                    pass
+
+                camera_dist[source] += 1
+
+        avg_confidence = total_confidence / total_detections if total_detections > 0 else 0
+        
+        # Calculate metrics similar to image
+        dynamic_recognition = min(100, int((total_detections / max(1, len(daily_dist))) * 10))  # Dynamic recognition score
+        output_intensity = min(100, int(avg_confidence * 100))  # Based on confidence
+        output_volume = total_detections  # Total detections
+        basic_info = min(100, int((len(camera_dist) / 10) * 100))  # Based on camera diversity
+
+        # Sort recent images by timestamp
+        recent_images.sort(key=lambda x: x["timestamp"], reverse=True)
+        recent_images = recent_images[:10]  # Limit to 10 most recent
+
+        # Fill hourly distribution
+        hourly_data = [hourly_dist.get(h, 0) for h in range(24)]
+        
+        # Get daily distribution for last 7 days
+        daily_labels = []
+        daily_data = []
+        for i in range(7):
+            date = (datetime.now() - timedelta(days=i)).date().isoformat()
+            daily_labels.append(date)
+            daily_data.append(daily_dist.get(date, 0))
+        daily_labels.reverse()
+        daily_data.reverse()
+
+        return {
+            "name": person_name,
+            "total_detections": total_detections,
+            "avg_confidence": round(avg_confidence, 3),
+            "dynamic_recognition": dynamic_recognition,
+            "output_intensity": output_intensity,
+            "output_volume": output_volume,
+            "basic_info": basic_info,
+            "hourly_distribution": hourly_data,
+            "daily_distribution": {
+                "labels": daily_labels,
+                "data": daily_data
+            },
+            "camera_distribution": dict(camera_dist),
+            "recent_images": recent_images
+        }
+    except Exception as e:
+        logger.error(f"Error getting person analytics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+def convert_file_path_to_url(file_path: str) -> str:
+    """Convert file path to API URL"""
+    try:
+        if not file_path:
+            return ""
+        
+        normalized_path = os.path.normpath(file_path)
+        
+        # Check if it's a gallery image
+        gallery_dir = os.path.normpath(GALLERY_DIR)
+        if normalized_path.startswith(gallery_dir):
+            relative_path = os.path.relpath(normalized_path, gallery_dir)
+            parts = relative_path.split(os.sep)
+            if len(parts) >= 2:
+                person_name = parts[0]
+                image_name = parts[-1]
+                return f"{API_BASE_URL}/api/gallery/image/{person_name}/{image_name}"
+        
+        # Check if it's a captured face (known)
+        known_faces_dir = os.path.join(CAPTURED_FACES_DIR, "known")
+        known_dir = os.path.normpath(known_faces_dir)
+        if normalized_path.startswith(known_dir):
+            relative_path = os.path.relpath(normalized_path, known_dir)
+            parts = relative_path.split(os.sep)
+            image_name = os.path.basename(normalized_path)
+            if len(parts) >= 2:
+                camera_name = parts[0]
+                person_name = parts[1] if len(parts) > 1 else "default"
+                return f"{API_BASE_URL}/api/captured/image/known/{camera_name}/{person_name}/{image_name}"
+            elif len(parts) == 1:
+                return f"{API_BASE_URL}/api/captured/image/known/default/default/{image_name}"
+        
+        # Check if it's a captured face (unknown)
+        unknown_faces_dir = os.path.join(CAPTURED_FACES_DIR, "unknown")
+        unknown_dir = os.path.normpath(unknown_faces_dir)
+        if normalized_path.startswith(unknown_dir):
+            relative_path = os.path.relpath(normalized_path, unknown_dir)
+            parts = relative_path.split(os.sep)
+            image_name = os.path.basename(normalized_path)
+            if len(parts) >= 1:
+                camera_name = parts[0] if parts[0] else "default"
+                return f"{API_BASE_URL}/api/captured/image/unknown/{camera_name}/unknown/{image_name}"
+        
+        return normalized_path
+    except Exception as e:
+        logger.warning(f"Error converting file path to URL: {file_path}, error: {e}")
+        return file_path
 
 # ============= FACE CAPTURE ENDPOINTS =============
 

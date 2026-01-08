@@ -67,6 +67,7 @@ def migrate_cameras():
     existing_cameras = service._load_cameras()
     existing_urls = {camera.rtsp_url for camera in existing_cameras}
     existing_ips = {camera.ip_address for camera in existing_cameras}
+    print(f"found {len(existing_urls)} existing camera Urls")
     
     print(f"📊 Found {len(existing_cameras)} cameras in enhanced system")
     
@@ -105,6 +106,7 @@ def migrate_cameras():
                 created_at=datetime.now(),
                 error_count=0,
                 is_active=False
+                error_message="Not migrated yet"
             )
             
             # Add to existing cameras list

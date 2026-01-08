@@ -999,6 +999,7 @@ class CameraService:
                     cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.camera_width)
                     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.camera_height)
                     cap.set(cv2.CAP_PROP_FPS, self.camera_fps)
+                    cap.set(cv2.CAP_PROP_AUTOFOCUS,0)
                    
                     # Additional optimizations for better performance
                     if isinstance(rtsp_url, str):
@@ -1017,6 +1018,7 @@ class CameraService:
                         break
                     logger.warning(f"Camera {camera_id} initialization attempt {attempt + 1} failed")
                     time.sleep(0.5)  # Longer delay between attempts
+                    time.sleep(0.5)
                
                 if not success:
                     error_msg = f"Could not read initial frame from camera {camera_id} after 3 attempts"
@@ -1087,6 +1089,8 @@ class CameraService:
             self.last_frame_time.pop(camera_id, None)
             self.stream_health.pop(camera_id, None)
             self.reconnection_attempts.pop(camera_id, None)
+            self.error_counts.pop(camera_id,None)
+            self.camera_error_states.pop(camera_id,None)
            
             logger.info(f"Stopped streaming for camera {camera_id}")
            
@@ -1167,6 +1171,7 @@ class CameraService:
             face_recognition_states=self.face_recognition_states,
             total_cameras=len(self.camera_streams),
             stream_health=self.stream_health
+
         )
 
     def apply_clahe(self, image):
@@ -1189,12 +1194,14 @@ class CameraService:
         # Apply CLAHE to L-channel
         clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
         cl = clahe.apply(l)
+
        
         # Merge the CLAHE enhanced L-channel with the a and b channel
         limg = cv2.merge((cl,a,b))
        
         # Convert image from LAB Color model to BGR color space
         enhanced = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
+
        
         return enhanced
 
@@ -1221,6 +1228,9 @@ class CameraService:
            
             rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
             face_names = []
+            if self.yolo_model is None:
+                logger.warning("Yolo model not loaded, skipping face detection")
+                return display_frame,face_names
 
             # Use YOLO for face detection
             if self.yolo_model:
