@@ -317,6 +317,269 @@ const Dashboard = () => {
         </div>
       </div>
 
+      {/* Charts Section */}
+      <div className="charts-section">
+        <div className="charts-header">
+          <h2 className="charts-title">Advanced Analytics</h2>
+        </div>
+        <div className="charts-grid">
+          {/* Daily Trend Chart */}
+          <div className="chart-card">
+            <div className="chart-header">
+              <h3 className="chart-title">Detection Trend (7 Days)</h3>
+            </div>
+            <div className="chart-wrapper">
+              {trendData && trendData.labels ? (
+                <Line
+                  data={{
+                    labels: trendData.labels,
+                    datasets: [
+                      {
+                        label: 'Known Faces',
+                        data: trendData.known,
+                        borderColor: '#4FC3F7',
+                        backgroundColor: 'rgba(79, 195, 247, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                        pointBackgroundColor: '#4FC3F7',
+                        pointBorderColor: '#ffffff',
+                        pointBorderWidth: 2,
+                      },
+                      {
+                        label: 'Unknown Faces',
+                        data: trendData.unknown,
+                        borderColor: '#FF6B6B',
+                        backgroundColor: 'rgba(255, 107, 107, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                        pointBackgroundColor: '#FF6B6B',
+                        pointBorderColor: '#ffffff',
+                        pointBorderWidth: 2,
+                      },
+                    ],
+                  }}
+                  options={getChartOptions('Detection Trend')}
+                />
+              ) : (
+                <div className="no-chart-data">No trend data available</div>
+              )}
+            </div>
+          </div>
+
+          {/* Hourly Activity Chart */}
+          <div className="chart-card">
+            <div className="chart-header">
+              <h3 className="chart-title">Hourly Activity Pattern</h3>
+            </div>
+            <div className="chart-wrapper">
+              {hourlyData && hourlyData.labels ? (
+                <Bar
+                  data={{
+                    labels: hourlyData.labels,
+                    datasets: [
+                      {
+                        label: 'Detections',
+                        data: hourlyData.data,
+                        backgroundColor: 'rgba(79, 195, 247, 0.8)',
+                        borderColor: '#4FC3F7',
+                        borderWidth: 1,
+                        borderRadius: 8,
+                        borderSkipped: false,
+                      },
+                    ],
+                  }}
+                  options={getChartOptions('Hourly Activity')}
+                />
+              ) : (
+                <div className="no-chart-data">No hourly data available</div>
+              )}
+            </div>
+          </div>
+
+          {/* Camera Distribution Chart */}
+          <div className="chart-card">
+            <div className="chart-header">
+              <h3 className="chart-title">Camera Distribution</h3>
+            </div>
+            <div className="chart-wrapper">
+              {cameraData && cameraData.labels && cameraData.labels.length > 0 ? (
+                <Doughnut
+                  data={{
+                    labels: cameraData.labels,
+                    datasets: [
+                      {
+                        data: cameraData.data,
+                        backgroundColor: [
+                          'rgba(79, 195, 247, 0.8)',
+                          'rgba(255, 107, 107, 0.8)',
+                          'rgba(255, 206, 86, 0.8)',
+                          'rgba(75, 192, 192, 0.8)',
+                          'rgba(153, 102, 255, 0.8)',
+                          'rgba(255, 159, 64, 0.8)',
+                        ],
+                        borderColor: [
+                          '#4FC3F7',
+                          '#FF6B6B',
+                          '#FFCE56',
+                          '#4BC0C0',
+                          '#9966FF',
+                          '#FF9F40',
+                        ],
+                        borderWidth: 2,
+                      },
+                    ],
+                  }}
+                  options={getDoughnutOptions()}
+                />
+              ) : (
+                <div className="no-chart-data">No camera data available</div>
+              )}
+            </div>
+          </div>
+
+          {/* Confidence Distribution Chart */}
+          <div className="chart-card">
+            <div className="chart-header">
+              <h3 className="chart-title">Confidence Distribution</h3>
+            </div>
+            <div className="chart-wrapper">
+              {confidenceData && confidenceData.labels ? (
+                <Bar
+                  data={{
+                    labels: confidenceData.labels,
+                    datasets: [
+                      {
+                        label: 'Count',
+                        data: confidenceData.data,
+                        backgroundColor: [
+                          'rgba(255, 107, 107, 0.8)',
+                          'rgba(255, 159, 64, 0.8)',
+                          'rgba(255, 206, 86, 0.8)',
+                          'rgba(75, 192, 192, 0.8)',
+                          'rgba(79, 195, 247, 0.8)',
+                        ],
+                        borderColor: [
+                          '#FF6B6B',
+                          '#FF9F40',
+                          '#FFCE56',
+                          '#4BC0C0',
+                          '#4FC3F7',
+                        ],
+                        borderWidth: 2,
+                        borderRadius: 8,
+                      },
+                    ],
+                  }}
+                  options={getChartOptions('Confidence Distribution')}
+                />
+              ) : (
+                <div className="no-chart-data">No confidence data available</div>
+              )}
+            </div>
+          </div>
+
+          {/* Person Frequency Chart */}
+          <div className="chart-card">
+            <div className="chart-header">
+              <h3 className="chart-title">Top Recognized Persons</h3>
+            </div>
+            <div className="chart-wrapper">
+              {personFrequencyData && personFrequencyData.labels ? (
+                <Bar
+                  data={{
+                    labels: personFrequencyData.labels,
+                    datasets: [
+                      {
+                        label: 'Detections',
+                        data: personFrequencyData.data,
+                        backgroundColor: 'rgba(79, 195, 247, 0.8)',
+                        borderColor: '#4FC3F7',
+                        borderWidth: 2,
+                        borderRadius: 8,
+                      },
+                    ],
+                  }}
+                  options={getChartOptions('Person Frequency', true)}
+                />
+              ) : (
+                <div className="no-chart-data">No person frequency data available</div>
+              )}
+            </div>
+          </div>
+
+          {/* Person Daily Activity (if person selected) */}
+          {personAnalytics && personAnalytics.daily_distribution ? (
+            <div className="chart-card">
+              <div className="chart-header">
+                <h3 className="chart-title">{selectedPerson} - Daily Activity</h3>
+              </div>
+              <div className="chart-wrapper">
+                <Line
+                  data={{
+                    labels: personAnalytics.daily_distribution.labels,
+                    datasets: [
+                      {
+                        label: 'Detections',
+                        data: personAnalytics.daily_distribution.data,
+                        borderColor: '#4FC3F7',
+                        backgroundColor: 'rgba(79, 195, 247, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                        pointBackgroundColor: '#4FC3F7',
+                        pointBorderColor: '#ffffff',
+                        pointBorderWidth: 2,
+                      },
+                    ],
+                  }}
+                  options={getChartOptions('Daily Activity')}
+                />
+              </div>
+            </div>
+          ) : null}
+
+          {/* Person Hourly Distribution (if person selected) */}
+          {personAnalytics && personAnalytics.hourly_distribution ? (
+            <div className="chart-card">
+              <div className="chart-header">
+                <h3 className="chart-title">{selectedPerson} - Hourly Distribution</h3>
+              </div>
+              <div className="chart-wrapper">
+                <Bar
+                  data={{
+                    labels: Array.from({ length: 24 }, (_, i) => `${i}:00`),
+                    datasets: [
+                      {
+                        label: 'Detections',
+                        data: personAnalytics.hourly_distribution,
+                        backgroundColor: (context) => {
+                          const value = context.parsed.y;
+                          const max = Math.max(...personAnalytics.hourly_distribution);
+                          const intensity = value / max;
+                          return `rgba(79, 195, 247, ${0.3 + intensity * 0.7})`;
+                        },
+                        borderColor: '#4FC3F7',
+                        borderWidth: 1,
+                        borderRadius: 6,
+                      },
+                    ],
+                  }}
+                  options={getChartOptions('Hourly Distribution')}
+                />
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
       {/* Bottom Controls */}
       <div className="bottom-controls">
         <button className="control-button">
@@ -335,6 +598,132 @@ const Dashboard = () => {
     </div>
   );
 };
+
+const getChartOptions = (title, horizontal = false) => ({
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      display: true,
+      position: 'top',
+      labels: {
+        color: '#ffffff',
+        font: {
+          size: 12,
+          weight: '500',
+        },
+        padding: 15,
+        usePointStyle: true,
+        pointStyle: 'circle',
+      },
+    },
+    tooltip: {
+      backgroundColor: 'rgba(26, 47, 74, 0.95)',
+      titleColor: '#ffffff',
+      bodyColor: '#4FC3F7',
+      borderColor: 'rgba(79, 195, 247, 0.3)',
+      borderWidth: 1,
+      padding: 12,
+      displayColors: true,
+      callbacks: {
+        label: function(context) {
+          return `${context.dataset.label}: ${context.parsed.y || context.parsed.x}`;
+        },
+      },
+    },
+  },
+  scales: horizontal ? {
+    x: {
+      beginAtZero: true,
+      ticks: {
+        color: 'rgba(255, 255, 255, 0.6)',
+        font: {
+          size: 11,
+        },
+      },
+      grid: {
+        color: 'rgba(79, 195, 247, 0.1)',
+        drawBorder: false,
+      },
+    },
+    y: {
+      ticks: {
+        color: 'rgba(255, 255, 255, 0.6)',
+        font: {
+          size: 11,
+        },
+      },
+      grid: {
+        color: 'rgba(79, 195, 247, 0.1)',
+        drawBorder: false,
+      },
+    },
+  } : {
+    x: {
+      ticks: {
+        color: 'rgba(255, 255, 255, 0.6)',
+        font: {
+          size: 11,
+        },
+      },
+      grid: {
+        color: 'rgba(79, 195, 247, 0.1)',
+        drawBorder: false,
+      },
+    },
+    y: {
+      beginAtZero: true,
+      ticks: {
+        color: 'rgba(255, 255, 255, 0.6)',
+        font: {
+          size: 11,
+        },
+      },
+      grid: {
+        color: 'rgba(79, 195, 247, 0.1)',
+        drawBorder: false,
+      },
+    },
+  },
+});
+
+const getDoughnutOptions = () => ({
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      display: true,
+      position: 'right',
+      labels: {
+        color: '#ffffff',
+        font: {
+          size: 12,
+          weight: '500',
+        },
+        padding: 15,
+        usePointStyle: true,
+        pointStyle: 'circle',
+      },
+    },
+    tooltip: {
+      backgroundColor: 'rgba(26, 47, 74, 0.95)',
+      titleColor: '#ffffff',
+      bodyColor: '#4FC3F7',
+      borderColor: 'rgba(79, 195, 247, 0.3)',
+      borderWidth: 1,
+      padding: 12,
+      callbacks: {
+        label: function(context) {
+          const label = context.label || '';
+          const value = context.parsed || 0;
+          const total = context.dataset.data.reduce((a, b) => a + b, 0);
+          const percentage = ((value / total) * 100).toFixed(1);
+          return `${label}: ${value} (${percentage}%)`;
+        },
+      },
+    },
+  },
+});
 
 const MetricBar = ({ label, value, max }) => {
   const percentage = Math.min(100, (value / max) * 100);

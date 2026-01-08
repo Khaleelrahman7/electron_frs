@@ -636,10 +636,123 @@
   background: rgba(79, 195, 247, 0.7);
 }
 
+/* Charts Section */
+.charts-section {
+  margin-top: 30px;
+  padding: 30px 0;
+}
+
+.charts-header {
+  margin-bottom: 25px;
+  padding-bottom: 15px;
+  border-bottom: 2px solid rgba(79, 195, 247, 0.3);
+}
+
+.charts-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0;
+  text-shadow: 0 2px 10px rgba(79, 195, 247, 0.3);
+  letter-spacing: 1px;
+}
+
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+  gap: 25px;
+}
+
+.chart-card {
+  background: rgba(26, 47, 74, 0.6);
+  border-radius: 16px;
+  padding: 25px;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(79, 195, 247, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
+}
+
+.chart-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 12px 40px rgba(79, 195, 247, 0.2);
+  border-color: rgba(79, 195, 247, 0.4);
+}
+
+.chart-header {
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid rgba(79, 195, 247, 0.2);
+}
+
+.chart-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #4FC3F7;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.chart-wrapper {
+  height: 300px;
+  position: relative;
+  min-height: 300px;
+}
+
+/* Advanced Chart Animations */
+.chart-card canvas {
+  animation: fadeInChart 0.6s ease-in;
+}
+
+@keyframes fadeInChart {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Chart Tooltip Styling */
+.chart-card .chartjs-tooltip {
+  background: rgba(26, 47, 74, 0.95) !important;
+  border: 1px solid rgba(79, 195, 247, 0.3) !important;
+  border-radius: 8px !important;
+  padding: 10px !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+}
+
+.chart-card .chartjs-tooltip-title {
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  margin-bottom: 5px !important;
+}
+
+.chart-card .chartjs-tooltip-body {
+  color: #4FC3F7 !important;
+}
+
+.no-chart-data {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: rgba(255, 255, 255, 0.5);
+  font-style: italic;
+  font-size: 14px;
+}
+
 /* Responsive Design */
 @media (max-width: 1400px) {
   .dashboard-content {
     grid-template-columns: 250px 1fr 300px;
+  }
+
+  .charts-grid {
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
   }
 }
 
@@ -677,6 +790,19 @@
 
   .face-display-container {
     max-width: 100%;
+  }
+
+  .charts-grid {
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+
+  .chart-card {
+    padding: 15px;
+  }
+
+  .chart-wrapper {
+    height: 250px;
   }
 
   .bottom-controls {
