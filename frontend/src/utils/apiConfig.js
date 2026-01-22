@@ -1,13 +1,13 @@
-// Smart API URL detection: defaults to localhost, can be overridden
-// Priority: 1. Environment variable, 2. localhost (for local dev), 3. Server IP (fallback)
+// Smart API URL detection: defaults to 192.168.1.209, can be overridden
+// Priority: 1. Environment variable, 2. 192.168.1.209 (for local dev), 3. Server IP (fallback)
 const getApiBaseUrl = () => {
   // If explicitly set via environment variable, use it
-  if (process.env.REACT_APP_API_BASE_URL) {
-    return process.env.REACT_APP_API_BASE_URL;
-  }
+  // if (process.env.REACT_APP_API_BASE_URL) {
+  //   return process.env.REACT_APP_API_BASE_URL;
+  // }
   
-  // Default to server IP for production
-  // Can be overridden by setting REACT_APP_API_BASE_URL environment variable
+  // Default to 192.168.1.209 for local development
+  // Can be overridden by setting REACT_APP_API_BASE_URL=http://192.168.1.209:8005
   return 'http://192.168.1.209:8005';
 };
 
@@ -24,7 +24,7 @@ export const getApiUrl = (endpoint) => {
 // Helper to detect which backend is available (for auto-detection if needed)
 export const detectBackendUrl = async () => {
   const urls = [
-    'http://localhost:8005',
+    'http://192.168.1.209:8005',
     'http://192.168.1.209:8005'
   ];
   

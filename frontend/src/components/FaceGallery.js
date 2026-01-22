@@ -111,6 +111,9 @@ const FaceGallery = () => {
           // Use the image filename from backend, fallback to original.jpg
           const imageFilename = personData.image_filename || 'original.jpg';
 
+          // Debug log to trace URL construction
+          // console.log(`Constructing URL for ${personData.name}:`, `${API_BASE_URL}/api/gallery/image/${personId}/${imageFilename}`);
+
           return (
             <PersonCard
               key={personId}

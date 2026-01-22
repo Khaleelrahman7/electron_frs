@@ -27,8 +27,8 @@ function loadEnvVariables() {
 
 loadEnvVariables();
 
-// API Base URL - defaults to localhost, can be overridden via environment variable
-const API_BASE_URL = process.env.API_BASE_URL || process.env.REACT_APP_API_BASE_URL || 'http://localhost:8005';
+// API Base URL - defaults to 192.168.1.209, can be overridden via environment variable
+const API_BASE_URL = process.env.API_BASE_URL || process.env.REACT_APP_API_BASE_URL || 'http://192.168.1.209:8005';
 console.log('[Electron] API_BASE_URL configured as:', API_BASE_URL);
 
 function loadFallbackPage(mainWindow) {
@@ -88,10 +88,13 @@ function createWindow() {
     show: false
   });
 
+  // Clear cache to ensure fresh load
+  mainWindow.webContents.session.clearCache();
+
   // Load the app
   if (isDev) {
     // In development, try to load from development server first
-    mainWindow.loadURL('http://localhost:3000').catch(() => {
+    mainWindow.loadURL('http://192.168.11.107:3000').catch(() => {
       // If dev server is not running, fall back to build
       const buildPath = path.join(__dirname, 'build/index.html');
       if (fs.existsSync(buildPath)) {

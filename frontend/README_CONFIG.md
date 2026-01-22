@@ -2,11 +2,11 @@
 
 ## API URL Configuration
 
-The frontend is now configured to work with both **localhost** (local development) and **server** (remote deployment).
+The frontend is now configured to work with both **192.168.1.209** (local development) and **server** (remote deployment).
 
 ### Default Behavior
 
-- **Default**: `http://localhost:8005` (for local development)
+- **Default**: `http://192.168.1.209:8005` (for local development)
 - **Can be overridden** via environment variable
 
 ### Configuration Methods
@@ -17,7 +17,7 @@ Create a `.env` file in the `frontend` directory:
 
 ```bash
 # For local development (default)
-REACT_APP_API_BASE_URL=http://localhost:8005
+REACT_APP_API_BASE_URL=http://192.168.1.209:8005
 
 # OR for server deployment
 REACT_APP_API_BASE_URL=http://192.168.1.209:8005
@@ -28,7 +28,7 @@ REACT_APP_API_BASE_URL=http://192.168.1.209:8005
 **For React development server:**
 ```bash
 # Local
-REACT_APP_API_BASE_URL=http://localhost:8005 npm run react-dev
+REACT_APP_API_BASE_URL=http://192.168.1.209:8005 npm run react-dev
 
 # Server
 REACT_APP_API_BASE_URL=http://192.168.1.209:8005 npm run react-dev
@@ -37,7 +37,7 @@ REACT_APP_API_BASE_URL=http://192.168.1.209:8005 npm run react-dev
 **For Electron:**
 ```bash
 # Local
-API_BASE_URL=http://localhost:8005 npm start
+API_BASE_URL=http://192.168.1.209:8005 npm start
 
 # Server
 API_BASE_URL=http://192.168.1.209:8005 npm start
@@ -49,9 +49,9 @@ API_BASE_URL=http://192.168.1.209:8005 npm start
 ```bash
 # 1. Start backend locally
 cd backend_face
-python start_server.py  # Runs on localhost:8005
+python start_server.py  # Runs on 192.168.1.209:8005
 
-# 2. Start frontend (uses localhost by default)
+# 2. Start frontend (uses 192.168.1.209 by default)
 cd frontend
 npm run react-dev
 npm run dev

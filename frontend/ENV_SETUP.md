@@ -124,7 +124,7 @@ echo $REACT_APP_API_BASE_URL
 3. Check network requests - they should show `http://192.168.1.209:8005`
 4. Or add temporary console log:
    ```javascript
-   console.log('API URL:', process.env.REACT_APP_API_BASE_URL || 'http://localhost:8005');
+   console.log('API URL:', process.env.REACT_APP_API_BASE_URL || 'http://192.168.1.209:8005');
    ```
 
 ## Important Notes
@@ -149,7 +149,7 @@ echo $REACT_APP_API_BASE_URL
 
 | Scenario | Frontend Command | Backend Command |
 |----------|-----------------|-----------------|
-| **Local Development** | No env var needed (defaults to localhost) | No env var needed |
+| **Local Development** | No env var needed (defaults to 192.168.1.209) | No env var needed |
 | **Server Deployment** | Set `REACT_APP_API_BASE_URL=http://192.168.1.209:8005` | Set `API_BASE_URL=http://192.168.1.209:8005` |
 
 ## Troubleshooting

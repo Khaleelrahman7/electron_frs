@@ -160,12 +160,12 @@ python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ### Step 3: Test Endpoints
 ```bash
 # Test capture_face_b64 endpoint
-curl -X POST http://localhost:8000/capture_face_b64 \
+curl -X POST http://192.168.1.209:8000/capture_face_b64 \
   -H "Content-Type: application/json" \
   -d '{"image_b64":"data:image/jpeg;base64,/9j/4AAQ...", "label":"test"}'
 
 # Test capture_face_upload endpoint
-curl -X POST http://localhost:8000/capture_face_upload \
+curl -X POST http://192.168.1.209:8000/capture_face_upload \
   -F "file=@test_face.jpg" \
   -F "label=test" \
   -F "confidence=0.95"

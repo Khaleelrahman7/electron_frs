@@ -24,7 +24,9 @@ const convertImagePathToUrl = (imagePath) => {
       const imageName = pathParts[dataIndex + 2];
       
       // Return the proper API URL for serving gallery images
-      return `${BASE_URL}/api/gallery/image/${personName}/${imageName}`;
+      const fullUrl = `${BASE_URL}/api/gallery/image/${personName}/${imageName}`;
+      // console.log('Converted image path to URL:', fullUrl);
+      return fullUrl;
     }
     
     // Fallback: return empty string if path format is not recognized
