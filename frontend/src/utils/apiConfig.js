@@ -6,9 +6,9 @@ const getApiBaseUrl = () => {
     return process.env.REACT_APP_API_BASE_URL;
   }
   
-  // Default to localhost for local development
-  // Can be overridden by setting REACT_APP_API_BASE_URL=http://192.168.1.209:8005
-  return 'http://localhost:8005';
+  // Default to server IP for production
+  // Can be overridden by setting REACT_APP_API_BASE_URL environment variable
+  return 'http://192.168.1.209:8005';
 };
 
 export const API_BASE_URL = getApiBaseUrl();
