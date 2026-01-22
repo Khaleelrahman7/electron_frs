@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { getApiUrl } from '../../utils/apiConfig';
+import { getApiUrl, fixImageUrl } from '../../utils/apiConfig';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -78,15 +78,10 @@ const Dashboard = () => {
       
       // Fix image URLs in persons list if they contain localhost
       const persons = Array.isArray(personsRes.data) ? personsRes.data.map(person => {
-        if (person.profile_image && person.profile_image.includes('localhost')) {
-          // Replace localhost:8005 with configured API URL
-          const currentApiUrl = getApiUrl('');
-          // Remove trailing slash if present
-          const baseUrl = currentApiUrl.endsWith('/') ? currentApiUrl.slice(0, -1) : currentApiUrl;
-          
+        if (person.profile_image) {
           return {
             ...person,
-            profile_image: person.profile_image.replace(/http:\/\/localhost:\d+/, baseUrl)
+            profile_image: fixImageUrl(person.profile_image)
           };
         }
         return person;

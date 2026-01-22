@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { fixImageUrl } from '../utils/apiConfig';
 import './FaceCard.css';
 
 const FaceCard = ({ imagePath, name, camera, timestamp }) => {
   const [imageError, setImageError] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const imageRef = useRef(null);
+  const fixedImagePath = fixImageUrl(imagePath);
 
   const handleImageError = () => {
-    console.error('Failed to load image:', imagePath);
+    console.error('Failed to load image:', fixedImagePath);
     setImageError(true);
   };
 
@@ -22,7 +24,7 @@ const FaceCard = ({ imagePath, name, camera, timestamp }) => {
     } else {
       setImageLoaded(false);
     }
-  }, [imagePath]);
+  }, [fixedImagePath]);
 
   // Format timestamp for display
   const formatTimestamp = (timestamp) => {
@@ -40,7 +42,7 @@ const FaceCard = ({ imagePath, name, camera, timestamp }) => {
         {!imageError ? (
           <img
             ref={imageRef}
-            src={imagePath}
+            src={fixedImagePath}
             alt={name}
             className={`face-image ${imageLoaded ? 'loaded' : ''}`}
             onError={handleImageError}
@@ -49,7 +51,7 @@ const FaceCard = ({ imagePath, name, camera, timestamp }) => {
         ) : (
           <div className="no-image">
             <span>No Image Available</span>
-            <small>{imagePath}</small>
+            <small>{fixedImagePath}</small>
           </div>
         )}
       </div>

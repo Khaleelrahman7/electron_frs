@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { fixImageUrl } from '../utils/apiConfig';
 import './PersonCard.css';
 
 const PersonCard = ({ name, photoPath, details }) => {
   const [imageError, setImageError] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
+  const fixedPhotoPath = fixImageUrl(photoPath);
 
   const handleImageError = (event) => {
     // Only log error if it's not a 404 (missing image)
@@ -12,20 +14,20 @@ const PersonCard = ({ name, photoPath, details }) => {
       fetch(event.target.src, { method: 'HEAD' })
         .then(response => {
           if (response.status === 404) {
-            console.warn(`Image not found for ${name}:`, photoPath);
+            console.warn(`Image not found for ${name}:`, fixedPhotoPath);
           } else {
-            console.error('Failed to load image:', photoPath);
+            console.error('Failed to load image:', fixedPhotoPath);
           }
         })
         .catch(() => {
-          console.warn(`Image not accessible for ${name}:`, photoPath);
+          console.warn(`Image not accessible for ${name}:`, fixedPhotoPath);
         });
     }
     setImageError(true);
   };
 
   const handleImageLoad = () => {
-    console.log('Image loaded successfully:', photoPath);
+    console.log('Image loaded successfully:', fixedPhotoPath);
     setImageLoaded(true);
   };
 
@@ -33,7 +35,7 @@ const PersonCard = ({ name, photoPath, details }) => {
   useEffect(() => {
     setImageError(false);
     setImageLoaded(false);
-  }, [photoPath]);
+  }, [fixedPhotoPath]);
 
   return (
     <div className="person-card">
@@ -44,7 +46,7 @@ const PersonCard = ({ name, photoPath, details }) => {
       <div className="photo-container">
         {!imageError ? (
           <img
-            src={photoPath}
+            src={fixedPhotoPath}
             alt={name}
             className={`person-photo ${imageLoaded ? 'loaded' : ''}`}
             onError={handleImageError}
