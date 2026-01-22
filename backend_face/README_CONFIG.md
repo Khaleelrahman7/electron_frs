@@ -6,19 +6,19 @@ The backend can be configured to work in both local and server environments.
 
 ### Default Behavior
 
-- **Default**: `http://localhost:8005` (for local development)
+- **Default**: `http://192.168.1.209:8005` (for local development)
 - **Can be overridden** via environment variable
 
 ### Configuration
 
 #### For Local Development (Default)
 
-No configuration needed - backend defaults to `localhost:8005`:
+No configuration needed - backend defaults to `192.168.1.209:8005`:
 
 ```bash
 cd backend_face
 python start_server.py
-# Backend runs on http://localhost:8005
+# Backend runs on http://192.168.1.209:8005
 ```
 
 #### For Server Deployment
@@ -71,5 +71,5 @@ For server deployment:
 Check which URL is being used:
 1. Check server logs on startup
 2. Check API responses - image URLs will show the configured base URL
-3. Test: `curl http://localhost:8005/api/status` (local) or `curl http://192.168.1.209:8005/api/status` (server)
+3. Test: `curl http://192.168.1.209:8005/api/status` (local) or `curl http://192.168.1.209:8005/api/status` (server)
 

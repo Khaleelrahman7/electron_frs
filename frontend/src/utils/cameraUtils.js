@@ -18,7 +18,7 @@ export const parseStreamUrl = (streamUrl) => {
     
     // Fallback: try to extract IP from hostname
     const hostname = url.hostname;
-    if (hostname && hostname !== 'localhost') {
+    if (hostname && hostname !== '192.168.1.209') {
       return {
         collectionName: 'default',
         cameraIp: hostname

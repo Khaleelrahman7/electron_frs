@@ -161,7 +161,7 @@ GALLERY_DIR = os.path.join(DATA_DIR, "gallery")
 CAPTURED_FACES_DIR = os.path.join(BASE_DIR, "captured_faces")
 
 # API base URL for constructing image URLs
-API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8005")
+API_BASE_URL = os.getenv("API_BASE_URL", "http://192.168.1.209:8005")
 
 # Create directories if they don't exist
 os.makedirs(GALLERY_DIR, exist_ok=True)
@@ -562,6 +562,29 @@ async def get_camera_activity():
         }
     except Exception as e:
         logger.error(f"Error getting camera activity: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/analytics/top-persons", tags=["Analytics"])
+async def get_top_persons(limit: int = 5):
+    """Get top detected persons (alias for person-frequency)"""
+    return await get_person_frequency(limit)
+
+@app.get("/api/analytics/detections-over-time", tags=["Analytics"])
+async def get_detections_over_time(days: int = 7):
+    """Get detections over time (alias for face-detection-trend)"""
+    return await get_face_detection_trend(days)
+
+@app.get("/api/analytics/face-types", tags=["Analytics"])
+async def get_face_types():
+    """Get distribution of face types (Known vs Unknown)"""
+    try:
+        overview = await get_analytics_overview()
+        return {
+            "labels": ["Known Faces", "Unknown Faces"],
+            "data": [overview["known_faces"], overview["unknown_faces"]]
+        }
+    except Exception as e:
+        logger.error(f"Error getting face types: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/analytics/persons-list", tags=["Analytics"])

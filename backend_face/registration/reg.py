@@ -14,12 +14,15 @@ from .aug import detect_face, augment_face
 import numpy as np
 import io
 import re
+import uuid
 
 # Configure paths and constants
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DATA_DIR = os.path.join(BASE_DIR, "backend_face", "data")
 GALLERY_DIR = os.path.join(DATA_DIR, "gallery")
 METADATA_FILE = os.path.join(DATA_DIR, "metadata.json")
+CATEGORIES_FILE = os.path.join(DATA_DIR, "categories.json")
+ALERTS_FILE = os.path.join(DATA_DIR, "alerts.json")
 
 # Standard sizes for face images
 FACE_WIDTH = 224
@@ -44,6 +47,7 @@ app.add_middleware(
 class PersonDetails(BaseModel):
     name: str  # Only name is required
     age: str | None = None  # Optional
+    age_range: str | None = None
     gender: str | None = None  # Optional
     category: str | None = "Unknown"  # Optional with default value
 
@@ -52,6 +56,54 @@ class RegistrationResponse(BaseModel):
     message: str
     person_dir: Optional[str] = None
     error: Optional[str] = None
+
+class CategoryManager:
+    @staticmethod
+    def load_categories():
+        try:
+            if os.path.exists(CATEGORIES_FILE):
+                with open(CATEGORIES_FILE, 'r') as f:
+                    return json.load(f)
+            return ["employee", "visitor", "vip", "security"]
+        except:
+            return []
+
+    @staticmethod
+    def save_categories(categories):
+        try:
+            with open(CATEGORIES_FILE, 'w') as f:
+                json.dump(categories, f, indent=4)
+            return True
+        except:
+            return False
+
+def estimate_age_from_face(face_image):
+    """
+    Estimate age from face image.
+    In a real system, this would use a pre-trained model.
+    """
+    try:
+        # Mock implementation - random age for demonstration since no model is loaded
+        # In production, replace with: age = deepface.analyze(face_image)['age']
+        import random
+        estimated_age = random.randint(20, 50) 
+        
+        if estimated_age <= 12: range_ = "0-12"
+        elif estimated_age <= 17: range_ = "13-17"
+        elif estimated_age <= 35: range_ = "18-35"
+        elif estimated_age <= 60: range_ = "36-60"
+        else: range_ = "60+"
+        
+        return str(estimated_age), range_
+    except:
+        return "N/A", "N/A"
+
+def auto_assign_category(face_encoding):
+    """
+    Auto-assign category based on face encoding.
+    """
+    # Placeholder for logic
+    return "Unassigned", 0.0
 
 class MetadataManager:
     @staticmethod
@@ -516,10 +568,26 @@ async def register_single(
         except (FileNotFoundError, json.JSONDecodeError):
             person_data = {}
 
+        # Auto-detect age if not provided
+        age_range = "N/A"
+        if not age:
+            age, age_range = estimate_age_from_face(face)
+            
+        # Auto-assign category if not provided
+        if not category or category.lower() == "unknown":
+            category, _ = auto_assign_category(None)
+            
+        # Validate category
+        valid_categories = CategoryManager.load_categories()
+        if valid_categories and category.lower() not in [c.lower() for c in valid_categories] and category.lower() != "unassigned":
+             # Force Unassigned if not in list
+             category = "Unassigned"
+
         registration_time = datetime.now().isoformat()
         person_data[unique_name] = {
             "name": name,
             "age": age if age else "N/A",
+            "age_range": age_range,
             "gender": gender if gender else "N/A",
             "category": category.lower() if category else "unknown",
             "registration_date": registration_time,
@@ -676,8 +744,97 @@ async def register_bulk(
             shutil.rmtree(temp_dir, ignore_errors=True)
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/registered-faces", response_model=Dict)
-async def get_registered_faces():
+# Category Management Endpoints
+@app.get("/categories", response_model=List[str])
+async def get_categories():
+    """Get all available categories"""
+    return CategoryManager.load_categories()
+
+@app.post("/categories")
+async def add_category(category: str = Body(..., embed=True)):
+    """Add a new category"""
+    categories = CategoryManager.load_categories()
+    if category in categories:
+        raise HTTPException(status_code=400, detail="Category already exists")
+    categories.append(category)
+    if CategoryManager.save_categories(categories):
+        return {"status": "success", "categories": categories}
+    raise HTTPException(status_code=500, detail="Failed to save category")
+
+@app.delete("/categories/{category}")
+async def delete_category(category: str):
+    """Delete a category"""
+    categories = CategoryManager.load_categories()
+    if category not in categories:
+        raise HTTPException(status_code=404, detail="Category not found")
+    categories.remove(category)
+    if CategoryManager.save_categories(categories):
+        return {"status": "success", "categories": categories}
+    raise HTTPException(status_code=500, detail="Failed to save category")
+
+
+# Alert System
+class AlertManager:
+    @staticmethod
+    def load_alerts():
+        try:
+            if os.path.exists(ALERTS_FILE):
+                with open(ALERTS_FILE, 'r') as f:
+                    return json.load(f)
+            return []
+        except:
+            return []
+
+    @staticmethod
+    def save_alert(alert_data):
+        try:
+            alerts = AlertManager.load_alerts()
+            alerts.append(alert_data)
+            with open(ALERTS_FILE, 'w') as f:
+                json.dump(alerts, f, indent=4)
+            return True
+        except:
+            return False
+
+    @staticmethod
+    def send_email(to_email, subject, body):
+        # Mock email sending
+        print(f"--- MOCK EMAIL ---")
+        print(f"To: {to_email}")
+        print(f"Subject: {subject}")
+        print(f"Body: {body}")
+        print(f"------------------")
+        return True
+
+@app.post("/alerts")
+async def send_alert(
+    supervisor_id: str = Body(...),
+    message: str = Body(...),
+    severity: str = Body("normal")
+):
+    """Send an alert to admin from supervisor"""
+    alert_data = {
+        "id": str(uuid.uuid4()),
+        "supervisor_id": supervisor_id,
+        "message": message,
+        "severity": severity,
+        "timestamp": datetime.now().isoformat(),
+        "status": "sent"
+    }
+    
+    # Save to file
+    if AlertManager.save_alert(alert_data):
+        # Send email
+        AlertManager.send_email("admin@example.com", f"Alert from {supervisor_id}", message)
+        return {"status": "success", "message": "Alert sent and logged"}
+    
+    raise HTTPException(status_code=500, detail="Failed to process alert")
+
+@app.get("/alerts")
+async def get_alerts():
+    """Get all alerts"""
+    return AlertManager.load_alerts()
+
     """Get list of all registered faces"""
     try:
         with open(METADATA_FILE, 'r') as f:

@@ -46,7 +46,7 @@ Added two new FastAPI endpoints for manual face capture:
 #### Endpoint 1: `/capture_face_upload` (POST)
 Upload a face image file directly
 ```bash
-curl -X POST http://localhost:8000/capture_face_upload \
+curl -X POST http://192.168.1.209:8000/capture_face_upload \
   -F "file=@face.jpg" \
   -F "label=john" \
   -F "confidence=0.95"
@@ -65,7 +65,7 @@ Response:
 #### Endpoint 2: `/capture_face_b64` (POST)
 Capture from base64 encoded image (typically from frontend video element)
 ```bash
-curl -X POST http://localhost:8000/capture_face_b64 \
+curl -X POST http://192.168.1.209:8000/capture_face_b64 \
   -H "Content-Type: application/json" \
   -d '{
     "image_b64": "data:image/jpeg;base64,/9j/4AAQSkZJRg...",
@@ -127,7 +127,7 @@ async function captureAndUpload(label = "unknown", confidence = null) {
   
   const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
   
-  const res = await fetch("http://localhost:8000/capture_face_b64", {
+  const res = await fetch("http://192.168.1.209:8000/capture_face_b64", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ 

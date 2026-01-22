@@ -20,7 +20,7 @@ const CameraStream = ({ streamUrl }) => {
       // Parse the stream URL to extract collection and camera IP
       const urlParts = streamUrl.split('/');
 
-      // Format is typically: http://localhost:8005/collection_name_ip/stream
+      // Format is typically: http://192.168.1.209:8005/collection_name_ip/stream
       const collectionAndIp = urlParts[urlParts.length - 2];
 
       // Split by underscore to separate collection name and IP

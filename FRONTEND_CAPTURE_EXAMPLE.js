@@ -42,7 +42,7 @@ async function captureFromVideoStream(videoElementId = "streamVideo", label = "u
 
     console.log(`Capturing face for label: ${label}, confidence: ${confidence}`);
     
-    const response = await fetch("http://localhost:8000/capture_face_b64", {
+    const response = await fetch("http://192.168.1.209:8000/capture_face_b64", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
@@ -89,7 +89,7 @@ async function uploadFaceImage(fileInput, label = "unknown", confidence = null) 
 
     console.log(`Uploading face image: ${file.name}, label: ${label}`);
 
-    const response = await fetch("http://localhost:8000/capture_face_upload", {
+    const response = await fetch("http://192.168.1.209:8000/capture_face_upload", {
       method: "POST",
       body: formData
     });
@@ -373,7 +373,7 @@ document.addEventListener("DOMContentLoaded", function() {
  */
 async function checkBackendHealth() {
   try {
-    const response = await fetch("http://localhost:8000/");
+    const response = await fetch("http://192.168.1.209:8000/");
     if (!response.ok) throw new Error("Backend not responding");
     
     const data = await response.json();
@@ -384,7 +384,7 @@ async function checkBackendHealth() {
     return true;
   } catch (error) {
     console.error("✗ Backend health check failed:", error);
-    alert("Backend is not available. Make sure the FastAPI server is running on http://localhost:8000");
+    alert("Backend is not available. Make sure the FastAPI server is running on http://192.168.1.209:8000");
     return false;
   }
 }

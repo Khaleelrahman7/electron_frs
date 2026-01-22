@@ -13,7 +13,7 @@ A React.js Electron desktop application for face recognition with backend connec
 
 - Node.js (v14 or higher)
 - npm or yarn
-- Backend server running on http://localhost:8000
+- Backend server running on http://192.168.1.209:8000
 
 ## Installation
 
@@ -73,7 +73,7 @@ npm start
 
 ### Backend Connection Issues
 
-1. Ensure the backend server is running on http://localhost:8000
+1. Ensure the backend server is running on http://192.168.1.209:8000
 2. Check if CORS is properly configured in the backend
 3. Verify the API endpoints are accessible
 

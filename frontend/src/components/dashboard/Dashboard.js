@@ -75,7 +75,23 @@ const Dashboard = () => {
       ]);
 
       setOverviewData(overviewRes.data);
-      const persons = Array.isArray(personsRes.data) ? personsRes.data : [];
+      
+      // Fix image URLs in persons list if they contain localhost
+      const persons = Array.isArray(personsRes.data) ? personsRes.data.map(person => {
+        if (person.profile_image && person.profile_image.includes('localhost')) {
+          // Replace localhost:8005 with configured API URL
+          const currentApiUrl = getApiUrl('');
+          // Remove trailing slash if present
+          const baseUrl = currentApiUrl.endsWith('/') ? currentApiUrl.slice(0, -1) : currentApiUrl;
+          
+          return {
+            ...person,
+            profile_image: person.profile_image.replace(/http:\/\/localhost:\d+/, baseUrl)
+          };
+        }
+        return person;
+      }) : [];
+      
       setPersonsList(persons);
       setTrendData(trendRes.data);
       setHourlyData(hourlyRes.data);
