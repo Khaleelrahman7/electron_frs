@@ -591,21 +591,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Bottom Controls */}
-      <div className="bottom-controls">
-        <button className="control-button">
-          <span className="control-icon">✋</span>
-          <span className="control-label">Manual</span>
-        </button>
-        <button className="control-button">
-          <span className="control-icon">☁</span>
-          <span className="control-label">Cloud</span>
-        </button>
-        <button className="control-button">
-          <span className="control-icon">⚙</span>
-          <span className="control-label">Settings</span>
-        </button>
-      </div>
+      
     </div>
   );
 };
