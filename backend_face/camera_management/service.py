@@ -173,15 +173,6 @@ class EnhancedCameraService:
             if not validation.valid:
                 raise HTTPException(status_code=409, detail=validation.error)
             
-            # Check Quota if supervisor_id is provided
-            if request.supervisor_id:
-                quotas = self._load_quotas()
-                quota = quotas.get(request.supervisor_id, 0)
-                # Count current cameras for this supervisor
-                current_count = sum(1 for c in cameras if getattr(c, 'supervisor_id', None) == request.supervisor_id)
-                if current_count >= quota:
-                    raise HTTPException(status_code=403, detail=f"Camera quota exceeded. Limit: {quota}, Current: {current_count}")
-
             # Get collection name
             collections = self._load_collections()
             collection_name = None
@@ -201,8 +192,7 @@ class EnhancedCameraService:
                 status="inactive",
                 created_at=datetime.now(),
                 error_count=0,
-                is_active=False,
-                supervisor_id=request.supervisor_id
+                is_active=False
             )
             
             cameras.append(new_camera)

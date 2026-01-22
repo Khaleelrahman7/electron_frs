@@ -98,35 +98,6 @@ async def update_camera(
         logger.error(f"Error updating camera: {e}")
         raise HTTPException(status_code=500, detail="Failed to update camera")
 
-@router.post("/quotas")
-async def set_quota(
-    supervisor_id: str = Body(...),
-    quota: int = Body(...),
-    service: EnhancedCameraService = Depends(get_camera_service)
-):
-    """Set camera quota for a supervisor"""
-    try:
-        if service.set_quota(supervisor_id, quota):
-            return {"status": "success", "message": f"Quota for {supervisor_id} set to {quota}"}
-        raise HTTPException(status_code=500, detail="Failed to set quota")
-    except Exception as e:
-        logger.error(f"Error setting quota: {e}")
-        raise HTTPException(status_code=500, detail="Failed to set quota")
-
-@router.get("/quotas/{supervisor_id}")
-async def get_quota(
-    supervisor_id: str,
-    service: EnhancedCameraService = Depends(get_camera_service)
-):
-    """Get camera quota for a supervisor"""
-    try:
-        quotas = service._load_quotas()
-        return {"supervisor_id": supervisor_id, "quota": quotas.get(supervisor_id, 0)}
-    except Exception as e:
-        logger.error(f"Error getting quota: {e}")
-        raise HTTPException(status_code=500, detail="Failed to get quota")
-
-
 @router.delete("/cameras/{camera_id}", response_model=CameraOperationResponse)
 async def delete_camera(
     camera_id: int,
