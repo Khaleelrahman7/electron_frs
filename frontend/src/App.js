@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './App.css';
 import FaceGallery from './components/FaceGallery';
 import EventsWidget from './components/EventsWidget';
@@ -9,6 +9,7 @@ import Dashboard from './components/dashboard/Dashboard';
 import { CameraProvider } from './components/camera/CameraManager';
 import SimpleCameraManager from './components/camera/SimpleCameraManager';
 import StreamViewer from './components/StreamViewer';
+import { detectBackendUrl, API_BASE_URL } from './utils/apiConfig';
 
 // Import SVG icons
 import { ReactComponent as GalleryIcon } from './icon/gallery.svg';
@@ -22,6 +23,39 @@ import { ReactComponent as DashboardIcon } from './icon/dashboard.svg';
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [isCheckingBackend, setIsCheckingBackend] = useState(true);
+
+  useEffect(() => {
+    // Auto-detect backend URL and switch if necessary
+    const checkBackend = async () => {
+      try {
+        const workingUrl = await detectBackendUrl();
+        const currentUrl = localStorage.getItem('api_base_url');
+        
+        // If we found a working URL
+        if (workingUrl) {
+          // If it's different from what we have saved (or we have nothing saved)
+          // AND it's different from the current runtime default (to avoid unnecessary reloads if default matches)
+          if (workingUrl !== currentUrl) {
+            console.log(`Switching API URL to ${workingUrl}`);
+            localStorage.setItem('api_base_url', workingUrl);
+            window.location.reload();
+            return;
+          }
+        } else {
+          // If no server found, and we don't have a stored URL, maybe default to localhost?
+          // Or just let it proceed and fail.
+          console.warn('No backend server detected.');
+        }
+      } catch (error) {
+        console.error('Backend detection failed:', error);
+      } finally {
+        setIsCheckingBackend(false);
+      }
+    };
+    
+    checkBackend();
+  }, []);
 
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: <DashboardIcon /> },
@@ -35,6 +69,16 @@ function App() {
   ];
 
   const renderActiveComponent = () => {
+    if (isCheckingBackend) {
+      return (
+        <div className="loading-screen">
+          <div className="loading-spinner"></div>
+          <h2>Connecting to Server...</h2>
+          <p>Checking available connection points...</p>
+        </div>
+      );
+    }
+
     switch (activeTab) {
       case 'dashboard':
         return <Dashboard />;

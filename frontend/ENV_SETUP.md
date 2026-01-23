@@ -12,7 +12,7 @@ cd frontend
 
 **For Windows (PowerShell or CMD):**
 ```bash
-echo REACT_APP_API_BASE_URL=http://192.168.1.209:8005 > .env
+echo REACT_APP_API_BASE_URL=localhost:8005 > .env
 ```
 
 **For Linux/Mac:**
@@ -33,10 +33,10 @@ REACT_APP_API_BASE_URL=http://192.168.1.209:8005
 $env:REACT_APP_API_BASE_URL="http://192.168.1.209:8005"; npm run react-dev
 
 # Windows (CMD)
-set REACT_APP_API_BASE_URL=http://192.168.1.209:8005 && npm run react-dev
+set REACT_APP_API_BASE_URL=localhost:8005 && npm run react-dev
 
 # Linux/Mac
-REACT_APP_API_BASE_URL=http://192.168.1.209:8005 npm run react-dev
+REACT_APP_API_BASE_URL=localhost:8005 npm run react-dev
 ```
 
 **For Electron (Production):**
@@ -45,10 +45,10 @@ REACT_APP_API_BASE_URL=http://192.168.1.209:8005 npm run react-dev
 $env:REACT_APP_API_BASE_URL="http://192.168.1.209:8005"; npm start
 
 # Windows (CMD)
-set REACT_APP_API_BASE_URL=http://192.168.1.209:8005 && npm start
+set REACT_APP_API_BASE_URL=localhost:8005 && npm start
 
 # Linux/Mac
-REACT_APP_API_BASE_URL=http://192.168.1.209:8005 npm start
+REACT_APP_API_BASE_URL=localhost:8005 npm start
 ```
 
 ### Method 3: Set System-Wide Environment Variable (Windows)

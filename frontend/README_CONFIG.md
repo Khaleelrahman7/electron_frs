@@ -28,19 +28,19 @@ REACT_APP_API_BASE_URL=http://192.168.1.209:8005
 **For React development server:**
 ```bash
 # Local
-REACT_APP_API_BASE_URL=http://192.168.1.209:8005 npm run react-dev
+REACT_APP_API_BASE_URL=localhost:8005 npm run react-dev
 
 # Server
-REACT_APP_API_BASE_URL=http://192.168.1.209:8005 npm run react-dev
+REACT_APP_API_BASE_URL=localhost:8005 npm run react-dev
 ```
 
 **For Electron:**
 ```bash
 # Local
-API_BASE_URL=http://192.168.1.209:8005 npm start
+API_BASE_URL=localhost:8005 npm start
 
 # Server
-API_BASE_URL=http://192.168.1.209:8005 npm start
+API_BASE_URL=localhost:8005 npm start
 ```
 
 ### Usage Scenarios
@@ -67,7 +67,7 @@ cd frontend
 echo "REACT_APP_API_BASE_URL=http://192.168.1.209:8005" > .env
 
 # Or set before running:
-REACT_APP_API_BASE_URL=http://192.168.1.209:8005 npm start
+REACT_APP_API_BASE_URL=localhost:8005 npm start
 ```
 
 ### Files Updated

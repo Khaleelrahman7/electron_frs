@@ -6,6 +6,12 @@ const getApiBaseUrl = () => {
     return process.env.REACT_APP_API_BASE_URL;
   }
   
+  // Check for saved preference
+  const savedUrl = localStorage.getItem('api_base_url');
+  if (savedUrl) {
+    return savedUrl;
+  }
+  
   // Default to 192.168.1.209 for local development
   // Can be overridden by setting REACT_APP_API_BASE_URL=http://192.168.1.209:8005
   return 'http://192.168.1.209:8005';
@@ -40,7 +46,8 @@ export const fixImageUrl = (url) => {
 export const detectBackendUrl = async () => {
   const urls = [
     'http://192.168.1.209:8005',
-    'http://192.168.1.209:8005'
+    'http://localhost:8005',
+    'http://127.0.0.1:8005'
   ];
   
   for (const url of urls) {
@@ -58,8 +65,8 @@ export const detectBackendUrl = async () => {
     }
   }
   
-  // Return default if none found
-  return API_BASE_URL;
+  // Return null if none found, let caller decide or fallback to current
+  return null;
 };
 
 export default {
