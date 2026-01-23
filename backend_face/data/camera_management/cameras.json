@@ -51,7 +51,7 @@
     "location": "EAGLE",
     "status": "inactive",
     "created_at": "2025-11-07 11:45:06.182602",
-    "last_seen": "2025-11-17 14:02:39.863703",
+    "last_seen": "2026-01-23 14:57:50.931143",
     "error_count": 0,
     "is_active": false
   },
@@ -65,7 +65,7 @@
     "location": "ground",
     "status": "inactive",
     "created_at": "2025-11-17 14:09:14.720911",
-    "last_seen": "2025-11-17 16:59:15.101242",
+    "last_seen": "2026-01-23 14:57:17.854643",
     "error_count": 0,
     "is_active": false
   }

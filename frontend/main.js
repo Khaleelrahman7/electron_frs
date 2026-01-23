@@ -28,7 +28,7 @@ function loadEnvVariables() {
 loadEnvVariables();
 
 // API Base URL - defaults to 192.168.1.209, can be overridden via environment variable
-const API_BASE_URL = process.env.API_BASE_URL || process.env.REACT_APP_API_BASE_URL || 'http://192.168.1.209:8005';
+const API_BASE_URL = process.env.API_BASE_URL || process.env.REACT_APP_API_BASE_URL || 'http://192.168.1.209:8005' || 'http://localhost:8005';
 console.log('[Electron] API_BASE_URL configured as:', API_BASE_URL);
 
 function loadFallbackPage(mainWindow) {

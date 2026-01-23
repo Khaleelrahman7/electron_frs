@@ -18,6 +18,8 @@ UNKNOWN_DIRNAME = "unknown"
 LOG_CSV = BASE_DIR / "capture_log.csv"
 # Minimum seconds between saves for same label (to avoid duplicates)
 DEFAULT_MIN_SAVE_INTERVAL_SECONDS = 8.0
+# Minimum pixel size for a face to be considered "visible" and saved
+MIN_FACE_PIXELS = 50
 
 # Internal state for rate-limiting and thread-safety
 _last_saved_time: Dict[str, float] = {}
@@ -167,6 +169,12 @@ def save_face_image(
     if confidence is not None and confidence < 0.7:
         return None
 
+    # If using direct crop without frame extraction, check size here
+    if face_crop_bgr is not None and (frame_bgr is None or bbox is None):
+        h, w = face_crop_bgr.shape[:2]
+        if h < MIN_FACE_PIXELS or w < MIN_FACE_PIXELS:
+            return None
+
     try:
         # If bbox + frame provided, extract and expand crop
         if frame_bgr is not None and bbox is not None:
@@ -188,7 +196,8 @@ def save_face_image(
             w_box = r - l
             h_box = b - t
             
-            if w_box <= 0 or h_box <= 0:
+            # Check if face is too small (likely noise or far away)
+            if w_box < MIN_FACE_PIXELS or h_box < MIN_FACE_PIXELS:
                 return None
             
             # Expand box by expand_factor to capture more context
