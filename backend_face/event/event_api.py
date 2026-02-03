@@ -13,7 +13,7 @@ import json
 from .config import KNOWN_FACES_DIR, UNKNOWN_FACES_DIR
 
 # API base URL for constructing image URLs
-# Defaults to 192.168.1.209, can be overridden via environment variable
+# Defaults to localhost, can be overridden via environment variable
 API_BASE_URL = os.getenv("API_BASE_URL", "http://192.168.1.209:8005")
 
 def convert_file_path_to_url(file_path: str) -> str:

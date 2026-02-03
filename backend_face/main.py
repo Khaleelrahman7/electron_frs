@@ -42,9 +42,9 @@ def mount_services():
     try:
         from event.event_api import router as event_router
         app.include_router(event_router, prefix="/api/events", tags=["Events"])
-        logger.info("✓ Event service mounted")
+        logger.info("? Event service mounted")
     except Exception as e:
-        logger.error(f"✗ Failed to mount event service: {e}")
+        logger.error(f"? Failed to mount event service: {e}")
 
     # Old camera service removed - using enhanced camera management instead
     # Add a basic status endpoint
@@ -61,42 +61,42 @@ def mount_services():
     try:
         from registration.reg import app as registration_app
         app.mount("/api/registration", registration_app)
-        logger.info("✓ Registration service mounted")
+        logger.info("? Registration service mounted")
     except Exception as e:
-        logger.error(f"✗ Failed to mount registration service: {e}")
+        logger.error(f"? Failed to mount registration service: {e}")
 
     # Mount enhanced camera management service
     try:
         from camera_management.routes import router as camera_management_router
         app.include_router(camera_management_router)
-        logger.info("✓ Enhanced camera management service mounted")
+        logger.info("? Enhanced camera management service mounted")
     except Exception as e:
-        logger.error(f"✗ Failed to mount enhanced camera management service: {e}")
+        logger.error(f"? Failed to mount enhanced camera management service: {e}")
 
     # Mount WebRTC streaming service
     try:
         from webrtc_streaming.routes import router as webrtc_router
         app.include_router(webrtc_router)
-        logger.info("✓ WebRTC streaming service mounted")
+        logger.info("? WebRTC streaming service mounted")
     except Exception as e:
-        logger.error(f"✗ Failed to mount WebRTC streaming service: {e}")
+        logger.error(f"? Failed to mount WebRTC streaming service: {e}")
         logger.info("Continuing with basic camera service only")
 
     # Mount matching service
     try:
         from matching.one import app as matching_app
         app.mount("/api/matching", matching_app)
-        logger.info("✓ Matching service mounted")
+        logger.info("? Matching service mounted")
     except Exception as e:
-        logger.error(f"✗ Failed to mount matching service: {e}")
+        logger.error(f"? Failed to mount matching service: {e}")
 
     # Mount video processing service
     try:
         from video.video_thread import app as video_app
         app.mount("/api/video", video_app)
-        logger.info("✓ Video processing service mounted")
+        logger.info("? Video processing service mounted")
     except Exception as e:
-        logger.error(f"✗ Failed to mount video processing service: {e}")
+        logger.error(f"? Failed to mount video processing service: {e}")
         logger.info("Adding basic video endpoints as fallback")
 
         # Add basic video endpoints as fallback
@@ -148,10 +148,10 @@ try:
     # (1024, 1024) provides excellent quality while Tesla T4 can handle it efficiently
     init_face_pipeline(os.path.join(os.path.dirname(__file__), "data"), ctx=0, det_size=(1024, 1024))
     FACE_PIPELINE_READY = True
-    logger.info("✓ Face pipeline initialized")
+    logger.info("? Face pipeline initialized")
 except Exception as e:
     FACE_PIPELINE_READY = False
-    logger.error(f"✗ Face pipeline init failed: {e}")
+    logger.error(f"? Face pipeline init failed: {e}")
     logger.info("Face recognition will be disabled. Check CUDA/GPU setup if GPU was expected.")
 
 # Configure static file serving for gallery images and captured faces
@@ -161,7 +161,7 @@ GALLERY_DIR = os.path.join(DATA_DIR, "gallery")
 CAPTURED_FACES_DIR = os.path.join(BASE_DIR, "captured_faces")
 
 # API base URL for constructing image URLs
-API_BASE_URL = os.getenv("API_BASE_URL", "http://192.168.1.209:8005")
+API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8005")
 
 # Create directories if they don't exist
 os.makedirs(GALLERY_DIR, exist_ok=True)

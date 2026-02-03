@@ -7,6 +7,7 @@ import threading
 import re
 import cv2
 import numpy as np
+import face_recognition
 from typing import Optional, Dict, Tuple
 
 # CONFIG - Use dynamic path based on file location
@@ -224,6 +225,31 @@ def save_face_image(
             
             face_crop_bgr = face
 
+        # Validate that the final crop actually contains a face
+        # This prevents saving "empty" images (e.g. from false positive person detections)
+        if face_crop_bgr is not None and face_crop_bgr.size > 0:
+            try:
+                # Convert to RGB for face_recognition
+                # Use a smaller version for validation speed if the image is huge
+                val_img = face_crop_bgr
+                if val_img.shape[0] > 600 or val_img.shape[1] > 600:
+                    # Downscale for faster validation
+                    scale = 600 / max(val_img.shape[0], val_img.shape[1])
+                    val_img = cv2.resize(val_img, (0, 0), fx=scale, fy=scale)
+                
+                val_img_rgb = cv2.cvtColor(val_img, cv2.COLOR_BGR2RGB)
+                
+                # Use HOG model (faster)
+                # If the crop is the result of a face detection, it should definitely have a face.
+                face_locs = face_recognition.face_locations(val_img_rgb, model="hog")
+                
+                if not face_locs:
+                    print(f"Skipping save: No face detected in crop for {label_s}")
+                    return None
+            except Exception as e:
+                print(f"Warning: Face validation check failed: {e}")
+                # Fail safe to avoid saving potential garbage
+                return None
         
         # Ensure dtype is uint8
         if face_crop_bgr.dtype != "uint8":

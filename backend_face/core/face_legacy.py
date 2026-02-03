@@ -44,7 +44,7 @@ logger.info(f"Data Directory: {DATA_DIR}")
 logger.info(f"Model Path: {MODEL_PATH}")
 
 # Define captured faces directory
-CAPTURED_FACES_DIR = r"C:\python_programs\backend_face\captured_faces"
+CAPTURED_FACES_DIR = r"C:\Users\e629\Desktop\GUI_Face\backend_face\captured_faces"
 KNOWN_FACES_DIR = os.path.join(CAPTURED_FACES_DIR, "known")
 UNKNOWN_FACES_DIR = os.path.join(CAPTURED_FACES_DIR, "unknown")
 
@@ -160,10 +160,6 @@ class CameraService:
         self.camera_width = 640  # Reduced for better performance
         self.camera_height = 480  # Reduced for better performance
         self.camera_fps = 20  # Increased slightly for smoother display
-        self.camera_buffer_size=1
-        self.camera_bitrate=2000
-        self.camera_timeout=5
-        self.camera_resolution=(640,480)
        
         # Configure face detection parameters
         self.face_conf_threshold = 0.3  # YOLO confidence threshold
@@ -176,7 +172,6 @@ class CameraService:
         self.max_reconnection_attempts = 5  # Maximum number of reconnection attempts
         self.reconnection_cooldown = 60  # Cooldown period between reconnection attempts in seconds
         self.health_check_interval = 10  # Health check interval in seconds
-        self.active_cameras:Dict[int,bool]={}
        
         # Configure 24/7 operation parameters
         self.continuous_operation = True  # Flag for continuous operation
@@ -184,9 +179,6 @@ class CameraService:
         self.last_maintenance_time = time.time()
         self.error_threshold = 10  # Maximum consecutive errors before maintenance
         self.error_counts: Dict[int, int] = {}  # Track error counts per camera
-        self.consecutive_error_limits=5
-        self.max_consecutive_errors=5
-        self.max_consecutive_errors_per_stream=5
        
         # Configure processing parameters
         self.process_every_n_frames = 2  # Process every other frame
@@ -194,11 +186,6 @@ class CameraService:
         self.max_queue_size = 2  # Reduced queue size for lower latency
         self.processing_frames = {}  # Track which cameras are being processed
         self.frame_skip = {}  # Track frame skipping per camera
-        self.frame_timestamps={}
-        self.retry_intervals={}
-        self.active_streams={}
-        self.camera_ids:list[int]=[]
-
        
         # Configure buffer settings
         self.buffer_size = 1  # Minimize frame buffer
@@ -209,9 +196,6 @@ class CameraService:
         self.thread_pool = ThreadPoolExecutor(max_workers=self.num_workers * 2)
         self.frame_queues: Dict[int, Queue] = {}  # Queue for each camera's frames
         self.processing_queues: Dict[int, Queue] = {}  # Queue for processing results
-        self.active_streams:Dict[int,bool]={}
-        self.max_retry_interval=30
-        self.max_consecutive_errors=5
        
         # Initialize components
         self.initialize_yolo()
@@ -231,18 +215,11 @@ class CameraService:
         self.max_retry_interval = 30  # Maximum seconds between retry attempts
         self.min_retry_interval = 5   # Minimum seconds between retry attempts
         self.camera_retry_times: Dict[int, float] = {}  # Track last retry times
-        self.camera_consecutive_errors:Dict[int,int]={}
-    
-        # Configure logging levels based on environment variables
        
         # Start streaming and monitoring
         self.initialize_all_cameras()
         self.start_health_monitoring()
         self.start_maintenance_monitoring()
-        self.start_processing_threads()
-        self.start_health_monitoring()
-
-        
        
     def configure_gpu(self) -> bool:
         """Enhanced GPU configuration with better error handling"""
@@ -282,10 +259,6 @@ class CameraService:
             self.yolo_model.iou = 0.45   # Lower IOU threshold for better detection
             self.yolo_model.max_det = 5   # Limit detections per image
             self.yolo_model.verbose = False
-            self.yolo_model.fuse()
-            self.model_evaluate()
-            logger.info("Yolo model set to evaluation mode")
-            logger.info(f"Using device:{device}")
            
             logger.info(f"YOLO model configured with conf={self.yolo_model.conf}, iou={self.yolo_model.iou}")
            
@@ -394,7 +367,6 @@ class CameraService:
             logger.error(f"Error loading known faces: {e}")
             self.known_faces = {"encodings": [], "names": []}
 
-
     def _process_face_image(self, image_path: str, person_name: str):
         """Process a single face image and return encoding and name"""
         try:
@@ -431,12 +403,10 @@ class CameraService:
                     return None
                
                 x1, y1, x2, y2 = map(int, best_box.xyxy[0])
-                logger.debug(f"detected face with confidence{confidence:.2f} at ({x1},{y1},{x2},{y2}) in image:{image_path}")
                
                 # Instead of cropping, use the full image with face locations
                 face_locations = [(y1, x2, y2, x1)]  # Convert to face_recognition format (top, right, bottom, left)
                 face_encodings = face_recognition.face_encodings(rgb_image, face_locations)
-                logger.debug(f"generated {len(face_encodings)} face encodings using yolo detection for image:{image_path}")
                
                 if not face_encodings:
                     logger.warning(f"Could not generate face encoding for detected face in: {image_path}")
@@ -448,7 +418,6 @@ class CameraService:
             else:
                 # Fallback to face_recognition library
                 face_locations = face_recognition.face_locations(rgb_image)
-                logger.debug(f"decteted {len(face_locations)} faces using face recognition in image:{image_path}")
                 if not face_locations:
                     logger.warning(f"No faces detected by face_recognition in image: {image_path}")
                     return None
@@ -532,8 +501,6 @@ class CameraService:
                         'reconnection_attempts': self.reconnection_attempts.get(camera_id, 0),
                         'status': 'healthy' if frame_age <= self.max_frame_age else 'stale'
                     }
-                    if self.stream_health[camera_id][status]=='stale':
-                        self._attempt_stream_recovery(camera_id)
 
                 # Sleep for health check interval
                 time.sleep(self.health_check_interval)
@@ -554,7 +521,6 @@ class CameraService:
 
             # Increment attempt counter
             self.reconnection_attempts[camera_id] = current_attempts + 1
-            logger.info(f"Attempting to rrecover camera {camera_id} stream (attempt {self.reconnection_attempts[camera_id]})")
            
             # Stop existing stream
             self.stop_camera_stream(camera_id)
@@ -726,7 +692,6 @@ class CameraService:
         try:
             if camera_id not in self.video_captures:
                 return False
-
            
             cap = self.video_captures[camera_id]
             if not cap.isOpened():
@@ -781,8 +746,6 @@ class CameraService:
             
             # Reset error count
             self.error_counts[camera_id] = 0
-            self.camera_consecutive_errors[camera_id]=0
-
             
             # Continue streaming while active
             while self.active_cameras.get(camera_id, False):
@@ -821,7 +784,6 @@ class CameraService:
                     self.stream_health[camera_id]['status'] = 'streaming'
                     self.stream_health[camera_id]['frame_count'] += 1
                     self.stream_health[camera_id]['last_frame_time'] = time.time()
-
                     
                     # Calculate FPS every 30 frames
                     if self.stream_health[camera_id]['frame_count'] % 30 == 0:
@@ -883,7 +845,6 @@ class CameraService:
             self.camera_error_states[camera_id]['last_error_time'] = current_time
             self.camera_error_states[camera_id]['error_count'] += 1
             self.camera_error_states[camera_id]['current_error'] = error_message
-            self.camera_consecutive_errors[camera_id]+=1
 
         # Update stream health
         self.stream_health[camera_id] = {
@@ -999,7 +960,6 @@ class CameraService:
                     cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.camera_width)
                     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.camera_height)
                     cap.set(cv2.CAP_PROP_FPS, self.camera_fps)
-                    cap.set(cv2.CAP_PROP_AUTOFOCUS,0)
                    
                     # Additional optimizations for better performance
                     if isinstance(rtsp_url, str):
@@ -1018,7 +978,6 @@ class CameraService:
                         break
                     logger.warning(f"Camera {camera_id} initialization attempt {attempt + 1} failed")
                     time.sleep(0.5)  # Longer delay between attempts
-                    time.sleep(0.5)
                
                 if not success:
                     error_msg = f"Could not read initial frame from camera {camera_id} after 3 attempts"
@@ -1034,8 +993,6 @@ class CameraService:
             # Update status and timestamps
             self.last_frame_time[camera_id] = time.time()
             self._update_camera_status(camera_id, "running")
-            self.active_cameras[camera_id]=True
-            self.camera_consecutive_errors[camera_id]=0
            
             # Start streaming thread if not already running
             if not self.stream_threads.get(camera_id, {}).get('active', False):
@@ -1089,8 +1046,6 @@ class CameraService:
             self.last_frame_time.pop(camera_id, None)
             self.stream_health.pop(camera_id, None)
             self.reconnection_attempts.pop(camera_id, None)
-            self.error_counts.pop(camera_id,None)
-            self.camera_error_states.pop(camera_id,None)
            
             logger.info(f"Stopped streaming for camera {camera_id}")
            
@@ -1171,7 +1126,6 @@ class CameraService:
             face_recognition_states=self.face_recognition_states,
             total_cameras=len(self.camera_streams),
             stream_health=self.stream_health
-
         )
 
     def apply_clahe(self, image):
@@ -1194,14 +1148,12 @@ class CameraService:
         # Apply CLAHE to L-channel
         clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
         cl = clahe.apply(l)
-
        
         # Merge the CLAHE enhanced L-channel with the a and b channel
         limg = cv2.merge((cl,a,b))
        
         # Convert image from LAB Color model to BGR color space
         enhanced = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
-
        
         return enhanced
 
@@ -1228,9 +1180,6 @@ class CameraService:
            
             rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
             face_names = []
-            if self.yolo_model is None:
-                logger.warning("Yolo model not loaded, skipping face detection")
-                return display_frame,face_names
 
             # Use YOLO for face detection
             if self.yolo_model:

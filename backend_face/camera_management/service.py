@@ -1,7 +1,6 @@
 import json
 import os
 import uuid
-import time
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 from fastapi import HTTPException
@@ -240,59 +239,6 @@ class EnhancedCameraService:
             logger.error(f"Error getting cameras: {e}")
             raise HTTPException(status_code=500, detail="Failed to retrieve cameras")
 
-    def _start_legacy_stream(self, camera: "EnhancedCamera") -> bool:
-        """Ensure compatibility with legacy SimpleRTSPStream manager in main.py"""
-        try:
-            import __main__ as main_module
-
-            if not hasattr(main_module, 'active_streams'):
-                logger.debug("Legacy camera manager not available (active_streams missing)")
-                return False
-
-            if not hasattr(main_module, 'SimpleRTSPStream'):
-                logger.debug("Legacy camera manager not available (SimpleRTSPStream missing)")
-                return False
-
-            ip_address = camera.ip_address or extract_ip_from_url(camera.rtsp_url) or camera.rtsp_url
-            if not ip_address:
-                logger.warning(f"Unable to determine IP/index for camera {camera.id}, skipping legacy stream start")
-                return False
-
-            collection_id = camera.collection_id or "default"
-            collection_name = collection_id.lower().replace(' ', '_')
-            legacy_stream_id = f"{collection_name}_{ip_address}"
-
-            # Check for any existing legacy stream entries that should be re-used
-            existing_entry = main_module.active_streams.get(legacy_stream_id)
-            if existing_entry:
-                stream_obj = existing_entry.get('stream')
-                rtsp_url = existing_entry.get('rtsp_url')
-                if stream_obj and getattr(stream_obj, 'is_running', False) and rtsp_url == camera.rtsp_url:
-                    logger.info(f"Legacy stream {legacy_stream_id} already running for camera {camera.id}")
-                    return True
-
-                # Stop mismatched/inactive legacy stream
-                try:
-                    if stream_obj:
-                        stream_obj.stop()
-                finally:
-                    del main_module.active_streams[legacy_stream_id]
-                    logger.info(f"Removed stale legacy stream {legacy_stream_id} for camera {camera.id}")
-
-            # Spin up compatibility stream
-            stream_obj = main_module.SimpleRTSPStream(camera.rtsp_url, legacy_stream_id)
-            stream_obj.start()
-            main_module.active_streams[legacy_stream_id] = {
-                'stream': stream_obj,
-                'rtsp_url': camera.rtsp_url,
-                'created_at': time.time()
-            }
-            logger.info(f"Started legacy MJPEG stream {legacy_stream_id} for camera {camera.id}")
-            return True
-        except Exception as legacy_error:
-            logger.warning(f"Failed to start legacy stream for camera {camera.id}: {legacy_error}", exc_info=True)
-            return False
-
     def activate_camera(self, camera_id: int) -> CameraOperationResponse:
         """Activate a camera and start its stream"""
         try:
@@ -326,9 +272,6 @@ class EnhancedCameraService:
             except Exception as stream_error:
                 logger.warning(f"Failed to start stream for camera {camera_id}: {stream_error}")
                 # Don't fail the activation if stream start fails
-
-            # Start legacy SimpleRTSP stream for backwards compatibility (e.g., USB cameras)
-            self._start_legacy_stream(camera)
 
             return CameraOperationResponse(
                 success=True,

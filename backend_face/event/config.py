@@ -12,6 +12,6 @@ os.makedirs(KNOWN_FACES_DIR, exist_ok=True)
 os.makedirs(UNKNOWN_FACES_DIR, exist_ok=True)
 
 # API settings
-API_HOST = "192.168.1.209"
+API_HOST = "localhost"
 API_PORT = 8000
 API_PREFIX = "/api" 

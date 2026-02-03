@@ -573,7 +573,7 @@ def process_video_task(task_id: str, video_id: str, options: Dict[str, Any]):
                                 image_path = os.path.join(person_path, img_file)
                                 image = face_recognition.load_image_file(image_path)
                                 if image is None:
-                                    logger.warning(f"  ✗ Could not load image: {img_file}")
+                                    logger.warning(f"  ? Could not load image: {img_file}")
                                     continue
                                 face_locations = face_recognition.face_locations(image)
 
@@ -583,13 +583,13 @@ def process_video_task(task_id: str, video_id: str, options: Dict[str, Any]):
                                         known_faces["encodings"].append(encodings[0])
                                         known_faces["names"].append(person_name)
                                         processed_count += 1
-                                        logger.debug(f"  ✓ Processed {img_file}")
+                                        logger.debug(f"  ? Processed {img_file}")
                                     else:
-                                        logger.warning(f"  ✗ No encodings for {img_file}")
+                                        logger.warning(f"  ? No encodings for {img_file}")
                                 else:
-                                    logger.warning(f"  ✗ No face detected in {img_file}")
+                                    logger.warning(f"  ? No face detected in {img_file}")
                             except Exception as e:
-                                logger.error(f"  ✗ Error processing {img_file}: {e}")
+                                logger.error(f"  ? Error processing {img_file}: {e}")
 
                         logger.info(f"  Successfully processed {processed_count} images for {person_name}")
 
