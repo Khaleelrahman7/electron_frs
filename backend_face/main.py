@@ -12,6 +12,10 @@ import cv2
 import threading
 from typing import Dict, Optional
 from face_pipeline import init as init_face_pipeline, process_frame
+from auth.middleware import RBACMiddleware
+from auth.routes import router as auth_router
+from auth.user_routes import router as user_router
+from auth.camera_routes import router as camera_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -34,9 +38,21 @@ app.add_middleware(
     allow_headers=["*"],  # Allows all headers
 )
 
+# Add RBAC middleware for authentication and authorization
+app.add_middleware(RBACMiddleware)
+
 # Mount individual service applications
 def mount_services():
     """Mount all service applications"""
+    
+    # Mount authentication service
+    try:
+        app.include_router(auth_router, prefix="/api")
+        app.include_router(user_router, prefix="/api")
+        app.include_router(camera_router, prefix="/api")
+        logger.info("✓ Authentication service mounted")
+    except Exception as e:
+        logger.error(f"✗ Failed to mount authentication service: {e}")
 
     # Mount event service
     try:
@@ -1215,7 +1231,7 @@ async def stop_stream(stream_id: str):
         logger.error(f"Error stopping stream {stream_id}: {e}")
         return JSONResponse({"error": str(e)}, status_code=500)
 
-@app.options("/{full_path:path}")
+@app.options("/api/{full_path:path}")
 async def options_handler(full_path: str):
     """Handle OPTIONS requests for CORS preflight"""
     return {"message": "OK"}

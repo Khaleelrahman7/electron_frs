@@ -36,15 +36,21 @@ function App() {
         if (workingUrl) {
           // If it's different from what we have saved (or we have nothing saved)
           // AND it's different from the current runtime default (to avoid unnecessary reloads if default matches)
-          if (workingUrl !== currentUrl) {
+          if (workingUrl !== currentUrl && workingUrl !== API_BASE_URL) {
             console.log(`Switching API URL to ${workingUrl}`);
             localStorage.setItem('api_base_url', workingUrl);
             window.location.reload();
             return;
           }
         } else {
-          // If no server found, and we don't have a stored URL, maybe default to localhost?
-          // Or just let it proceed and fail.
+          // If no server found, and we have a stored URL that might be dead
+          if (currentUrl) {
+            console.warn(`Stored backend URL ${currentUrl} is not responding. Resetting to defaults.`);
+            localStorage.removeItem('api_base_url');
+            window.location.reload();
+            return;
+          }
+          
           console.warn('No backend server detected.');
         }
       } catch (error) {
