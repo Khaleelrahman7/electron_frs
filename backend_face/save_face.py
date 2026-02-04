@@ -7,6 +7,7 @@ import threading
 import re
 import cv2
 import numpy as np
+import face_recognition
 from typing import Optional, Dict, Tuple
 
 # CONFIG - Use dynamic path based on file location
@@ -18,8 +19,6 @@ UNKNOWN_DIRNAME = "unknown"
 LOG_CSV = BASE_DIR / "capture_log.csv"
 # Minimum seconds between saves for same label (to avoid duplicates)
 DEFAULT_MIN_SAVE_INTERVAL_SECONDS = 8.0
-# Minimum pixel size for a face to be considered "visible" and saved
-MIN_FACE_PIXELS = 50
 
 # Internal state for rate-limiting and thread-safety
 _last_saved_time: Dict[str, float] = {}
@@ -169,12 +168,6 @@ def save_face_image(
     if confidence is not None and confidence < 0.7:
         return None
 
-    # If using direct crop without frame extraction, check size here
-    if face_crop_bgr is not None and (frame_bgr is None or bbox is None):
-        h, w = face_crop_bgr.shape[:2]
-        if h < MIN_FACE_PIXELS or w < MIN_FACE_PIXELS:
-            return None
-
     try:
         # If bbox + frame provided, extract and expand crop
         if frame_bgr is not None and bbox is not None:
@@ -196,8 +189,7 @@ def save_face_image(
             w_box = r - l
             h_box = b - t
             
-            # Check if face is too small (likely noise or far away)
-            if w_box < MIN_FACE_PIXELS or h_box < MIN_FACE_PIXELS:
+            if w_box <= 0 or h_box <= 0:
                 return None
             
             # Expand box by expand_factor to capture more context
@@ -233,6 +225,31 @@ def save_face_image(
             
             face_crop_bgr = face
 
+        # Validate that the final crop actually contains a face
+        # This prevents saving "empty" images (e.g. from false positive person detections)
+        if face_crop_bgr is not None and face_crop_bgr.size > 0:
+            try:
+                # Convert to RGB for face_recognition
+                # Use a smaller version for validation speed if the image is huge
+                val_img = face_crop_bgr
+                if val_img.shape[0] > 600 or val_img.shape[1] > 600:
+                    # Downscale for faster validation
+                    scale = 600 / max(val_img.shape[0], val_img.shape[1])
+                    val_img = cv2.resize(val_img, (0, 0), fx=scale, fy=scale)
+                
+                val_img_rgb = cv2.cvtColor(val_img, cv2.COLOR_BGR2RGB)
+                
+                # Use HOG model (faster)
+                # If the crop is the result of a face detection, it should definitely have a face.
+                face_locs = face_recognition.face_locations(val_img_rgb, model="hog")
+                
+                if not face_locs:
+                    print(f"Skipping save: No face detected in crop for {label_s}")
+                    return None
+            except Exception as e:
+                print(f"Warning: Face validation check failed: {e}")
+                # Fail safe to avoid saving potential garbage
+                return None
         
         # Ensure dtype is uint8
         if face_crop_bgr.dtype != "uint8":
