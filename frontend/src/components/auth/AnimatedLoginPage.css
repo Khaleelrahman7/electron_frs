@@ -1,0 +1,618 @@
+/* Professional Cyber-Security Face Recognition System Styles */
+
+:root {
+  --cyber-primary: #00d4ff;
+  --cyber-secondary: #6c5ce7;
+  --cyber-accent: #ff2d75;
+  --cyber-dark: #0a0a0a;
+  --cyber-dark-secondary: #1a1a2e;
+  --cyber-glow: rgba(0, 212, 255, 0.3);
+  --cyber-glow-strong: rgba(0, 212, 255, 0.6);
+  --success-color: #10b981;
+  --error-color: #ef4444;
+}
+
+/* Reset & Container */
+.animated-login-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 9999;
+  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
+  font-family: 'Orbitron', 'Poppins', 'Inter', sans-serif;
+}
+
+.main-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  padding: 20px;
+}
+
+/* Main Wrapper - The "Card" */
+.glass-wrapper {
+  display: flex;
+  width: 900px;
+  max-width: 95vw;
+  height: 600px;
+  max-height: 90vh;
+  border-radius: 30px;
+  overflow: hidden;
+  box-shadow: 
+    0 25px 50px -12px rgba(0, 0, 0, 0.5),
+    0 0 40px rgba(0, 212, 255, 0.2);
+  border: 1px solid rgba(0, 212, 255, 0.1);
+}
+
+/* Left Side - Login Form (Glass) */
+.login-section {
+  flex: 1;
+  background: rgba(10, 10, 10, 0.4);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  padding: 40px 50px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border-right: 1px solid rgba(0, 212, 255, 0.2);
+  position: relative;
+}
+
+.login-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    linear-gradient(45deg, transparent 49%, rgba(0, 212, 255, 0.1) 50%, transparent 51%),
+    linear-gradient(-45deg, transparent 49%, rgba(0, 212, 255, 0.1) 50%, transparent 51%);
+  background-size: 20px 20px;
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+/* Right Side - Visual (Dark Card) */
+.visual-section {
+  flex: 1;
+  background: 
+    radial-gradient(circle at 30% 30%, rgba(0, 212, 255, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 70% 70%, rgba(108, 92, 231, 0.1) 0%, transparent 50%),
+    linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Typography */
+.login-header {
+  text-align: center;
+  margin-bottom: 40px;
+  position: relative;
+  z-index: 2;
+}
+
+.login-title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--cyber-primary);
+  margin-bottom: 10px;
+  text-shadow: 0 0 20px var(--cyber-glow);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+/* Form Elements */
+.login-form {
+  width: 100%;
+  max-width: 350px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 2;
+}
+
+.form-group {
+  margin-bottom: 25px;
+  position: relative;
+}
+
+.form-label {
+  display: block;
+  font-size: 14px;
+  color: var(--cyber-primary);
+  margin-bottom: 8px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.input-with-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.form-input {
+  width: 100%;
+  padding: 12px 0;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid var(--cyber-primary);
+  font-size: 16px;
+  color: #ffffff;
+  transition: all 0.3s ease;
+  border-radius: 0;
+  font-family: 'Orbitron', monospace;
+}
+
+.form-input:focus {
+  outline: none;
+  border-bottom-color: var(--cyber-accent);
+  box-shadow: 0 2px 10px var(--cyber-glow);
+}
+
+.form-input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* Icons positioned absolute right */
+.input-icon, .toggle-password {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--cyber-primary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 5px;
+  transition: color 0.3s ease;
+}
+
+.input-icon:hover, .toggle-password:hover {
+  color: var(--cyber-accent);
+}
+
+.password-wrapper .form-input {
+  padding-right: 35px;
+}
+
+.toggle-password {
+  right: 30px;
+}
+
+.password-icon {
+  pointer-events: none;
+}
+
+/* Button */
+.login-button {
+  width: 100%;
+  padding: 15px;
+  background: linear-gradient(90deg, var(--cyber-primary) 0%, var(--cyber-secondary) 100%);
+  border: none;
+  border-radius: 25px;
+  color: #000;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 0 20px var(--cyber-glow);
+  transition: all 0.3s ease;
+  margin-top: 10px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  position: relative;
+  overflow: hidden;
+}
+
+.login-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transition: left 0.5s;
+}
+
+.login-button:hover::before {
+  left: 100%;
+}
+
+.login-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 30px var(--cyber-glow-strong);
+}
+
+.login-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* Footer */
+.form-footer {
+  margin-top: 30px;
+  text-align: center;
+  position: relative;
+  z-index: 2;
+}
+
+.login-help-text {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* Professional Face Recognition 3D Model */
+.scene-container {
+  z-index: 10;
+  transform: scale(0.8);
+  position: relative;
+  width: 400px;
+  height: 400px;
+}
+
+/* Advanced Face Recognition Cube */
+.face-recognition-cube {
+  width: 200px;
+  height: 200px;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform-style: preserve-3d;
+  transform: translate(-50%, -50%) rotateX(-15deg) rotateY(25deg);
+  animation: cyberRotate 20s linear infinite;
+}
+
+.face-recognition-cube.login-active {
+  animation: cyberLogin 3s ease-in-out;
+}
+
+@keyframes cyberRotate {
+  0% { transform: translate(-50%, -50%) rotateX(-15deg) rotateY(0deg); }
+  100% { transform: translate(-50%, -50%) rotateX(-15deg) rotateY(360deg); }
+}
+
+@keyframes cyberLogin {
+  0% { transform: translate(-50%, -50%) rotateX(-15deg) rotateY(0deg) scale(1); }
+  50% { transform: translate(-50%, -50%) rotateX(-15deg) rotateY(180deg) scale(1.1); }
+  100% { transform: translate(-50%, -50%) rotateX(-15deg) rotateY(360deg) scale(1); }
+}
+
+/* Cyber Security Face */
+.cube-face {
+  position: absolute;
+  width: 200px;
+  height: 200px;
+  background: 
+    linear-gradient(135deg, rgba(0, 212, 255, 0.1) 0%, rgba(108, 92, 231, 0.1) 100%),
+    rgba(10, 10, 10, 0.8);
+  border: 2px solid var(--cyber-primary);
+  backdrop-filter: blur(10px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 
+    inset 0 0 20px var(--cyber-glow),
+    0 0 30px var(--cyber-glow);
+  transition: all 0.3s ease;
+}
+
+.cube-face::before {
+  content: '';
+  position: absolute;
+  width: 90%;
+  height: 90%;
+  border: 1px solid var(--cyber-secondary);
+  border-radius: 10px;
+  box-shadow: inset 0 0 15px rgba(108, 92, 231, 0.3);
+}
+
+.cube-face::after {
+  content: '👤';
+  position: absolute;
+  font-size: 60px;
+  color: var(--cyber-primary);
+  text-shadow: 0 0 20px var(--cyber-glow);
+  animation: faceScan 2s ease-in-out infinite;
+}
+
+@keyframes faceScan {
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.05); text-shadow: 0 0 30px var(--cyber-glow-strong); }
+}
+
+.cube-face.front  { transform: translateZ(100px); }
+.cube-face.back   { transform: translateZ(-100px) rotateY(180deg); }
+.cube-face.right  { transform: rotateY(90deg) translateZ(100px); }
+.cube-face.left   { transform: rotateY(-90deg) translateZ(100px); }
+.cube-face.top    { transform: rotateX(90deg) translateZ(100px); }
+.cube-face.bottom { transform: rotateX(-90deg) translateZ(100px); }
+
+/* Success State */
+.cube-face.success-glow {
+  animation: successCyberGlow 2s ease-in-out infinite;
+}
+
+@keyframes successCyberGlow {
+  0%, 100% { 
+    box-shadow: 
+      inset 0 0 20px var(--cyber-glow),
+      0 0 30px var(--cyber-glow);
+    border-color: var(--cyber-primary);
+  }
+  50% { 
+    box-shadow: 
+      inset 0 0 30px rgba(16, 185, 129, 0.5),
+      0 0 50px rgba(16, 185, 129, 0.8),
+      0 0 80px rgba(16, 185, 129, 0.4);
+    border-color: var(--success-color);
+  }
+}
+
+/* Enhanced Particles */
+.particles {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+.particle {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  background: var(--cyber-primary);
+  border-radius: 50%;
+  animation: cyberParticleFloat 15s infinite linear;
+  box-shadow: 0 0 10px var(--cyber-glow);
+}
+
+.particle:nth-child(1) { left: 10%; animation-delay: 0s; }
+.particle:nth-child(2) { left: 30%; animation-delay: 3s; }
+.particle:nth-child(3) { left: 50%; animation-delay: 6s; }
+.particle:nth-child(4) { left: 70%; animation-delay: 2s; }
+.particle:nth-child(5) { left: 90%; animation-delay: 4s; }
+
+@keyframes cyberParticleFloat {
+  0% { transform: translateY(100vh) scale(0); opacity: 0; }
+  10% { opacity: 1; transform: scale(1); }
+  90% { opacity: 1; transform: scale(1); }
+  100% { transform: translateY(-100px) scale(0); opacity: 0; }
+}
+
+/* Professional Authentication Coin */
+.auth-coin {
+  position: absolute;
+  top: -120px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--cyber-primary), var(--cyber-secondary));
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 20;
+  box-shadow: 0 0 30px var(--cyber-glow-strong);
+  border: 3px solid var(--cyber-primary);
+  font-family: 'Orbitron', monospace;
+  font-weight: 700;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #000;
+  animation: authCoinFloat 3s ease-in-out infinite;
+  transition: all 0.5s ease;
+}
+
+.auth-coin::before {
+  content: '';
+  position: absolute;
+  width: 70px;
+  height: 70px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  animation: authCoinRotate 4s linear infinite;
+}
+
+@keyframes authCoinRotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.auth-coin.inserting {
+  top: 50%;
+  transform: translate(-50%, -50%) scale(0.8);
+  animation: none;
+}
+
+.auth-coin.success {
+  background: linear-gradient(135deg, var(--success-color), #34d399);
+  border-color: var(--success-color);
+  box-shadow: 0 0 40px rgba(16, 185, 129, 0.8);
+  animation: successCoin 2s ease-in-out;
+}
+
+.auth-coin.failed {
+  background: linear-gradient(135deg, var(--error-color), #f87171);
+  border-color: var(--error-color);
+  box-shadow: 0 0 40px rgba(239, 68, 68, 0.8);
+  animation: failedCoin 1s ease-in-out;
+}
+
+@keyframes successCoin {
+  0% { transform: translate(-50%, -50%) scale(0.8); }
+  50% { transform: translate(-50%, -50%) scale(1.1); }
+  100% { transform: translate(-50%, -50%) scale(1); }
+}
+
+@keyframes failedCoin {
+  0%, 100% { transform: translate(-50%, -50%) scale(0.8); }
+  25%, 75% { transform: translate(-50%, -50%) scale(0.8) rotateZ(-5deg); }
+  50% { transform: translate(-50%, -50%) scale(0.8) rotateZ(5deg); }
+}
+
+@keyframes authCoinFloat {
+  0%, 100% { transform: translateX(-50%) translateY(0) rotateY(0deg); }
+  50% { transform: translateX(-50%) translateY(-15px) rotateY(180deg); }
+}
+
+/* Role-based enhanced coin styles */
+.coin-supervisor {
+  background: linear-gradient(135deg, #ff2d75 0%, #ff6b6b 50%, #ff8e53 100%);
+  border: 3px solid #ff2d75;
+  color: #fff;
+  box-shadow: 0 0 25px rgba(255, 45, 117, 0.6);
+}
+
+.coin-admin {
+  background: linear-gradient(135deg, var(--cyber-secondary) 0%, #a29bfe 50%, #6c5ce7 100%);
+  border: 3px solid var(--cyber-secondary);
+  color: #fff;
+  box-shadow: 0 0 25px rgba(108, 92, 231, 0.6);
+}
+
+.coin-superadmin {
+  background: linear-gradient(135deg, var(--cyber-primary) 0%, #55a3ff 50%, #00d4ff 100%);
+  border: 3px solid var(--cyber-primary);
+  color: #000;
+  box-shadow: 0 0 30px rgba(0, 212, 255, 0.8), 0 0 50px rgba(0, 212, 255, 0.4);
+}
+
+.auth-coin-icon {
+  font-size: 20px;
+  margin-bottom: 2px;
+  text-shadow: 0 0 15px currentColor;
+}
+
+.auth-coin-text {
+  font-size: 8px;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.2;
+}
+
+/* Enhanced Success Message */
+.success-message {
+  position: absolute;
+  bottom: -100px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(90deg, var(--success-color), #00d4ff);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 25px;
+  white-space: nowrap;
+  opacity: 0;
+  transition: all 0.5s ease;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  box-shadow: 0 10px 30px rgba(16, 185, 129, 0.4);
+  z-index: 30;
+}
+
+.success-message.show {
+  opacity: 1;
+  bottom: -60px;
+}
+
+/* Error Message */
+.error-message {
+  background: linear-gradient(90deg, var(--error-color), #f87171);
+  color: white;
+  padding: 12px 18px;
+  border-radius: 20px;
+  font-size: 14px;
+  margin-bottom: 20px;
+  font-weight: 500;
+  text-align: center;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 5px 20px rgba(239, 68, 68, 0.3);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .glass-wrapper {
+    flex-direction: column;
+    height: auto;
+    width: 100%;
+    max-width: 450px;
+  }
+  
+  .visual-section {
+    height: 250px;
+    order: -1;
+  }
+  
+  .login-section {
+    padding: 30px;
+  }
+  
+  .login-title {
+    font-size: 24px;
+  }
+  
+  .scene-container {
+    transform: scale(0.6);
+  }
+  
+  .auth-coin {
+    width: 70px;
+    height: 70px;
+  }
+  
+  .auth-coin::before {
+    width: 50px;
+    height: 50px;
+  }
+}
+
+@media (max-width: 480px) {
+  .login-section {
+    padding: 20px;
+  }
+  
+  .login-title {
+    font-size: 20px;
+  }
+  
+  .form-input {
+    font-size: 14px;
+  }
+  
+  .login-button {
+    font-size: 14px;
+    padding: 12px;
+  }
+  
+  .scene-container {
+    transform: scale(0.5);
+  }
+  
+  .auth-coin {
+    width: 60px;
+    height: 60px;
+  }
+  
+  .auth-coin::before {
+    width: 40px;
+    height: 40px;
+  }
+}

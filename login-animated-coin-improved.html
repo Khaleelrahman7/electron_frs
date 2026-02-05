@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern Animated Login - Coin Bank</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            /* Modern Color Palette */
+            --primary-bg: #0a0b0f;
+            --secondary-bg: #1a1d29;
+            --accent-blue: #00d4ff;
+            --accent-purple: #6366f1;
+            --accent-green: #10b981;
+            --accent-gold: #f59e0b;
+            --text-primary: #ffffff;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --border-color: rgba(255, 255, 255, 0.1);
+            --shadow-glow: rgba(0, 212, 255, 0.3);
+            --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --gradient-secondary: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            --gradient-dark: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--primary-bg);
+            min-height: 100vh;
+            display: flex;
+            overflow: hidden;
+            color: var(--text-primary);
+        }
+
+        /* Main Container */
+        .main-container {
+            display: flex;
+            width: 100%;
+            height: 100vh;
+        }
+
+        /* Left Side - 3D Animation */
+        .animation-side {
+            flex: 1;
+            background: var(--gradient-dark);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Animated Background */
+        .animated-bg {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.3) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(255, 119, 198, 0.3) 0%, transparent 50%),
+                radial-gradient(circle at 40% 40%, rgba(120, 219, 255, 0.2) 0%, transparent 50%);
+            animation: bgPulse 8s ease-in-out infinite;
+        }
+
+        @keyframes bgPulse {
+            0%, 100% { opacity: 0.8; }
+            50% { opacity: 1; }
+        }
+
+        /* Floating Particles */
+        .particles {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--accent-blue);
+            border-radius: 50%;
+            animation: particleFloat 20s linear infinite;
+            opacity: 0.6;
+        }
+
+        .particle:nth-child(1) { left: 10%; animation-delay: 0s; }
+        .particle:nth-child(2) { left: 20%; animation-delay: 2s; }
+        .particle:nth-child(3) { left: 30%; animation-delay: 4s; }
+        .particle:nth-child(4) { left: 40%; animation-delay: 6s; }
+        .particle:nth-child(5) { left: 50%; animation-delay: 8s; }
+        .particle:nth-child(6) { left: 60%; animation-delay: 10s; }
+        .particle:nth-child(7) { left: 70%; animation-delay: 12s; }
+        .particle:nth-child(8) { left: 80%; animation-delay: 14s; }
+
+        @keyframes particleFloat {
+            0% {
+                transform: translateY(100vh) scale(0);
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            90% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            100% {
+                transform: translateY(-100px) scale(0);
+                opacity: 0;
+            }
+        }
+
+        /* 3D Scene */
+        .scene-container {
+            position: relative;
+            width: 400px;
+            height: 400px;
+            perspective: 1000px;
+            z-index: 10;
+        }
+
+        /* Main Coin Bank (3D Cube) */
+        .coin-bank {
+            width: 200px;
+            height: 200px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform-style: preserve-3d;
+            transform: translate(-50%, -50%) rotateX(-15deg) rotateY(25deg);
+            animation: bankRotate 15s linear infinite;
+        }
+
+        .coin-bank.login-active {
+            animation: none;
+            transition: all 1s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes bankRotate {
+            0% { transform: translate(-50%, -50%) rotateX(-15deg) rotateY(25deg); }
+            100% { transform: translate(-50%, -50%) rotateX(-15deg) rotateY(385deg); }
+        }
+
+        .bank-face {
+            position: absolute;
+            width: 200px;
+            height: 200px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid var(--border-color);
+            backdrop-filter: blur(10px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: all 0.6s ease;
+        }
+
+        .bank-face::before {
+            content: '';
+            position: absolute;
+            width: 80%;
+            height: 80%;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+
+        .bank-face.front  { transform: translateZ(100px); }
+        .bank-face.back   { transform: translateZ(-100px) rotateY(180deg); }
+        .bank-face.right  { transform: rotateY(90deg) translateZ(100px); }
+        .bank-face.left   { transform: rotateY(-90deg) translateZ(100px); }
+        .bank-face.top    { transform: rotateX(90deg) translateZ(100px); }
+        .bank-face.bottom { transform: rotateX(-90deg) translateZ(100px); }
+
+        /* Coin Slot */
+        .bank-face.top::after {
+            content: '';
+            position: absolute;
+            width: 60px;
+            height: 6px;
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 3px;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Animated Coin */
+        .animated-coin {
+            position: absolute;
+            top: -120px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 600;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+            animation: coinFloat 3s ease-in-out infinite;
+            transition: all 1.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+            z-index: 20;
+        }
+
+        .animated-coin.inserting {
+            top: 50%;
+            transform: translate(-50%, -50%) rotateY(720deg);
+            animation: none;
+        }
+
+        @keyframes coinFloat {
+            0%, 100% { transform: translateX(-50%) translateY(0) rotateY(0deg); }
+            50% { transform: translateX(-50%) translateY(-15px) rotateY(180deg); }
+        }
+
+        /* Role-based coin styles */
+        .coin-supervisor {
+            background: linear-gradient(135deg, #cd7f32 0%, #b87333 50%, #a0522d 100%);
+            border: 3px solid #8b4513;
+            color: #fff;
+        }
+
+        .coin-admin {
+            background: linear-gradient(135deg, #c0c0c0 0%, #a8a8a8 50%, #808080 100%);
+            border: 3px solid #696969;
+            color: #000;
+        }
+
+        .coin-superadmin {
+            background: linear-gradient(135deg, #ffd700 0%, #ffed4e 50%, #daa520 100%);
+            border: 3px solid #b8860b;
+            color: #000;
+            box-shadow: 0 10px 40px rgba(255, 215, 0, 0.5), 0 0 60px rgba(255, 215, 0, 0.3);
+        }
+
+        .coin-icon {
+            font-size: 24px;
+            margin-bottom: 2px;
+        }
+
+        /* Success Effects */
+        .success-glow {
+            animation: successGlow 2s ease-in-out infinite;
+        }
+
+        @keyframes successGlow {
+            0%, 100% { 
+                box-shadow: 0 0 20px var(--shadow-glow);
+                border-color: var(--accent-blue);
+            }
+            50% { 
+                box-shadow: 0 0 40px var(--shadow-glow), 0 0 80px var(--shadow-glow);
+                border-color: var(--accent-green);
+            }
+        }
+
+        /* Right Side - Login Form */
+        .login-side {
+            flex: 1;
+            background: var(--secondary-bg);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        .login-container {
+            width: 100%;
+            max-width: 420px;
+            padding: 20px;
+        }
+
+        .login-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            padding: 48px 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            transition: all 0.6s ease;
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+
+        .login-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 32px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .login-subtitle {
+            color: var(--text-secondary);
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        /* Form Styles */
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        .form-label {
+            display: block;
+            color: var(--text-secondary);
+            font-weight: 500;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 16px 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-size: 15px;
+            transition: all 0.3s ease;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.1);
+        }
+
+        .form-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .password-wrapper {
+            position: relative;
+        }
+
+        .toggle-password {
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            cursor: pointer;
+            color: var(--text-muted);
+            transition: color 0.3s ease;
+            background: none;
+            border: none;
+            padding: 4px;
+        }
+
+        .toggle-password:hover {
+            color: var(--accent-blue);
+        }
+
+        .login-button {
+            width: 100%;
+            padding: 16px;
+            background: var(--gradient-primary);
+            border: none;
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: 'Space Grotesk', sans-serif;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .login-button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .login-button:hover::before {
+            left: 100%;
+        }
+
+        .login-button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+
+        .login-button:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .form-footer {
+            text-align: center;
+            margin-top: 24px;
+        }
+
+        .forgot-link {
+            color: var(--accent-blue);
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.3s ease;
+        }
+
+        .forgot-link:hover {
+            color: var(--accent-purple);
+        }
+
+        /* Quick Test Buttons */
+        .test-buttons {
+            margin-top: 32px;
+            padding-top: 32px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .test-title {
+            color: var(--text-secondary);
+            font-size: 12px;
+            text-align: center;
+            margin-bottom: 16px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .test-buttons-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+
+        .test-button {
+            padding: 12px 8px;
+            border: none;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .test-button:hover {
+            transform: translateY(-1px);
+        }
+
+        .test-supervisor {
+            background: linear-gradient(135deg, #cd7f32 0%, #b87333 100%);
+            color: white;
+        }
+
+        .test-admin {
+            background: linear-gradient(135deg, #c0c0c0 0%, #a8a8a8 100%);
+            color: #000;
+        }
+
+        .test-superadmin {
+            background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+            color: #000;
+        }
+
+        /* Success Message */
+        .success-message {
+            position: absolute;
+            bottom: -60px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(16, 185, 129, 0.95);
+            color: white;
+            padding: 16px 32px;
+            border-radius: 30px;
+            font-weight: 600;
+            font-size: 16px;
+            box-shadow: 0 10px 40px rgba(16, 185, 129, 0.3);
+            opacity: 0;
+            transition: all 0.6s ease;
+            z-index: 30;
+        }
+
+        .success-message.show {
+            opacity: 1;
+            bottom: -80px;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 1024px) {
+            .main-container {
+                flex-direction: column;
+            }
+
+            .animation-side,
+            .login-side {
+                flex: none;
+                height: 50vh;
+            }
+
+            .scene-container {
+                width: 300px;
+                height: 300px;
+            }
+
+            .coin-bank {
+                width: 150px;
+                height: 150px;
+            }
+
+            .bank-face {
+                width: 150px;
+                height: 150px;
+            }
+
+            .bank-face.front  { transform: translateZ(75px); }
+            .bank-face.back   { transform: translateZ(-75px) rotateY(180deg); }
+            .bank-face.right  { transform: rotateY(90deg) translateZ(75px); }
+            .bank-face.left   { transform: rotateY(-90deg) translateZ(75px); }
+            .bank-face.top    { transform: rotateX(90deg) translateZ(75px); }
+            .bank-face.bottom { transform: rotateX(-90deg) translateZ(75px); }
+
+            .animated-coin {
+                width: 60px;
+                height: 60px;
+                font-size: 8px;
+            }
+
+            .coin-icon {
+                font-size: 18px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .login-card {
+                padding: 32px 24px;
+            }
+
+            .login-title {
+                font-size: 24px;
+            }
+
+            .test-buttons-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Loading State */
+        .loading {
+            position: relative;
+        }
+
+        .loading::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            margin: -10px 0 0 -10px;
+            border: 2px solid transparent;
+            border-top: 2px solid var(--text-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <!-- Left Side - 3D Animation -->
+        <div class="animation-side">
+            <div class="animated-bg"></div>
+            <div class="particles">
+                <div class="particle"></div>
+                <div class="particle"></div>
+                <div class="particle"></div>
+                <div class="particle"></div>
+                <div class="particle"></div>
+                <div class="particle"></div>
+                <div class="particle"></div>
+                <div class="particle"></div>
+            </div>
+
+            <div class="scene-container">
+                <!-- Animated Coin -->
+                <div class="animated-coin" id="animatedCoin">
+                    <div class="coin-icon">★</div>
+                    <div id="coinText">Loading</div>
+                </div>
+
+                <!-- 3D Coin Bank -->
+                <div class="coin-bank" id="coinBank">
+                    <div class="bank-face front"></div>
+                    <div class="bank-face back"></div>
+                    <div class="bank-face right"></div>
+                    <div class="bank-face left"></div>
+                    <div class="bank-face top"></div>
+                    <div class="bank-face bottom"></div>
+                </div>
+
+                <!-- Success Message -->
+                <div class="success-message" id="successMessage">
+                    ✓ Login Successful
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Side - Login Form -->
+        <div class="login-side">
+            <div class="login-container">
+                <div class="login-card">
+                    <div class="login-header">
+                        <h1 class="login-title">Welcome Back</h1>
+                        <p class="login-subtitle">Sign in to access your dashboard and manage your account.</p>
+                    </div>
+
+                    <form id="loginForm">
+                        <div class="form-group">
+                            <label for="role" class="form-label">Access Level</label>
+                            <select id="role" name="role" class="form-input" required>
+                                <option value="">Select Your Role</option>
+                                <option value="superadmin">Super Admin</option>
+                                <option value="admin">Admin</option>
+                                <option value="supervisor">Supervisor</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="email" class="form-label">Email Address</label>
+                            <input type="email" id="email" name="email" class="form-input" placeholder="Enter your email" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="password" class="form-label">Password</label>
+                            <div class="password-wrapper">
+                                <input type="password" id="password" name="password" class="form-input" placeholder="Enter your password" required>
+                                <button type="button" class="toggle-password" onclick="togglePassword()">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                        <circle cx="12" cy="12" r="3"></circle>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <button type="submit" class="login-button" id="loginButton">
+                                Sign In
+                            </button>
+                        </div>
+
+                        <div class="form-footer">
+                            <a href="#" class="forgot-link" id="forgotLink">Forgot your password?</a>
+                        </div>
+                    </form>
+
+                    <!-- Quick Test Buttons -->
+                    <div class="test-buttons">
+                        <div class="test-title">Quick Test Login</div>
+                        <div class="test-buttons-grid">
+                            <button type="button" class="test-button test-supervisor" onclick="testLogin('supervisor')">
+                                👤 Supervisor
+                            </button>
+                            <button type="button" class="test-button test-admin" onclick="testLogin('admin')">
+                                👨‍💼 Admin
+                            </button>
+                            <button type="button" class="test-button test-superadmin" onclick="testLogin('superadmin')">
+                                ⭐ Super Admin
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Test credentials
+        const testCredentials = {
+            supervisor: {
+                email: 'supervisor@tylet.com',
+                password: 'super123'
+            },
+            admin: {
+                email: 'admin@tylet.com',
+                password: 'admin123'
+            },
+            superadmin: {
+                email: 'superadmin@tylet.com',
+                password: 'superadmin123'
+            }
+        };
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            updateCoinAppearance();
+        });
+
+        // Update coin appearance based on selected role
+        document.getElementById('role').addEventListener('change', updateCoinAppearance);
+
+        function updateCoinAppearance() {
+            const role = document.getElementById('role').value;
+            const coin = document.getElementById('animatedCoin');
+            const coinText = document.getElementById('coinText');
+            
+            // Remove all role classes
+            coin.className = 'animated-coin';
+            
+            if (role) {
+                coin.classList.add(`coin-${role}`);
+                coinText.textContent = role.replace('admin', ' Admin').replace('super', 'Super ');
+            } else {
+                coinText.textContent = 'Select Role';
+            }
+        }
+
+        // Toggle password visibility
+        function togglePassword() {
+            const passwordInput = document.getElementById('password');
+            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+            passwordInput.setAttribute('type', type);
+        }
+
+        // Quick test login
+        function testLogin(role) {
+            document.getElementById('role').value = role;
+            document.getElementById('email').value = testCredentials[role].email;
+            document.getElementById('password').value = testCredentials[role].password;
+            updateCoinAppearance();
+            
+            // Auto submit with delay
+            setTimeout(() => {
+                document.getElementById('loginForm').dispatchEvent(new Event('submit'));
+            }, 500);
+        }
+
+        // Main login handler
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const role = document.getElementById('role').value;
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const button = document.getElementById('loginButton');
+            const coinBank = document.getElementById('coinBank');
+            const animatedCoin = document.getElementById('animatedCoin');
+            const successMessage = document.getElementById('successMessage');
+            
+            // Validation
+            if (!role) {
+                alert('Please select your access level');
+                return;
+            }
+            
+            // Check credentials
+            if (testCredentials[role]) {
+                if (email !== testCredentials[role].email || password !== testCredentials[role].password) {
+                    alert(`❌ Invalid credentials!\n\nUse the quick test buttons or enter:\n\n📧 Email: ${testCredentials[role].email}\n🔑 Password: ${testCredentials[role].password}`);
+                    return;
+                }
+            }
+            
+            // Start login animation
+            button.disabled = true;
+            button.innerHTML = '<span class="loading">Authenticating...</span>';
+            
+            // Phase 1: Stop bank rotation and prepare for coin insertion
+            setTimeout(() => {
+                coinBank.classList.add('login-active');
+                coinBank.style.transform = 'translate(-50%, -50%) rotateX(0deg) rotateY(0deg) scale(1.1)';
+            }, 800);
+            
+            // Phase 2: Coin insertion animation
+            setTimeout(() => {
+                animatedCoin.classList.add('inserting');
+            }, 1600);
+            
+            // Phase 3: Success effects
+            setTimeout(() => {
+                // Add glow effect to bank
+                document.querySelectorAll('.bank-face').forEach(face => {
+                    face.classList.add('success-glow');
+                });
+                
+                // Update button
+                button.innerHTML = '✓ Success';
+                button.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
+                
+                // Show success message
+                const roleText = role === 'superadmin' ? 'Super Admin' : 
+                               role === 'admin' ? 'Admin' : 'Supervisor';
+                successMessage.innerHTML = `✓ ${roleText} Login Successful`;
+                successMessage.classList.add('show');
+                
+            }, 3000);
+            
+            // Phase 4: Complete and redirect
+            setTimeout(() => {
+                alert(`🎉 Login Successful!\n\n👤 Role: ${roleText}\n📧 Email: ${email}\n\n✨ Redirecting to dashboard...`);
+                
+                // Reset for demo
+                setTimeout(() => {
+                    location.reload();
+                }, 1500);
+            }, 4200);
+        });
+
+        // Forgot password handler
+        document.getElementById('forgotLink').addEventListener('click', function(e) {
+            e.preventDefault();
+            alert('Password reset instructions would be sent to your registered email address.');
+        });
+
+        // Add some interactive hover effects
+        document.querySelectorAll('.test-button').forEach(button => {
+            button.addEventListener('mouseenter', function() {
+                this.style.transform = 'translateY(-2px) scale(1.02)';
+            });
+            
+            button.addEventListener('mouseleave', function() {
+                this.style.transform = 'translateY(0) scale(1)';
+            });
+        });
+    </script>
+</body>
+</html>

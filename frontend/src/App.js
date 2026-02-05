@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import './App.css';
 import FaceGallery from './components/FaceGallery';
 import EventsWidget from './components/EventsWidget';
@@ -9,6 +10,8 @@ import Dashboard from './components/dashboard/Dashboard';
 import { CameraProvider } from './components/camera/CameraManager';
 import SimpleCameraManager from './components/camera/SimpleCameraManager';
 import StreamViewer from './components/StreamViewer';
+import AnimatedLoginPage from './components/auth/AnimatedLoginPage';
+import useAuthStore from './store/authStore';
 import { detectBackendUrl, API_BASE_URL } from './utils/apiConfig';
 
 // Import SVG icons
@@ -21,9 +24,10 @@ import { ReactComponent as CameraIcon } from './icon/camera.svg';
 import { ReactComponent as StreamViewerIcon } from './icon/stream_viewer.svg';
 import { ReactComponent as DashboardIcon } from './icon/dashboard.svg';
 
-function App() {
+const AppContent = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isCheckingBackend, setIsCheckingBackend] = useState(true);
+  const { isAuthenticated, user, logout } = useAuthStore();
 
   useEffect(() => {
     // Auto-detect backend URL and switch if necessary
@@ -106,12 +110,15 @@ function App() {
         );
       case 'stream-viewer':
         return <StreamViewer />;
-      case 'webrtc-test':
-        return <WebRTCTest />;
       default:
         return <Dashboard />;
     }
   };
+
+  // If not authenticated, show login page
+  if (!isAuthenticated && !isCheckingBackend) {
+    return <AnimatedLoginPage />;
+  }
 
   return (
     <div className="app">
@@ -119,6 +126,19 @@ function App() {
         <aside className="sidebar">
           <div className="sidebar-header">
             <h1>Face Recognition System</h1>
+            {user && (
+              <div className="user-info">
+                <span className="user-role">{user.role}</span>
+              </div>
+            )}
+          </div>
+          <div className="sidebar-footer">
+            {user && (
+              <button className="logout-button" onClick={logout}>
+                <span className="logout-icon">🚪</span>
+                <span className="logout-label">Logout</span>
+              </button>
+            )}
           </div>
           <nav className="sidebar-navigation">
             {tabs.map(tab => (
@@ -140,6 +160,17 @@ function App() {
         </main>
       </div>
     </div>
+  );
+};
+
+function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/login" element={<AnimatedLoginPage />} />
+        <Route path="/*" element={<AppContent />} />
+      </Routes>
+    </Router>
   );
 }
 
