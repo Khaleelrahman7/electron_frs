@@ -46,20 +46,27 @@
     0 25px 50px -12px rgba(0, 0, 0, 0.5),
     0 0 40px rgba(0, 212, 255, 0.2);
   border: 1px solid rgba(0, 212, 255, 0.1);
+  /* Optimization: Force GPU layer */
+  transform: translateZ(0);
+  will-change: transform; 
 }
 
 /* Left Side - Login Form (Glass) */
 .login-section {
   flex: 1;
-  background: rgba(10, 10, 10, 0.4);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: rgba(10, 10, 10, 0.6); /* Slightly darker to reduce reliance on blur */
+  /* Optimization: Reduce blur radius or remove if very slow. 
+     Keeping it but moderate. */
+  backdrop-filter: blur(10px); 
+  -webkit-backdrop-filter: blur(10px);
   padding: 40px 50px;
   display: flex;
   flex-direction: column;
   justify-content: center;
   border-right: 1px solid rgba(0, 212, 255, 0.2);
   position: relative;
+  /* Optimization */
+  will-change: backdrop-filter;
 }
 
 .login-section::before {
@@ -271,6 +278,8 @@
   transform-style: preserve-3d;
   transform: translate(-50%, -50%) rotateX(-15deg) rotateY(25deg);
   animation: cyberRotate 20s linear infinite;
+  /* Optimization */
+  will-change: transform;
 }
 
 .face-recognition-cube.login-active {
@@ -293,20 +302,22 @@
   position: absolute;
   width: 200px;
   height: 200px;
-  background: 
-    linear-gradient(135deg, rgba(0, 212, 255, 0.1) 0%, rgba(108, 92, 231, 0.1) 100%),
-    rgba(10, 10, 10, 0.8);
+  /* Optimization: Replaced complex gradient with solid color + simple opacity */
+  background: rgba(10, 10, 20, 0.9);
   border: 2px solid var(--cyber-primary);
-  backdrop-filter: blur(10px);
+  /* Optimization: REMOVED backdrop-filter */
   display: flex;
   justify-content: center;
   align-items: center;
-  box-shadow: 
-    inset 0 0 20px var(--cyber-glow),
-    0 0 30px var(--cyber-glow);
+  /* Optimization: REMOVED box-shadow from moving face */
+  box-shadow: none; 
   transition: all 0.3s ease;
+  /* Optimization */
+  backface-visibility: hidden; /* Hide back faces */
+  will-change: transform;
 }
 
+/* Add a static internal glow via pseudo-element to avoid repainting the main face */
 .cube-face::before {
   content: '';
   position: absolute;
@@ -314,7 +325,9 @@
   height: 90%;
   border: 1px solid var(--cyber-secondary);
   border-radius: 10px;
-  box-shadow: inset 0 0 15px rgba(108, 92, 231, 0.3);
+  /* Optimization: Simple border, no shadow */
+  opacity: 0.5;
+  pointer-events: none;
 }
 
 .cube-face::after {
@@ -322,13 +335,14 @@
   position: absolute;
   font-size: 60px;
   color: var(--cyber-primary);
-  text-shadow: 0 0 20px var(--cyber-glow);
+  /* Optimization: No text-shadow */
   animation: faceScan 2s ease-in-out infinite;
+  will-change: transform, opacity;
 }
 
 @keyframes faceScan {
   0%, 100% { opacity: 0.7; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.05); text-shadow: 0 0 30px var(--cyber-glow-strong); }
+  50% { opacity: 1; transform: scale(1.05); }
 }
 
 .cube-face.front  { transform: translateZ(100px); }
@@ -341,20 +355,20 @@
 /* Success State */
 .cube-face.success-glow {
   animation: successCyberGlow 2s ease-in-out infinite;
+  will-change: box-shadow, border-color; /* Optimization */
 }
 
 @keyframes successCyberGlow {
   0%, 100% { 
     box-shadow: 
       inset 0 0 20px var(--cyber-glow),
-      0 0 30px var(--cyber-glow);
+      0 0 15px var(--cyber-glow);
     border-color: var(--cyber-primary);
   }
   50% { 
     box-shadow: 
       inset 0 0 30px rgba(16, 185, 129, 0.5),
-      0 0 50px rgba(16, 185, 129, 0.8),
-      0 0 80px rgba(16, 185, 129, 0.4);
+      0 0 30px rgba(16, 185, 129, 0.8); /* Reduced spread */
     border-color: var(--success-color);
   }
 }
@@ -367,6 +381,7 @@
   width: 100%;
   height: 100%;
   z-index: 1;
+  pointer-events: none; /* Optimization */
 }
 
 .particle {
@@ -376,7 +391,10 @@
   background: var(--cyber-primary);
   border-radius: 50%;
   animation: cyberParticleFloat 15s infinite linear;
-  box-shadow: 0 0 10px var(--cyber-glow);
+  /* Optimization: REMOVED box-shadow */
+  /* box-shadow: 0 0 5px var(--cyber-glow); */
+  opacity: 0.6; /* Static opacity instead of shadow */
+  will-change: transform, opacity; /* Optimization */
 }
 
 .particle:nth-child(1) { left: 10%; animation-delay: 0s; }
@@ -401,13 +419,15 @@
   width: 90px;
   height: 90px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--cyber-primary), var(--cyber-secondary));
+  /* Optimization: Simplified background */
+  background: var(--cyber-primary);
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
   z-index: 20;
-  box-shadow: 0 0 30px var(--cyber-glow-strong);
+  /* Optimization: Reduced shadow */
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.5); 
   border: 3px solid var(--cyber-primary);
   font-family: 'Orbitron', monospace;
   font-weight: 700;
@@ -417,6 +437,7 @@
   color: #000;
   animation: authCoinFloat 3s ease-in-out infinite;
   transition: all 0.5s ease;
+  will-change: transform, top; /* Optimization */
 }
 
 .auth-coin::before {
@@ -427,6 +448,9 @@
   border: 2px solid rgba(255, 255, 255, 0.3);
   border-radius: 50%;
   animation: authCoinRotate 4s linear infinite;
+  will-change: transform;
+  /* Optimization: ensure no layout thrashing */
+  pointer-events: none;
 }
 
 @keyframes authCoinRotate {
@@ -522,8 +546,9 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 1px;
-  box-shadow: 0 10px 30px rgba(16, 185, 129, 0.4);
+  box-shadow: 0 5px 15px rgba(16, 185, 129, 0.4); /* Reduced shadow */
   z-index: 30;
+  will-change: transform, opacity, bottom;
 }
 
 .success-message.show {
@@ -541,8 +566,8 @@
   margin-bottom: 20px;
   font-weight: 500;
   text-align: center;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 5px 20px rgba(239, 68, 68, 0.3);
+  /* backdrop-filter: blur(10px); REMOVED for performance */
+  box-shadow: 0 5px 10px rgba(239, 68, 68, 0.3); /* Reduced shadow */
   text-transform: uppercase;
   letter-spacing: 1px;
 }

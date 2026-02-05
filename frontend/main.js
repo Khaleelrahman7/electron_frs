@@ -769,6 +769,12 @@ ipcMain.handle('show-error-dialog', async (event, title, content) => {
   }
 });
 
+// Optimize GPU usage for animations
+app.commandLine.appendSwitch('enable-gpu-rasterization');
+app.commandLine.appendSwitch('enable-zero-copy');
+app.commandLine.appendSwitch('ignore-gpu-blacklist');
+app.commandLine.appendSwitch('disable-gpu-vsync'); /* Optional: might help if vsync is causing stutter */
+
 app.whenReady().then(createWindow);
 
 app.on('window-all-closed', () => {
