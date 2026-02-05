@@ -34,17 +34,29 @@ class UserResponse(BaseModel):
 async def login(request: LoginRequest):
     ensure_auth_data_dir()
     
-    # Special handling for SuperAdmin - allow login without role matching
-    user = get_user(request.username)
-    if user and user["role"] == "SuperAdmin":
-        # For SuperAdmin, authenticate without role check
-        auth_user = authenticate_user(request.username, request.password, user["role"])
-    else:
-        # For other roles, require exact role match
-        auth_user = authenticate_user(request.username, request.password, request.role)
+    # Normalize username to lowercase
+    username = request.username.lower()
+    
+    print(f"Login attempt: user='{username}', requested_role='{request.role}'")
+    
+    user = get_user(username)
+    
+    if not user:
+        print(f"User not found: {username}")
+        raise HTTPException(status_code=401, detail="Invalid credentials or role")
+
+    print(f"User found: {username}, Actual Role: {user['role']}")
+
+    # Authenticate using the user's ACTUAL role from the database.
+    # This effectively ignores the role selected in the frontend dropdown,
+    # preventing login failures due to role mismatch.
+    auth_user = authenticate_user(username, request.password, user["role"])
     
     if not auth_user:
+        print(f"Authentication failed for {username} (Password mismatch)")
         raise HTTPException(status_code=401, detail="Invalid credentials or role")
+    
+    print(f"Authentication successful for {username}")
     
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(

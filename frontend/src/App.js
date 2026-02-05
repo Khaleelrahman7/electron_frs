@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
+import useAuthStore from './store/authStore';
+import LoginPage from './components/auth/LoginPage';
 import FaceGallery from './components/FaceGallery';
 import EventsWidget from './components/EventsWidget';
 import RegistrationWidget from './components/RegistrationWidget';
@@ -21,9 +23,65 @@ import { ReactComponent as CameraIcon } from './icon/camera.svg';
 import { ReactComponent as StreamViewerIcon } from './icon/stream_viewer.svg';
 import { ReactComponent as DashboardIcon } from './icon/dashboard.svg';
 
+import axios from 'axios';
+
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isCheckingBackend, setIsCheckingBackend] = useState(true);
+  
+  // Auth state
+  const { isAuthenticated, user, logout } = useAuthStore();
+
+  // Verify token on mount if authenticated
+  useEffect(() => {
+    const verifySession = async () => {
+      if (isAuthenticated) {
+        try {
+          await axios.get('/api/auth/me');
+        } catch (error) {
+          console.warn('Session verification failed, logging out...');
+          logout();
+        }
+      }
+    };
+    verifySession();
+  }, [isAuthenticated, logout]);
+
+  const tabs = [
+    { id: 'dashboard', label: 'Dashboard', icon: <DashboardIcon /> },
+    { id: 'registration', label: 'Registration', icon: <RegistrationIcon /> },
+    { id: 'gallery', label: 'Gallery', icon: <GalleryIcon /> },
+    { id: 'events', label: 'Events', icon: <EventsIcon /> },
+    { id: 'matching', label: 'Face Matching', icon: <FaceMatchingIcon /> },
+    { id: 'video', label: 'Video Processing', icon: <VideoIcon /> },
+    { id: 'camera', label: 'Camera Management', icon: <CameraIcon /> },
+    { id: 'stream-viewer', label: 'Stream Viewer', icon: <StreamViewerIcon /> },
+  ];
+
+  // Filter tabs based on role
+  const getAllowedTabs = (role) => {
+    if (!role) return [];
+    
+    switch(role) {
+      case 'SuperAdmin':
+      case 'Admin':
+        return ['dashboard', 'registration', 'gallery', 'events', 'matching', 'video', 'camera', 'stream-viewer'];
+      case 'Supervisor':
+        return ['dashboard', 'events', 'matching', 'stream-viewer'];
+      default:
+        return ['dashboard'];
+    }
+  };
+
+  const allowedTabIds = user ? getAllowedTabs(user.role) : [];
+  const visibleTabs = tabs.filter(tab => allowedTabIds.includes(tab.id));
+
+  useEffect(() => {
+    // Reset to dashboard if current tab is not allowed for the new role
+    if (isAuthenticated && user && !allowedTabIds.includes(activeTab)) {
+      setActiveTab('dashboard');
+    }
+  }, [isAuthenticated, user, activeTab]);
 
   useEffect(() => {
     // Auto-detect backend URL and switch if necessary
@@ -63,17 +121,6 @@ function App() {
     checkBackend();
   }, []);
 
-  const tabs = [
-    { id: 'dashboard', label: 'Dashboard', icon: <DashboardIcon /> },
-    { id: 'registration', label: 'Registration', icon: <RegistrationIcon /> },
-    { id: 'gallery', label: 'Gallery', icon: <GalleryIcon /> },
-    { id: 'events', label: 'Events', icon: <EventsIcon /> },
-    { id: 'matching', label: 'Face Matching', icon: <FaceMatchingIcon /> },
-    { id: 'video', label: 'Video Processing', icon: <VideoIcon /> },
-    { id: 'camera', label: 'Camera Management', icon: <CameraIcon /> },
-    { id: 'stream-viewer', label: 'Stream Viewer', icon: <StreamViewerIcon /> },
-  ];
-
   const renderActiveComponent = () => {
     if (isCheckingBackend) {
       return (
@@ -83,6 +130,11 @@ function App() {
           <p>Checking available connection points...</p>
         </div>
       );
+    }
+
+    // If not authenticated, show login page
+    if (!isAuthenticated) {
+      return <LoginPage />;
     }
 
     switch (activeTab) {
@@ -106,12 +158,15 @@ function App() {
         );
       case 'stream-viewer':
         return <StreamViewer />;
-      case 'webrtc-test':
-        return <WebRTCTest />;
       default:
         return <Dashboard />;
     }
   };
+
+  // If not authenticated and not checking backend, show login page (full screen)
+  if (!isCheckingBackend && !isAuthenticated) {
+    return <LoginPage />;
+  }
 
   return (
     <div className="app">
@@ -119,9 +174,13 @@ function App() {
         <aside className="sidebar">
           <div className="sidebar-header">
             <h1>Face Recognition System</h1>
+            {user && <div className="user-info">
+              <span className="user-role">{user.role}</span>
+              <span className="user-name">{user.username}</span>
+            </div>}
           </div>
           <nav className="sidebar-navigation">
-            {tabs.map(tab => (
+            {visibleTabs.map(tab => (
               <button
                 key={tab.id}
                 className={`sidebar-button ${activeTab === tab.id ? 'active' : ''}`}
@@ -133,6 +192,13 @@ function App() {
               </button>
             ))}
           </nav>
+          
+          <div className="sidebar-footer">
+            <button className="sidebar-button logout-button" onClick={logout}>
+              <span className="sidebar-icon">🚪</span>
+              <span className="sidebar-label">Logout</span>
+            </button>
+          </div>
         </aside>
 
         <main className="main-content">

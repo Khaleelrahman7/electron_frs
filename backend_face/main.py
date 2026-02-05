@@ -16,6 +16,8 @@ from auth.middleware import RBACMiddleware
 from auth.routes import router as auth_router
 from auth.user_routes import router as user_router
 from auth.camera_routes import router as camera_router
+from auth.storage import ensure_auth_data_dir
+from auth.users import list_users, create_user
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -28,6 +30,33 @@ app = FastAPI(
     description="Unified API for face recognition, camera management, registration, and video processing",
     version="1.0.0"
 )
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize system on startup"""
+    try:
+        # 1. Ensure auth data directory exists
+        ensure_auth_data_dir()
+        logger.info("✓ Auth data directory ensured")
+        
+        # 2. Check and create default SuperAdmin if needed
+        users = list_users()
+        superadmin_exists = any(user["role"] == "SuperAdmin" for user in users)
+        
+        if not superadmin_exists:
+            logger.info("Creating default SuperAdmin user...")
+            create_user(
+                username="eagleai",
+                password="Eagle@1234",
+                role="SuperAdmin",
+                created_by="system"
+            )
+            logger.info("✓ Default SuperAdmin (eagleai) created")
+        else:
+            logger.info("✓ SuperAdmin exists")
+            
+    except Exception as e:
+        logger.error(f"✗ Startup initialization failed: {e}")
 
 # Configure CORS to allow frontend requests
 app.add_middleware(

@@ -9,6 +9,7 @@ import numpy as np
 from datetime import datetime
 import cv2
 import tempfile
+import threading
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -46,7 +47,8 @@ class GalleryImage:
 class FaceMatchingService:
     def __init__(self):
         self.gallery_images: List[GalleryImage] = []
-        self.load_gallery()
+        # Load gallery in background to avoid blocking startup
+        # self.load_gallery()
 
     def load_gallery(self):
         """Load all gallery images and their encodings"""
@@ -195,6 +197,11 @@ class FaceMatchingService:
 
 # Initialize face matching service
 face_service = FaceMatchingService()
+
+@app.on_event("startup")
+async def startup_event():
+    # Load gallery in background thread
+    threading.Thread(target=face_service.load_gallery, daemon=True).start()
 
 @app.post("/api/match/one-to-many")
 async def match_face_to_gallery(

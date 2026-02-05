@@ -68,8 +68,8 @@ def check_path_permission(current_user: Dict[str, Any], path: str, method: str) 
     
     # Supervisor restrictions
     if user_role == "Supervisor":
-        # Supervisors can only access dashboard and cameras
-        allowed_paths = ["/api/dashboard", "/api/cameras", "/api/auth/me"]
+        # Supervisors can only access dashboard, cameras, and their own user data
+        allowed_paths = ["/api/dashboard", "/api/cameras", "/api/auth/me", "/api/users/"]
         return any(path.startswith(allowed) for allowed in allowed_paths)
     
     return False

@@ -1,3 +1,6 @@
+import axios from 'axios';
+import useAuthStore from '../store/authStore';
+
 // Global fetch shim to inject auth token
 (function() {
   const originalFetch = window.fetch;
@@ -5,7 +8,7 @@
   window.fetch = async function(...args) {
     const [url, options = {}] = args;
     
-    // Get auth token from localStorage
+    // Get auth token from localStorage (or store)
     const token = localStorage.getItem('auth_token');
     
     if (token && url.includes('/api/')) {
@@ -26,36 +29,34 @@
 })();
 
 // Axios interceptor for auth token injection
-if (typeof window !== 'undefined' && window.axios) {
-  window.axios.interceptors.request.use(
-    function(config) {
-      const token = localStorage.getItem('auth_token');
-      if (token && config.url.includes('/api/')) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
-      return config;
-    },
-    function(error) {
-      return Promise.reject(error);
+// We modify the default instance which is used when importing 'axios'
+axios.interceptors.request.use(
+  function(config) {
+    const token = localStorage.getItem('auth_token');
+    if (token && config.url && config.url.includes('/api/')) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
-  );
+    return config;
+  },
+  function(error) {
+    return Promise.reject(error);
+  }
+);
 
-  // Response interceptor to handle auth errors
-  window.axios.interceptors.response.use(
-    function(response) {
-      return response;
-    },
-    function(error) {
-      if (error.response && error.response.status === 401) {
-        // Clear invalid token
-        localStorage.removeItem('auth_token');
-        // You could also redirect to login here if needed
-        console.warn('Authentication token invalid, please login again');
-      }
-      return Promise.reject(error);
+// Response interceptor to handle auth errors
+axios.interceptors.response.use(
+  function(response) {
+    return response;
+  },
+  function(error) {
+    if (error.response && error.response.status === 401) {
+      // Clear invalid token and logout via store
+      console.warn('Authentication token invalid, logging out...');
+      useAuthStore.getState().logout();
     }
-  );
-}
+    return Promise.reject(error);
+  }
+);
 
 // Export helper functions for manual API calls
 export const apiRequest = async (url, options = {}) => {
