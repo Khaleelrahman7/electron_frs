@@ -1,3 +1,5 @@
+import axios from 'axios';
+
 // Global fetch shim to inject auth token
 (function() {
   const originalFetch = window.fetch;
@@ -26,36 +28,33 @@
 })();
 
 // Axios interceptor for auth token injection
-if (typeof window !== 'undefined' && window.axios) {
-  window.axios.interceptors.request.use(
-    function(config) {
-      const token = localStorage.getItem('auth_token');
-      if (token && config.url.includes('/api/')) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
-      return config;
-    },
-    function(error) {
-      return Promise.reject(error);
+axios.interceptors.request.use(
+  function(config) {
+    const token = localStorage.getItem('auth_token');
+    const url = config?.url || '';
+    if (token && url.includes('/api/')) {
+      config.headers = config.headers || {};
+      config.headers.Authorization = `Bearer ${token}`;
     }
-  );
+    return config;
+  },
+  function(error) {
+    return Promise.reject(error);
+  }
+);
 
-  // Response interceptor to handle auth errors
-  window.axios.interceptors.response.use(
-    function(response) {
-      return response;
-    },
-    function(error) {
-      if (error.response && error.response.status === 401) {
-        // Clear invalid token
-        localStorage.removeItem('auth_token');
-        // You could also redirect to login here if needed
-        console.warn('Authentication token invalid, please login again');
-      }
-      return Promise.reject(error);
+axios.interceptors.response.use(
+  function(response) {
+    return response;
+  },
+  function(error) {
+    if (error?.response?.status === 401) {
+      localStorage.removeItem('auth_token');
+      console.warn('Authentication token invalid, please login again');
     }
-  );
-}
+    return Promise.reject(error);
+  }
+);
 
 // Export helper functions for manual API calls
 export const apiRequest = async (url, options = {}) => {

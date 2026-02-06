@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8005';
+import { API_BASE_URL } from '../utils/apiConfig';
 
 const useAuthStore = create(
   persist(
