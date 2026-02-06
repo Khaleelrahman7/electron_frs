@@ -13,6 +13,11 @@ PUBLIC_PATHS = {
     "/"
 }
 
+PUBLIC_PATH_PREFIXES = [
+    "/api/gallery/image",
+    "/api/captured/image"
+]
+
 ROLE_HIERARCHY = {
     "SuperAdmin": ["Admin", "Supervisor"],
     "Admin": ["Supervisor"],
@@ -97,7 +102,7 @@ class RBACMiddleware:
         method = scope.get("method", "GET")
         
         # Allow public paths
-        if path in PUBLIC_PATHS:
+        if path in PUBLIC_PATHS or any(path.startswith(prefix) for prefix in PUBLIC_PATH_PREFIXES):
             await self.app(scope, receive, send)
             return
         

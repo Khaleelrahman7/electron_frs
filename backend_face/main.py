@@ -29,6 +29,9 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Add RBAC middleware for authentication and authorization
+app.add_middleware(RBACMiddleware)
+
 # Configure CORS to allow frontend requests
 app.add_middleware(
     CORSMiddleware,
@@ -37,9 +40,6 @@ app.add_middleware(
     allow_methods=["*"],  # Allows all methods
     allow_headers=["*"],  # Allows all headers
 )
-
-# Add RBAC middleware for authentication and authorization
-app.add_middleware(RBACMiddleware)
 
 # Mount individual service applications
 def mount_services():
