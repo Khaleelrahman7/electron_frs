@@ -61,22 +61,5 @@
     "created_at": "2026-02-04T10:47:18.207884+00:00",
     "updated_at": "2026-02-04T10:54:15.638978+00:00",
     "hashed_password": "$2b$12$WuF76hHPE7d/zv3a6ouf/uhMWOgW5K/MKnFw2/W8G1hBjZcPIxRDq"
-  },
-  "testuser": {
-    "id": "test-user-123",
-    "username": "testuser",
-    "role": "Supervisor",
-    "created_by": "system",
-    "menus": [
-      "dashboard",
-      "analytics",
-      "registration"
-    ],
-    "camera_limit": 5,
-    "assigned_cameras": [],
-    "is_active": true,
-    "created_at": "2026-02-05T12:00:00+00:00",
-    "updated_at": "2026-02-05T12:00:00+00:00",
-    "hashed_password": "$2b$12$/3f6Yyz4tT2vNy7LNtWo2.E5IL6/BUtUCSIo82P/lyB/slrVn7..S"
   }
 }
