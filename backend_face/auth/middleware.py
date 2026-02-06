@@ -8,7 +8,9 @@ security = HTTPBearer()
 
 PUBLIC_PATHS = {
     "/api/auth/login",
-    "/api/auth/bootstrap/superadmin"
+    "/api/auth/bootstrap/superadmin",
+    "/api/status",
+    "/"
 }
 
 ROLE_HIERARCHY = {
@@ -68,8 +70,16 @@ def check_path_permission(current_user: Dict[str, Any], path: str, method: str) 
     
     # Supervisor restrictions
     if user_role == "Supervisor":
-        # Supervisors can only access dashboard and cameras
-        allowed_paths = ["/api/dashboard", "/api/cameras", "/api/auth/me"]
+        # Supervisors can access dashboard, cameras, analytics, registration, collections, and events
+        allowed_paths = [
+            "/api/dashboard", 
+            "/api/cameras", 
+            "/api/auth/me",
+            "/api/analytics",
+            "/api/registration",
+            "/api/collections",
+            "/api/events"
+        ]
         return any(path.startswith(allowed) for allowed in allowed_paths)
     
     return False
