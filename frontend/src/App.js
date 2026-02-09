@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import './App.css';
 import FaceGallery from './components/FaceGallery';
 import EventsWidget from './components/EventsWidget';
@@ -11,23 +11,15 @@ import { CameraProvider } from './components/camera/CameraManager';
 import SimpleCameraManager from './components/camera/SimpleCameraManager';
 import StreamViewer from './components/StreamViewer';
 import AnimatedLoginPage from './components/auth/AnimatedLoginPage';
+import UserManagement from './components/admin/UserManagement';
+import MainLayout from './components/layout/MainLayout';
 import useAuthStore from './store/authStore';
 import { detectBackendUrl, API_BASE_URL } from './utils/apiConfig';
-
-// Import SVG icons
-import { ReactComponent as GalleryIcon } from './icon/gallery.svg';
-import { ReactComponent as EventsIcon } from './icon/Events.svg';
-import { ReactComponent as RegistrationIcon } from './icon/registration.svg';
-import { ReactComponent as FaceMatchingIcon } from './icon/face_matching.svg';
-import { ReactComponent as VideoIcon } from './icon/video_processing.svg';
-import { ReactComponent as CameraIcon } from './icon/camera.svg';
-import { ReactComponent as StreamViewerIcon } from './icon/stream_viewer.svg';
-import { ReactComponent as DashboardIcon } from './icon/dashboard.svg';
 
 const AppContent = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isCheckingBackend, setIsCheckingBackend] = useState(true);
-  const { isAuthenticated, user, logout } = useAuthStore();
+  const { isAuthenticated } = useAuthStore();
 
   useEffect(() => {
     // Auto-detect backend URL and switch if necessary
@@ -67,21 +59,10 @@ const AppContent = () => {
     checkBackend();
   }, []);
 
-  const tabs = [
-    { id: 'dashboard', label: 'Dashboard', icon: <DashboardIcon /> },
-    { id: 'registration', label: 'Registration', icon: <RegistrationIcon /> },
-    { id: 'gallery', label: 'Gallery', icon: <GalleryIcon /> },
-    { id: 'events', label: 'Events', icon: <EventsIcon /> },
-    { id: 'matching', label: 'Face Matching', icon: <FaceMatchingIcon /> },
-    { id: 'video', label: 'Video Processing', icon: <VideoIcon /> },
-    { id: 'camera', label: 'Camera Management', icon: <CameraIcon /> },
-    { id: 'stream-viewer', label: 'Stream Viewer', icon: <StreamViewerIcon /> },
-  ];
-
   const renderActiveComponent = () => {
     if (isCheckingBackend) {
       return (
-        <div className="loading-screen">
+        <div className="loading-container">
           <div className="loading-spinner"></div>
           <h2>Connecting to Server...</h2>
           <p>Checking available connection points...</p>
@@ -110,6 +91,8 @@ const AppContent = () => {
         );
       case 'stream-viewer':
         return <StreamViewer />;
+      case 'users':
+        return <UserManagement />;
       default:
         return <Dashboard />;
     }
@@ -121,45 +104,9 @@ const AppContent = () => {
   }
 
   return (
-    <div className="app">
-      <div className="app-layout">
-        <aside className="sidebar">
-          <div className="sidebar-header">
-            <h1>Face Recognition System</h1>
-            {user && (
-              <div className="user-info">
-                <span className="user-role">{user.role}</span>
-              </div>
-            )}
-          </div>
-          <div className="sidebar-footer">
-            {user && (
-              <button className="logout-button" onClick={logout}>
-                <span className="logout-icon">🚪</span>
-                <span className="logout-label">Logout</span>
-              </button>
-            )}
-          </div>
-          <nav className="sidebar-navigation">
-            {tabs.map(tab => (
-              <button
-                key={tab.id}
-                className={`sidebar-button ${activeTab === tab.id ? 'active' : ''}`}
-                onClick={() => setActiveTab(tab.id)}
-                title={tab.label}
-              >
-                <span className="sidebar-icon">{tab.icon}</span>
-                <span className="sidebar-label">{tab.label}</span>
-              </button>
-            ))}
-          </nav>
-        </aside>
-
-        <main className="main-content">
-          {renderActiveComponent()}
-        </main>
-      </div>
-    </div>
+    <MainLayout activeTab={activeTab} onTabChange={setActiveTab}>
+      {renderActiveComponent()}
+    </MainLayout>
   );
 };
 

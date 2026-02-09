@@ -36,6 +36,7 @@ const useAuthStore = create(
             user: {
               username: data.username,
               role: data.role,
+              assigned_menus: data.assigned_menus,
             },
             token: data.access_token,
             isAuthenticated: true,
@@ -129,7 +130,12 @@ const useAuthStore = create(
 
       hasMenuAccess: (menu) => {
         const { user } = get();
-        return user?.assigned_menus?.includes(menu) || false;
+        const menus = (user?.assigned_menus || []).map(m => {
+          if (m === 'cameras') return 'camera';
+          if (m === 'admin') return 'users';
+          return m;
+        });
+        return menus.includes(menu);
       },
     }),
     {

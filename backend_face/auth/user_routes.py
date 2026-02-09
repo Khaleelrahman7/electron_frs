@@ -13,11 +13,16 @@ class CreateUserRequest(BaseModel):
     username: str
     password: str
     role: str
+    max_users_limit: Optional[int] = 0
+    max_cameras_limit: Optional[int] = 0
+    assigned_menus: Optional[List[str]] = None
 
 class UpdateUserRequest(BaseModel):
     is_active: Optional[bool] = None
     assigned_cameras: Optional[List[str]] = None
     assigned_menus: Optional[List[str]] = None
+    max_users_limit: Optional[int] = None
+    max_cameras_limit: Optional[int] = None
 
 class AssignCamerasRequest(BaseModel):
     camera_ids: List[str]
@@ -44,7 +49,10 @@ async def create_user_endpoint(request: CreateUserRequest, request_obj: Request)
             username=request.username,
             password=request.password,
             role=request.role,
-            created_by=current_user["username"]
+            created_by=current_user["username"],
+            max_users_limit=request.max_users_limit or 0,
+            max_cameras_limit=request.max_cameras_limit or 0,
+            assigned_menus=request.assigned_menus
         )
         return {"message": "User created successfully", "user": user}
     except ValueError as e:

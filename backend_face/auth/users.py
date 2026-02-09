@@ -2,11 +2,20 @@ from typing import Dict, Any, Optional, List
 from .storage import get_users, save_users, get_settings, save_settings
 from .security import get_password_hash, verify_password
 
-def create_user(username: str, password: str, role: str, created_by: str, is_active: bool = True) -> Dict[str, Any]:
+def create_user(username: str, password: str, role: str, created_by: str, is_active: bool = True, max_users_limit: int = 0, max_cameras_limit: int = 0, assigned_menus: List[str] = None) -> Dict[str, Any]:
     users = get_users()
     if username in users:
         raise ValueError("User already exists")
     
+    # Check if creator has permission to create more users
+    if role == "Supervisor" and created_by:
+        creator = users.get(created_by)
+        if creator and creator["role"] == "Admin":
+            current_users = sum(1 for u in users.values() if u.get("created_by") == created_by)
+            limit = creator.get("max_users_limit", 0)
+            if limit > 0 and current_users >= limit:
+                raise ValueError(f"User creation limit reached. You can only create {limit} users.")
+
     user_data = {
         "username": username,
         "hashed_password": get_password_hash(password),
@@ -15,7 +24,9 @@ def create_user(username: str, password: str, role: str, created_by: str, is_act
         "created_by": created_by,
         "created_at": "2024-01-01T00:00:00Z",  # Use proper timestamp in production
         "assigned_cameras": [],
-        "assigned_menus": get_default_menus_for_role(role)
+        "assigned_menus": assigned_menus if assigned_menus is not None else get_default_menus_for_role(role),
+        "max_users_limit": max_users_limit,
+        "max_cameras_limit": max_cameras_limit
     }
     users[username] = user_data
     save_users(users)
@@ -31,7 +42,7 @@ def update_user(username: str, updates: Dict[str, Any]) -> Optional[Dict[str, An
         return None
     
     user = users[username]
-    allowed_updates = ["is_active", "assigned_cameras", "assigned_menus"]
+    allowed_updates = ["is_active", "assigned_cameras", "assigned_menus", "max_users_limit", "max_cameras_limit"]
     for key, value in updates.items():
         if key in allowed_updates:
             user[key] = value
@@ -74,12 +85,23 @@ def can_assign_cameras(admin_username: str, target_username: str, camera_count: 
     if admin["role"] == "Admin" and target["role"] != "Supervisor":
         return False, "Admins can only assign cameras to Supervisors"
     
-    settings = get_settings()
-    max_cameras = settings.get(f"max_cameras_per_{target['role'].lower()}", 5)
-    
-    current_cameras = len(target.get("assigned_cameras", []))
-    if current_cameras + camera_count > max_cameras:
-        return False, f"Would exceed maximum cameras ({max_cameras}) for {target['role']}"
+    # Check Admin's limit if Admin is assigning to themselves (or if SuperAdmin is assigning to Admin)
+    # Actually, if target is Admin, we check their limit
+    if target["role"] == "Admin":
+        limit = target.get("max_cameras_limit", 0)
+        current_cameras = len(target.get("assigned_cameras", []))
+        if limit > 0 and current_cameras + camera_count > limit:
+            return False, f"Would exceed maximum cameras ({limit}) for Admin {target_username}"
+
+    # Global/System settings check for Supervisors (optional, can be overridden by specific logic if needed)
+    # But usually Supervisors don't have a limit unless specified. 
+    # Let's keep the global check for Supervisors for backward compatibility or safety
+    if target["role"] == "Supervisor":
+        settings = get_settings()
+        max_cameras = settings.get(f"max_cameras_per_{target['role'].lower()}", 5)
+        current_cameras = len(target.get("assigned_cameras", []))
+        if current_cameras + camera_count > max_cameras:
+            return False, f"Would exceed maximum cameras ({max_cameras}) for {target['role']}"
     
     return True, ""
 
@@ -91,6 +113,13 @@ def assign_cameras_to_user(admin_username: str, target_username: str, camera_ids
     if not admin or not target:
         return False, "User not found"
     
+    # Validation: Admin can only assign cameras they have access to
+    if admin["role"] == "Admin":
+        admin_cameras = set(admin.get("assigned_cameras", []))
+        cameras_to_assign = set(camera_ids)
+        if not cameras_to_assign.issubset(admin_cameras):
+            return False, "You can only assign cameras that you have access to"
+
     can_assign, reason = can_assign_cameras(admin_username, target_username, len(camera_ids))
     if not can_assign:
         return False, reason
@@ -100,7 +129,15 @@ def assign_cameras_to_user(admin_username: str, target_username: str, camera_ids
     
     # Check for exclusive assignment conflicts
     for username, user_data in users.items():
-        if username != target_username and user_data.get("role") in ["Admin", "Supervisor"]:
+        if username == target_username:
+            continue
+            
+        # Allow Admin to share cameras with their Supervisors (delegation)
+        # So if the existing owner is the Admin assigning the camera, it's allowed.
+        if username == admin_username:
+            continue
+
+        if user_data.get("role") in ["Admin", "Supervisor"]:
             existing_cameras = set(user_data.get("assigned_cameras", []))
             conflicts = existing_cameras.intersection(new_cameras)
             if conflicts:

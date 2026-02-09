@@ -18,6 +18,7 @@ class LoginResponse(BaseModel):
     token_type: str
     role: str
     username: str
+    assigned_menus: list
 
 class BootstrapSuperAdminRequest(BaseModel):
     username: str
@@ -29,6 +30,8 @@ class UserResponse(BaseModel):
     is_active: bool
     assigned_cameras: list
     assigned_menus: list
+    max_users_limit: Optional[int] = 0
+    max_cameras_limit: Optional[int] = 0
 
 @router.post("/login", response_model=LoginResponse)
 async def login(request: LoginRequest):
@@ -56,7 +59,8 @@ async def login(request: LoginRequest):
         access_token=access_token,
         token_type="bearer",
         role=auth_user["role"],
-        username=auth_user["username"]
+        username=auth_user["username"],
+        assigned_menus=auth_user.get("assigned_menus", auth_user.get("menus", []))
     )
 
 @router.get("/me", response_model=UserResponse)
@@ -70,7 +74,9 @@ async def get_current_user(request: Request):
         role=user["role"],
         is_active=user.get("is_active", True),
         assigned_cameras=user.get("assigned_cameras", []),
-        assigned_menus=user.get("assigned_menus", [])
+        assigned_menus=user.get("assigned_menus", user.get("menus", [])),
+        max_users_limit=user.get("max_users_limit", 0),
+        max_cameras_limit=user.get("max_cameras_limit", 0)
     )
 
 @router.post("/bootstrap/superadmin")

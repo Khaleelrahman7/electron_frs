@@ -28,7 +28,7 @@ const AnimatedLoginPage = () => {
       coin.className = 'auth-coin';
       if (role) {
         coin.classList.add(`coin-${role}`);
-        coinText.textContent = role === 'superadmin' ? 'SUPER\nADMIN' : role === 'admin' ? 'ADMIN' : 'SUPERVISOR';
+        coinText.textContent = role === 'SuperAdmin' ? 'SUPER\nADMIN' : role === 'Admin' ? 'ADMIN' : 'SUPERVISOR';
       } else {
         coinText.textContent = 'SELECT\nROLE';
       }
@@ -204,9 +204,9 @@ const AnimatedLoginPage = () => {
                   required
                 >
                   <option value="">SELECT ROLE</option>
-                  <option value="superadmin">SUPER ADMIN</option>
-                  <option value="admin">ADMIN</option>
-                  <option value="supervisor">SUPERVISOR</option>
+                  <option value="SuperAdmin">SUPER ADMIN</option>
+                  <option value="Admin">ADMIN</option>
+                  <option value="Supervisor">SUPERVISOR</option>
                 </select>
               </div>
 
