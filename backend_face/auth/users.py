@@ -2,7 +2,7 @@ from typing import Dict, Any, Optional, List
 from .storage import get_users, save_users, get_settings, save_settings
 from .security import get_password_hash, verify_password
 
-def create_user(username: str, password: str, role: str, created_by: str, is_active: bool = True, max_users_limit: int = 0, max_cameras_limit: int = 0, assigned_menus: List[str] = None) -> Dict[str, Any]:
+def create_user(username: str, password: str, role: str, created_by: str, is_active: bool = True, max_users_limit: int = 0, max_cameras_limit: int = 0, assigned_menus: List[str] = None, license_start_date: Optional[str] = None, license_end_date: Optional[str] = None) -> Dict[str, Any]:
     users = get_users()
     if username in users:
         raise ValueError("User already exists")
@@ -28,6 +28,10 @@ def create_user(username: str, password: str, role: str, created_by: str, is_act
         "max_users_limit": max_users_limit,
         "max_cameras_limit": max_cameras_limit
     }
+    # Apply license period for Admin users if provided
+    if role == "Admin":
+        user_data["license_start_date"] = license_start_date
+        user_data["license_end_date"] = license_end_date
     users[username] = user_data
     save_users(users)
     return user_data
@@ -42,7 +46,7 @@ def update_user(username: str, updates: Dict[str, Any]) -> Optional[Dict[str, An
         return None
     
     user = users[username]
-    allowed_updates = ["is_active", "assigned_cameras", "assigned_menus", "max_users_limit", "max_cameras_limit"]
+    allowed_updates = ["is_active", "assigned_cameras", "assigned_menus", "max_users_limit", "max_cameras_limit", "license_start_date", "license_end_date"]
     for key, value in updates.items():
         if key in allowed_updates:
             user[key] = value

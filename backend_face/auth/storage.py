@@ -51,3 +51,13 @@ def get_cameras() -> Dict[str, Any]:
 
 def save_cameras(cameras: Dict[str, Any]):
     atomic_write_json(CAMERAS_FILE, cameras)
+
+def _tokens_file() -> Path:
+    return AUTH_DATA_DIR / "tokens.json"
+
+def get_tokens() -> Dict[str, Any]:
+    return load_json(_tokens_file(), {})
+
+def save_tokens(tokens: Dict[str, Any]):
+    ensure_auth_data_dir()
+    atomic_write_json(_tokens_file(), tokens)

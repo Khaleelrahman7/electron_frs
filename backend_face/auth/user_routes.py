@@ -16,6 +16,8 @@ class CreateUserRequest(BaseModel):
     max_users_limit: Optional[int] = 0
     max_cameras_limit: Optional[int] = 0
     assigned_menus: Optional[List[str]] = None
+    license_start_date: Optional[str] = None
+    license_end_date: Optional[str] = None
 
 class UpdateUserRequest(BaseModel):
     is_active: Optional[bool] = None
@@ -23,6 +25,8 @@ class UpdateUserRequest(BaseModel):
     assigned_menus: Optional[List[str]] = None
     max_users_limit: Optional[int] = None
     max_cameras_limit: Optional[int] = None
+    license_start_date: Optional[str] = None
+    license_end_date: Optional[str] = None
 
 class AssignCamerasRequest(BaseModel):
     camera_ids: List[str]
@@ -52,7 +56,9 @@ async def create_user_endpoint(request: CreateUserRequest, request_obj: Request)
             created_by=current_user["username"],
             max_users_limit=request.max_users_limit or 0,
             max_cameras_limit=request.max_cameras_limit or 0,
-            assigned_menus=request.assigned_menus
+            assigned_menus=request.assigned_menus,
+            license_start_date=request.license_start_date,
+            license_end_date=request.license_end_date
         )
         return {"message": "User created successfully", "user": user}
     except ValueError as e:

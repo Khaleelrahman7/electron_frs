@@ -18,17 +18,15 @@ def get_password_hash(password: str) -> str:
 
 def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
+    # Non-expiring token: do not include exp claim; include issued-at for traceability
+    to_encode.update({"iat": int(datetime.utcnow().timestamp())})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
 def verify_token(token: str) -> Optional[Dict[str, Any]]:
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        # Ignore expiration entirely
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_exp": False})
         username: str = payload.get("sub")
         role: str = payload.get("role")
         if username is None or role is None:

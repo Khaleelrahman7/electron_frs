@@ -17,7 +17,7 @@ import {
 import './MainLayout.css';
 
 const MainLayout = ({ children, activeTab, onTabChange }) => {
-  const { user, logout } = useAuthStore();
+  const { user, logout, isLicenseExpired } = useAuthStore();
   const [collapsed, setCollapsed] = React.useState(false);
 
   const tabs = [
@@ -115,6 +115,12 @@ const MainLayout = ({ children, activeTab, onTabChange }) => {
             </div>
           </div>
         </header>
+        
+        {user?.role === 'Admin' && isLicenseExpired() && (
+          <div style={{ padding: '12px 16px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', margin: '12px 16px', borderRadius: 8 }}>
+            Licence expired. Please contact SuperAdmin to renew access.
+          </div>
+        )}
         
         <div className="content-wrapper">
           {children}

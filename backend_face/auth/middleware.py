@@ -3,6 +3,8 @@ from fastapi import HTTPException, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from .security import verify_token
 from .users import get_user
+from datetime import datetime, timezone
+from .storage import get_tokens
 
 security = HTTPBearer()
 
@@ -38,6 +40,20 @@ def get_current_user_from_token(token: str) -> Optional[Dict[str, Any]]:
         return None
     
     return user
+
+def is_admin_license_valid(user: Dict[str, Any]) -> bool:
+    if user.get("role") != "Admin":
+        return True
+    end_str = user.get("license_end_date")
+    if not end_str:
+        # No license specified -> treat as valid (unlimited) for backward compatibility
+        return True
+    try:
+        end_dt = datetime.fromisoformat(end_str.replace("Z", "+00:00"))
+    except Exception:
+        return False
+    now = datetime.now(timezone.utc)
+    return end_dt >= now
 
 def check_permission(current_user: Dict[str, Any], required_role: str) -> bool:
     user_role = current_user.get("role")
@@ -126,6 +142,17 @@ class RBACMiddleware:
             await self.send_unauthorized(send)
             return
         
+        # Check token is active (not revoked)
+        tokens = get_tokens()
+        if token not in tokens:
+            await self.send_unauthorized(send)
+            return
+        
+        # Enforce Admin license on all protected endpoints
+        if current_user.get("role") == "Admin" and not is_admin_license_valid(current_user):
+            await self.send_forbidden(send, message=b'{"detail": "License expired. Contact SuperAdmin."}')
+            return
+        
         # Check path permissions
         if not check_path_permission(current_user, path, method):
             await self.send_forbidden(send)
@@ -146,7 +173,7 @@ class RBACMiddleware:
             "body": b'{"detail": "Not authenticated"}',
         })
     
-    async def send_forbidden(self, send):
+    async def send_forbidden(self, send, message: bytes = b'{"detail": "Not enough permissions"}'):
         await send({
             "type": "http.response.start",
             "status": 403,
@@ -154,5 +181,5 @@ class RBACMiddleware:
         })
         await send({
             "type": "http.response.body",
-            "body": b'{"detail": "Not enough permissions"}',
+            "body": message,
         })

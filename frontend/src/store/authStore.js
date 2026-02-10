@@ -37,6 +37,8 @@ const useAuthStore = create(
               username: data.username,
               role: data.role,
               assigned_menus: data.assigned_menus,
+              license_start_date: data.license_start_date,
+              license_end_date: data.license_end_date,
             },
             token: data.access_token,
             isAuthenticated: true,
@@ -58,6 +60,16 @@ const useAuthStore = create(
       },
 
       logout: () => {
+        const { token } = get();
+        // Attempt server-side revocation
+        if (token) {
+          fetch(`${API_BASE_URL}/api/auth/logout`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          }).catch(() => {});
+        }
         set({
           user: null,
           token: null,
@@ -136,6 +148,15 @@ const useAuthStore = create(
           return m;
         });
         return menus.includes(menu);
+      },
+      
+      isLicenseExpired: () => {
+        const { user } = get();
+        if (!user) return false;
+        if (user.role !== 'Admin') return false;
+        const end = user.license_end_date ? new Date(user.license_end_date) : null;
+        if (!end) return true;
+        return end.getTime() < Date.now();
       },
     }),
     {

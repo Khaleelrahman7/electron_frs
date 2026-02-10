@@ -17,7 +17,10 @@ const UserManagement = () => {
     role: 'Admin',
     max_users_limit: 0,
     max_cameras_limit: 0,
-    assigned_menus: []
+    assigned_menus: [],
+    license_duration: '1y', // '1y' | '2y' | 'custom'
+    license_start_date: '',
+    license_end_date: ''
   });
 
   const availableMenus = [
@@ -65,6 +68,28 @@ const UserManagement = () => {
     }));
   };
 
+  const handleLicenseDurationChange = (e) => {
+    const value = e.target.value;
+    const now = new Date();
+    let startISO = new Date(now).toISOString();
+    let endISO = '';
+    if (value === '1y') {
+      const end = new Date(now);
+      end.setFullYear(end.getFullYear() + 1);
+      endISO = end.toISOString();
+    } else if (value === '2y') {
+      const end = new Date(now);
+      end.setFullYear(end.getFullYear() + 2);
+      endISO = end.toISOString();
+    }
+    setFormData(prev => ({
+      ...prev,
+      license_duration: value,
+      license_start_date: value === 'custom' ? prev.license_start_date : startISO,
+      license_end_date: value === 'custom' ? prev.license_end_date : endISO
+    }));
+  };
+
   const handleMenuChange = (menuId) => {
     setFormData(prev => {
       const currentMenus = prev.assigned_menus || [];
@@ -91,6 +116,21 @@ const UserManagement = () => {
         delete body.password; // Don't update password here for now
         delete body.username; // Can't change username
       }
+      // Normalize license fields: only include for Admin when SuperAdmin is acting
+      if (!((currentUser.role === 'SuperAdmin') && (formData.role === 'Admin'))) {
+        delete body.license_start_date;
+        delete body.license_end_date;
+        delete body.license_duration;
+      }
+      // If custom, ensure dates exist
+      if (body.license_duration === 'custom') {
+        if (!body.license_start_date || !body.license_end_date) {
+          alert('Please select start and end dates for custom licence.');
+          return;
+        }
+      }
+      // Remove duration helper from payload
+      delete body.license_duration;
 
       const response = await fetch(endpoint, {
         method,
@@ -112,7 +152,11 @@ const UserManagement = () => {
         password: '',
         role: 'Admin',
         max_users_limit: 0,
-        max_cameras_limit: 0
+        max_cameras_limit: 0,
+        assigned_menus: [],
+        license_duration: '1y',
+        license_start_date: '',
+        license_end_date: ''
       });
       setIsEditing(false);
       fetchUsers();
@@ -147,7 +191,10 @@ const UserManagement = () => {
       role: user.role,
       max_users_limit: user.max_users_limit || 0,
       max_cameras_limit: user.max_cameras_limit || 0,
-      assigned_menus: user.assigned_menus || []
+      assigned_menus: user.assigned_menus || [],
+      license_duration: 'custom',
+      license_start_date: user.license_start_date || '',
+      license_end_date: user.license_end_date || ''
     });
     setIsEditing(true);
     setShowModal(true);
@@ -201,6 +248,7 @@ const UserManagement = () => {
               <th>Created By</th>
               {currentUser.role === 'SuperAdmin' && <th>Max Users</th>}
               <th>Max Cameras</th>
+              {currentUser.role === 'SuperAdmin' && <th>Licence End</th>}
               <th>Assigned Cameras</th>
               <th>Actions</th>
             </tr>
@@ -217,6 +265,9 @@ const UserManagement = () => {
                 <td>{user.created_by || '-'}</td>
                 {currentUser.role === 'SuperAdmin' && <td>{user.max_users_limit || 'Unlimited'}</td>}
                 <td>{user.max_cameras_limit || 'Unlimited'}</td>
+                {currentUser.role === 'SuperAdmin' && (
+                  <td>{user.license_end_date ? new Date(user.license_end_date).toLocaleDateString() : '-'}</td>
+                )}
                 <td>{user.assigned_cameras ? user.assigned_cameras.length : 0}</td>
                 <td className="actions-cell">
                   <div className="actions-wrapper">
@@ -310,6 +361,42 @@ const UserManagement = () => {
                       />
                       <small>Set to 0 for unlimited cameras</small>
                     </div>
+                    <div className="form-group">
+                      <label>Licence Duration</label>
+                      <select name="license_duration" value={formData.license_duration} onChange={handleLicenseDurationChange}>
+                        <option value="1y">1 Year</option>
+                        <option value="2y">2 Years</option>
+                        <option value="custom">Custom Range</option>
+                      </select>
+                    </div>
+                    {formData.license_duration === 'custom' && (
+                      <div style={{ display: 'flex', gap: 12 }}>
+                        <div className="form-group" style={{ flex: 1 }}>
+                          <label>Start Date</label>
+                          <input
+                            type="date"
+                            name="license_start_date"
+                            value={formData.license_start_date ? formData.license_start_date.substring(0, 10) : ''}
+                            onChange={(e) => {
+                              const d = new Date(e.target.value);
+                              setFormData(prev => ({ ...prev, license_start_date: new Date(d).toISOString() }));
+                            }}
+                          />
+                        </div>
+                        <div className="form-group" style={{ flex: 1 }}>
+                          <label>End Date</label>
+                          <input
+                            type="date"
+                            name="license_end_date"
+                            value={formData.license_end_date ? formData.license_end_date.substring(0, 10) : ''}
+                            onChange={(e) => {
+                              const d = new Date(e.target.value);
+                              setFormData(prev => ({ ...prev, license_end_date: new Date(d).toISOString() }));
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
                   </>
                 )}
 
