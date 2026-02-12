@@ -151,6 +151,7 @@ const UserManagement = () => {
         username: '',
         password: '',
         role: 'Admin',
+        email: '',
         max_users_limit: 0,
         max_cameras_limit: 0,
         assigned_menus: [],
@@ -189,6 +190,7 @@ const UserManagement = () => {
       username: user.username,
       password: '', // Password not required for edit
       role: user.role,
+      email: user.email || '',
       max_users_limit: user.max_users_limit || 0,
       max_cameras_limit: user.max_cameras_limit || 0,
       assigned_menus: user.assigned_menus || [],
@@ -245,6 +247,7 @@ const UserManagement = () => {
             <tr>
               <th>Username</th>
               <th>Role</th>
+              <th>Email</th>
               <th>Created By</th>
               {currentUser.role === 'SuperAdmin' && <th>Max Users</th>}
               <th>Max Cameras</th>
@@ -262,6 +265,7 @@ const UserManagement = () => {
                     <Shield size={12} /> {user.role}
                   </span>
                 </td>
+                <td>{user.email || '-'}</td>
                 <td>{user.created_by || '-'}</td>
                 {currentUser.role === 'SuperAdmin' && <td>{user.max_users_limit || 'Unlimited'}</td>}
                 <td>{user.max_cameras_limit || 'Unlimited'}</td>
@@ -334,6 +338,17 @@ const UserManagement = () => {
                     {currentUser.role === 'SuperAdmin' && <option value="Admin">Admin</option>}
                     <option value="Supervisor">Supervisor</option>
                   </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Email (for notifications)</label>
+                  <input
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    placeholder="Enter email address"
+                  />
                 </div>
 
                 {/* License Controls - Only visible if creating Admin or if SuperAdmin is editing */}

@@ -400,13 +400,14 @@ class VideoThread(QThread):
                 
                 # Draw label
                 label = f"{name} ({confidence:.1f}%)"
+                (label_w, label_h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 1.2, 2)
                 cv2.rectangle(display_frame, 
-                            (expanded_left, expanded_top - 28), 
-                            (expanded_left + len(label)*10, expanded_top), 
+                            (expanded_left, expanded_top - label_h - 10), 
+                            (expanded_left + label_w, expanded_top), 
                             color, -1)
                 cv2.putText(display_frame, label, 
                           (expanded_left, expanded_top - 5),
-                          cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2)
+                          cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 255, 255), 2)
             
             return display_frame, annotations
             

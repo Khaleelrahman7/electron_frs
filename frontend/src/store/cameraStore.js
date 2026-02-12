@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { extractIPFromStreamURL } from '../utils/ipValidation';
+import useAuthStore from './authStore';
 
 // Import from centralized config
 import { API_BASE_URL } from '../utils/apiConfig';
@@ -24,9 +25,14 @@ export const useCameraStore = create((set, get) => ({
 
   // Fetch cameras with pagination
   fetchCameras: async (page = 1) => {
+    const { token } = useAuthStore.getState();
     set({ loading: true, error: null });
     try {
-      const response = await fetch(`${API_BASE_URL}/api/collections/cameras?page=${page}&per_page=6`);
+      const response = await fetch(`${API_BASE_URL}/api/collections/cameras?page=${page}&per_page=6`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -52,12 +58,14 @@ export const useCameraStore = create((set, get) => ({
 
   // Add new camera
   addCamera: async (name, streamUrl, collectionId = null, location = '') => {
+    const { token } = useAuthStore.getState();
     set({ loading: true, error: null });
     try {
       const response = await fetch(`${API_BASE_URL}/api/collections/cameras`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           name: name.trim(),
@@ -93,6 +101,7 @@ export const useCameraStore = create((set, get) => ({
 
   // Update camera
   updateCamera: async (cameraId, updates) => {
+    const { token } = useAuthStore.getState();
     set({ loading: true, error: null });
     try {
       // Map frontend field names to backend field names
@@ -110,6 +119,7 @@ export const useCameraStore = create((set, get) => ({
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(backendUpdates),
       });
@@ -140,10 +150,14 @@ export const useCameraStore = create((set, get) => ({
 
   // Remove camera
   removeCamera: async (cameraId) => {
+    const { token } = useAuthStore.getState();
     set({ loading: true, error: null });
     try {
       const response = await fetch(`${API_BASE_URL}/api/collections/cameras/${cameraId}`, {
         method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       });
 
       if (!response.ok) {
@@ -172,11 +186,13 @@ export const useCameraStore = create((set, get) => ({
 
   // Validate camera data
   validateCamera: async (ip, streamUrl, collectionName = null, excludeIp = null) => {
+    const { token } = useAuthStore.getState();
     try {
       const response = await fetch(`${API_BASE_URL}/api/collections/validate-camera`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           ip,

@@ -4,6 +4,7 @@ import { API_BASE_URL } from '../../utils/apiConfig';
 import './CollectionManager.css';
 
 import { Edit, Trash, Video, Monitor, Play, Square } from 'lucide-react';
+import useAuthStore from '../../store/authStore';
 // import DraggableVideoCell from './DraggableVideoCell'; // Temporarily disabled due to missing dependencies
 
 // MJPEG StreamPlayer component for real camera streaming
@@ -13,6 +14,7 @@ const StreamPlayer = ({ cameraId, cameraName, rtspUrl, isStreaming, onStreamStar
   const [streamStarted, setStreamStarted] = useState(false);
   const [streamUrl, setStreamUrl] = useState(null);
   const imgRef = useRef(null);
+  const { token } = useAuthStore();
 
   const startMJPEGStream = useCallback(async () => {
     try {
@@ -21,7 +23,8 @@ const StreamPlayer = ({ cameraId, cameraName, rtspUrl, isStreaming, onStreamStar
       setStreamError(false);
 
       // Use the enhanced stream endpoint for camera management cameras
-      const enhancedStreamUrl = `${API_BASE_URL}/api/collections/cameras/${cameraId}/stream`;
+      // Append auth token as query parameter for <img> tag compatibility
+      const enhancedStreamUrl = `${API_BASE_URL}/api/collections/cameras/${cameraId}/stream${token ? `?token=${token}` : ''}`;
       setStreamUrl(enhancedStreamUrl);
       setStreamStarted(true);
       setIsLoading(false);
@@ -70,6 +73,13 @@ const StreamPlayer = ({ cameraId, cameraName, rtspUrl, isStreaming, onStreamStar
     console.error(`❌ MJPEG stream error for camera ${cameraId}:`, event.target?.src);
     setStreamError(true);
     setIsLoading(false);
+    
+    // Auto-retry once on image error
+    if (!streamUrl?.includes('retry=')) {
+      console.log('Attempting auto-retry for image error...');
+      setTimeout(retryStream, 1000);
+    }
+
     if (onStreamError) {
       onStreamError('Stream connection failed');
     }
@@ -79,12 +89,15 @@ const StreamPlayer = ({ cameraId, cameraName, rtspUrl, isStreaming, onStreamStar
     console.log(`Retrying MJPEG stream for camera ${cameraId}`);
     setStreamError(false);
     setStreamStarted(false);
-    stopMJPEGStream();
-
-    // Restart stream after a short delay
-    setTimeout(() => {
-      startMJPEGStream();
-    }, 500);
+    
+    // When retrying, we'll force a fresh URL in startMJPEGStream by adding a timestamp
+    const timestamp = Date.now();
+    const separator = token ? '&' : '?';
+    const retryUrl = `${API_BASE_URL}/api/collections/cameras/${cameraId}/stream${token ? `?token=${token}` : ''}${separator}retry=${timestamp}`;
+    
+    setStreamUrl(retryUrl);
+    setStreamStarted(true);
+    setIsLoading(false);
   };
 
   if (streamError) {
@@ -171,7 +184,11 @@ const CollectionManager = ({ onClose, onViewChange }) => {
   const fetchCameraStreams = async () => {
     setStreamsLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/collections/cameras`);
+      const response = await fetch(`${API_BASE_URL}/api/collections/cameras`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       if (response.ok) {
         const data = await response.json();
         setAllCameras(data.cameras || []);

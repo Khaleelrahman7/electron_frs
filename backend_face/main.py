@@ -16,6 +16,7 @@ from auth.middleware import RBACMiddleware
 from auth.routes import router as auth_router
 from auth.user_routes import router as user_router
 from auth.camera_routes import router as camera_router
+from auth.license_checker import start_license_checker
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -28,6 +29,11 @@ app = FastAPI(
     description="Unified API for face recognition, camera management, registration, and video processing",
     version="1.0.0"
 )
+
+@app.on_event("startup")
+async def startup_event():
+    start_license_checker()
+    logger.info("License checker background task started")
 
 # Add RBAC middleware for authentication and authorization
 app.add_middleware(RBACMiddleware)
@@ -92,7 +98,7 @@ def mount_services():
     # Mount WebRTC streaming service
     try:
         from webrtc_streaming.routes import router as webrtc_router
-        app.include_router(webrtc_router)
+        app.include_router(webrtc_router, prefix="/api/webrtc")
         logger.info("? WebRTC streaming service mounted")
     except Exception as e:
         logger.error(f"? Failed to mount WebRTC streaming service: {e}")

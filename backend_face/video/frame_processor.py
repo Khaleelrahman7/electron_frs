@@ -45,13 +45,13 @@ class FrameProcessor(QObject):
         label_y = top - 10 if top - 10 > 10 else top + 10
         
         # Add black background for text
-        (label_w, label_h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+        (label_w, label_h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 1)
         cv2.rectangle(frame, (left, label_y - label_h), 
                      (left + label_w, label_y + 10), (0, 0, 0), cv2.FILLED)
         
         # Add text
         cv2.putText(frame, label, (left, label_y),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 1)
 
     def set_confidence_threshold(self, threshold):
         """Update the confidence threshold for face detection"""

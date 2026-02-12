@@ -530,7 +530,7 @@ def process_frame(frame_bgr: np.ndarray, force_process: bool = False, stream_id:
             label,
             (x1, label_y),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.5,
+            0.8,
             (255, 255, 255),
             2,
         )

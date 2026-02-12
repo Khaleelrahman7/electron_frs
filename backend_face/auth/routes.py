@@ -18,6 +18,7 @@ class LoginResponse(BaseModel):
     token_type: str
     role: str
     username: str
+    email: Optional[str] = None
     assigned_menus: list
     license_start_date: Optional[str] = None
     license_end_date: Optional[str] = None
@@ -29,6 +30,7 @@ class BootstrapSuperAdminRequest(BaseModel):
 class UserResponse(BaseModel):
     username: str
     role: str
+    email: Optional[str] = None
     is_active: bool
     assigned_cameras: list
     assigned_menus: list
@@ -85,6 +87,7 @@ async def login(request: LoginRequest):
         token_type="bearer",
         role=auth_user["role"],
         username=auth_user["username"],
+        email=auth_user.get("email"),
         assigned_menus=auth_user.get("assigned_menus", auth_user.get("menus", [])),
         license_start_date=auth_user.get("license_start_date"),
         license_end_date=auth_user.get("license_end_date")
@@ -99,6 +102,7 @@ async def get_current_user(request: Request):
     return UserResponse(
         username=user["username"],
         role=user["role"],
+        email=user.get("email"),
         is_active=user.get("is_active", True),
         assigned_cameras=user.get("assigned_cameras", []),
         assigned_menus=user.get("assigned_menus", user.get("menus", [])),

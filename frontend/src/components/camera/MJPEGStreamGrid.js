@@ -4,7 +4,10 @@ import './MJPEGStreamGrid.css';
 
 import { API_BASE_URL } from '../../utils/apiConfig';
 
+import useAuthStore from '../../store/authStore';
+
 const MJPEGStreamGrid = ({ collectionName }) => {
+  const { token } = useAuthStore();
   const [streams, setStreams] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -32,7 +35,11 @@ const MJPEGStreamGrid = ({ collectionName }) => {
 
     try {
       // Start streams for the collection
-      const response = await axios.get(`${API_BASE_URL}/api/start_collection_streams/${collectionName}`);
+      const response = await axios.get(`${API_BASE_URL}/api/start_collection_streams/${collectionName}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       
       if (response.data.started_streams) {
         setStreams(response.data.started_streams);
@@ -57,7 +64,11 @@ const MJPEGStreamGrid = ({ collectionName }) => {
     try {
       // Stop all active streams
       for (const stream of streams) {
-        await axios.delete(`${API_BASE_URL}/api/stop_stream/${stream.stream_id}`);
+        await axios.delete(`${API_BASE_URL}/api/stop_stream/${stream.stream_id}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
       }
       setStreams([]);
     } catch (err) {
@@ -156,7 +167,7 @@ const MJPEGStreamGrid = ({ collectionName }) => {
             <div className="video-container">
               <img
                 ref={el => imgRefs.current[stream.stream_id] = el}
-                src={`${API_BASE_URL}${stream.feed_url}`}
+                src={`${API_BASE_URL}${stream.feed_url}${stream.feed_url.includes('?') ? '&' : '?'}token=${token}`}
                 alt={`Camera ${stream.camera_ip}`}
                 className="video-stream"
                 onError={() => handleImageError(stream.stream_id)}

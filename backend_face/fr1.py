@@ -173,7 +173,7 @@ def recognize_frame_insight(frame_bgr: np.ndarray,
             label_parts.append(f"det:{conf:.2f}")
         label = " | ".join(label_parts) if label_parts else "Unknown"
         label_y = y1 - 10 if y1 - 10 > 10 else y1 + 10
-        cv2.putText(frame_bgr, label, (x1, label_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
+        cv2.putText(frame_bgr, label, (x1, label_y), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2, cv2.LINE_AA)
 
     return frame_bgr
 

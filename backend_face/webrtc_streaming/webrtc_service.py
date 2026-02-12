@@ -48,6 +48,33 @@ class WebRTCStreamManager:
         """Handle WebRTC signaling messages"""
         message_type = message.get('type')
         
+        # Handle DirectWebRTCPlayer.js style signaling (Socket.io-like events)
+        if not message_type and 'room' in message and 'sdp' in message:
+            # This looks like a join_room event from DirectWebRTCPlayer.js
+            rtsp_url = message.get('rtspUrl')
+            sdp_offer = message.get('sdp')
+            logger.info(f"Received join_room style offer for RTSP URL: {rtsp_url}")
+            
+            # Send answer back immediately
+            answer_sdp = self.create_rtsp_sdp(camera_id, rtsp_url)
+            
+            # First send room_joined confirmation
+            await websocket.send_text(json.dumps({
+                'type': 'room_joined',
+                'room': message.get('room')
+            }))
+            
+            # Then send the answer
+            await websocket.send_text(json.dumps({
+                'type': 'answer',
+                'streamId': message.get('room'),
+                'sdp': {
+                    'type': 'answer',
+                    'sdp': answer_sdp
+                }
+            }))
+            return
+
         if message_type == 'start_stream':
             rtsp_url = message.get('rtsp_url')
             await self.start_rtsp_stream(connection_id, camera_id, rtsp_url, websocket)

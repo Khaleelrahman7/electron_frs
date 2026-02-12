@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useCameraStore } from '../../store/cameraStore';
+import useAuthStore from '../../store/authStore';
 import WebRTCPlayer from './WebRTCPlayer';
 import { API_BASE_URL } from '../../utils/apiConfig';
 import { parseStreamUrl, generateCameraId } from '../../utils/cameraUtils';
@@ -12,13 +13,18 @@ const CameraStreamView = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const { initializeCameraConfig } = useCameraStore();
+  const { token } = useAuthStore();
 
   useEffect(() => {
     const fetchCameras = async () => {
       try {
         setLoading(true);
         // Fetch camera configuration from the backend
-        const response = await axios.get(`${API_BASE_URL}/api/collections/cameras`);
+        const response = await axios.get(`${API_BASE_URL}/api/collections/cameras`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
 
         if (response.data.error) {
           setError(response.data.error);
@@ -35,7 +41,12 @@ const CameraStreamView = () => {
         for (const collection of Object.keys(response.data.cameras)) {
           console.log(`Starting WebRTC streams for collection: ${collection}`);
           try {
-            const collectionResponse = await axios.get(`${API_BASE_URL}/webrtc-streams/${collection}`);
+            // Updated endpoint to match the new backend implementation
+            const collectionResponse = await axios.get(`${API_BASE_URL}/api/collections/${collection}/streams`, {
+              headers: {
+                'Authorization': `Bearer ${token}`
+              }
+            });
 
             if (collectionResponse.data.error) {
               console.error(`Error starting WebRTC streams for collection ${collection}:`, collectionResponse.data.error);
@@ -74,31 +85,23 @@ const CameraStreamView = () => {
   const streamCameras = streams.map((streamInfo, index) => {
     // Extract camera IP from the stream info
     const ip = streamInfo.camera_ip || '';
-
-    // Extract collection name from the room ID if available
-    let collectionName = '';
-    if (streamInfo.room_id) {
-      const parts = streamInfo.room_id.split('_');
-      if (parts.length > 1) {
-        // The first part is the collection name, the rest is the IP
-        collectionName = parts[0].replace(/_/g, ' ');
-      }
-    }
+    const collectionName = streamInfo.collection_name || '';
 
     // Create a name for the camera
-    const name = collectionName ? `${collectionName} (${ip})` : `Camera ${index + 1}`;
+    const name = streamInfo.camera_name || (collectionName ? `${collectionName} (${ip})` : `Camera ${index + 1}`);
 
     // Generate a stable ID for the camera
-    const cameraId = (collectionName && ip)
+    const cameraId = streamInfo.camera_id || (collectionName && ip
       ? generateCameraId(collectionName, ip)
-      : `stream-${index}-${Date.now()}`;
+      : `stream-${index}-${Date.now()}`);
 
     return {
       id: cameraId,
       name: name,
       streamId: streamInfo.stream_id,
       roomId: streamInfo.room_id,
-      ip: ip
+      ip: ip,
+      collectionName: collectionName
     };
   });
 
@@ -118,6 +121,8 @@ const CameraStreamView = () => {
             <WebRTCPlayer
               streamId={camera.streamId}
               roomId={camera.roomId}
+              cameraIp={camera.ip}
+              collectionName={camera.collectionName}
             />
             <div className="camera-footer">
               <span className="camera-status">Live</span>

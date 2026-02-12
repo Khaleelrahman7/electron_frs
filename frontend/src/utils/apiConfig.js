@@ -20,8 +20,9 @@ const getApiBaseUrl = () => {
 
 export const API_BASE_URL = getApiBaseUrl();
 
-export const getAugmentUrl = () => {
-  return API_BASE_URL;
+export const getAugmentUrl = (endpoint = '') => {
+  const base = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+  return endpoint ? `${base}/${endpoint}` : base;
 };
 
 export const getApiUrl = (endpoint) => {

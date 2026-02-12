@@ -10,10 +10,13 @@ from pydantic import BaseModel
 import shutil
 from datetime import datetime
 import face_recognition
+from retinaface import RetinaFace
+from deepface import DeepFace
 from .aug import detect_face, augment_face
 import numpy as np
 import io
 import re
+from typing import Tuple
 
 # Configure paths and constants
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -52,6 +55,8 @@ class RegistrationResponse(BaseModel):
     message: str
     person_dir: Optional[str] = None
     error: Optional[str] = None
+    age_range: Optional[str] = None
+    age_source: Optional[str] = None
 
 class MetadataManager:
     @staticmethod
@@ -193,10 +198,53 @@ def save_gallery_data(person_id: str, data: dict):
     except Exception as e:
         print(f"Error saving gallery data: {e}")
 
+class AgeEstimator:
+    @classmethod
+    def estimate_age(cls, face_bgr: np.ndarray) -> Optional[int]:
+        """
+        Estimate age from a face image using RetinaFace for detection 
+        and DeepFace (DEX-like) for age estimation.
+        """
+        try:
+            # Convert BGR to RGB for DeepFace
+            rgb_face = cv2.cvtColor(face_bgr, cv2.COLOR_BGR2RGB)
+            
+            # Use DeepFace analyze with retinaface backend
+            # Note: detector_backend='retinaface' uses the RetinaFace model for detection
+            # We set enforce_detection=False because we usually pass a cropped face,
+            # but DeepFace will still try to find a face to be sure.
+            results = DeepFace.analyze(
+                img_path=rgb_face, 
+                actions=['age'],
+                detector_backend='retinaface',
+                enforce_detection=False,
+                silent=True
+            )
+            
+            if results and len(results) > 0:
+                # DeepFace returns a list of results for each detected face
+                age = results[0].get('age')
+                if age is not None:
+                    return int(round(age))
+            
+            return None
+        except Exception as e:
+            print(f"Error in AgeEstimator.estimate_age: {e}")
+            return None
+
+def bucket_age_range(age: int, width: int = 5, min_age: int = 18) -> str:
+    if age < min_age:
+        age = min_age
+    offset = age - min_age
+    bucket_idx = offset // width
+    lower = min_age + width * bucket_idx
+    upper = lower + width
+    return f"{lower}-{upper}"
+
 class FaceProcessor:
     @staticmethod
     def standardize_face(image):
-        """Standardize face image to fixed size with proper alignment"""
+        """Standardize face image to fixed size with proper alignment using RetinaFace"""
         try:
             # Convert to RGB if needed
             if len(image.shape) == 3 and image.shape[2] == 3:
@@ -204,14 +252,32 @@ class FaceProcessor:
             else:
                 rgb_image = image
 
-            # Detect face locations
-            face_locations = face_recognition.face_locations(rgb_image)
-            if not face_locations:
-                return None
-
-            # Get the largest face
-            face_location = max(face_locations, key=lambda rect: (rect[2] - rect[0]) * (rect[1] - rect[3]))
-            top, right, bottom, left = face_location
+            # Detect faces using RetinaFace for high accuracy
+            faces = RetinaFace.detect_faces(rgb_image)
+            
+            if not faces or not isinstance(faces, dict):
+                # Fallback to face_recognition if RetinaFace fails
+                face_locations = face_recognition.face_locations(rgb_image)
+                if not face_locations:
+                    return None
+                face_location = max(face_locations, key=lambda rect: (rect[2] - rect[0]) * (rect[1] - rect[3]))
+                top, right, bottom, left = face_location
+            else:
+                # Get the largest face by area
+                best_face = None
+                max_area = 0
+                for face_id in faces:
+                    area = faces[face_id]['facial_area'] # [x1, y1, x2, y2]
+                    face_area = (area[2] - area[0]) * (area[3] - area[1])
+                    if face_area > max_area:
+                        max_area = face_area
+                        best_face = area
+                
+                if not best_face:
+                    return None
+                
+                # RetinaFace returns [x1, y1, x2, y2]
+                left, top, right, bottom = best_face
 
             # Calculate padding to maintain aspect ratio
             face_width = right - left
@@ -509,6 +575,17 @@ async def register_single(
         original_path = os.path.join(gallery_dir, "1.jpg")
         cv2.imwrite(original_path, face)
 
+        # Determine age and range (manual overrides AI)
+        predicted_age = AgeEstimator.estimate_age(face)
+        manual_age_val = None
+        try:
+            manual_age_val = int(age) if age and str(age).strip() != "" else None
+        except Exception:
+            manual_age_val = None
+        final_age_val = manual_age_val if manual_age_val is not None else predicted_age
+        age_source = "manual" if manual_age_val is not None else ("ai" if predicted_age is not None else "unknown")
+        age_range = bucket_age_range(final_age_val) if isinstance(final_age_val, int) else "N/A"
+
         # Update JSON data
         try:
             with open(METADATA_FILE, 'r') as f:
@@ -519,12 +596,15 @@ async def register_single(
         registration_time = datetime.now().isoformat()
         person_data[unique_name] = {
             "name": name,
-            "age": age if age else "N/A",
+            "age": str(final_age_val) if isinstance(final_age_val, int) else "N/A",
             "gender": gender if gender else "N/A",
             "category": category.lower() if category else "unknown",
             "registration_date": registration_time,
             "gallery_path": gallery_dir,
-            "photo_path": original_path
+            "photo_path": original_path,
+            "age_range": age_range,
+            "age_source": age_source,
+            "predicted_age": predicted_age if isinstance(predicted_age, int) else None
         }
 
         with open(METADATA_FILE, 'w') as f:
@@ -533,7 +613,9 @@ async def register_single(
         return RegistrationResponse(
             status="success",
             message=f"Successfully registered {name}",
-            person_dir=person_dir
+            person_dir=person_dir,
+            age_range=age_range,
+            age_source=age_source
         )
 
     except HTTPException:
@@ -629,14 +711,33 @@ async def register_bulk(
             if result['status'] == 'success':
                 # Update metadata
                 safe_name = re.sub(r'[^\w\-_\. ]', '', person_name)
+                age_str = result['details'].get('age', '')
+                try:
+                    age_int = int(age_str) if str(age_str).strip() != "" else None
+                except Exception:
+                    age_int = None
+                predicted_age = None
+                gallery_face_path = os.path.join(GALLERY_DIR, safe_name, "1.jpg")
+                if age_int is None and os.path.exists(gallery_face_path):
+                    try:
+                        face_img = cv2.imread(gallery_face_path)
+                        predicted_age = AgeEstimator.estimate_age(face_img) or None
+                    except Exception:
+                        predicted_age = None
+                final_age = age_int if age_int is not None else predicted_age
+                age_source = "manual" if age_int is not None else ("ai" if predicted_age is not None else "unknown")
+                age_range = bucket_age_range(final_age) if isinstance(final_age, int) else "N/A"
                 metadata[safe_name] = {
                     'name': person_name,
-                    'age': result['details']['age'],
+                    'age': str(final_age) if isinstance(final_age, int) else str(result['details'].get('age', '')) or "N/A",
                     'gender': result['details']['gender'],
                     'category': result['details']['category'],
                     'registration_date': datetime.now().isoformat(),
                     'gallery_path': os.path.join(GALLERY_DIR, safe_name),
-                    'photo_path': os.path.join(GALLERY_DIR, safe_name, "1.jpg")
+                    'photo_path': os.path.join(GALLERY_DIR, safe_name, "1.jpg"),
+                    'age_range': age_range,
+                    'age_source': age_source,
+                    'predicted_age': predicted_age if isinstance(predicted_age, int) else None
                 }
 
                 # Create gallery directory and copy original image
@@ -652,7 +753,9 @@ async def register_bulk(
                 response_list.append(RegistrationResponse(
                     status='success',
                     message=f"Successfully registered {person_name}",
-                    person_dir=os.path.join(DATA_DIR, safe_name)
+                    person_dir=os.path.join(DATA_DIR, safe_name),
+                    age_range=age_range,
+                    age_source=age_source
                 ))
             else:
                 response_list.append(RegistrationResponse(

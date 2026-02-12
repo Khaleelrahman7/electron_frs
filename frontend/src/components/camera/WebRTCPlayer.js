@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import { getAugmentUrl } from '../../utils/apiConfig';
+import useAuthStore from '../../store/authStore';
 import "./CameraStream.css";
 
 const WebRTCPlayer = ({ collectionName, cameraIp, streamId, roomId, onError, onPlay }) => {
+  const { token } = useAuthStore();
   const videoRef = useRef(null);
   const [isConnecting, setIsConnecting] = useState(true);
   const [error, setError] = useState(null);
@@ -42,7 +44,7 @@ const WebRTCPlayer = ({ collectionName, cameraIp, streamId, roomId, onError, onP
     pc.createOffer().then(offer => {
       return pc.setLocalDescription(offer);
     }).then(() => {
-      return fetch(getAugmentUrl("stream"), {
+      return fetch(getAugmentUrl("api/webrtc/stream"), {
         method: 'POST',
         body: JSON.stringify({
           ...pc.localDescription,
@@ -50,7 +52,8 @@ const WebRTCPlayer = ({ collectionName, cameraIp, streamId, roomId, onError, onP
           camera_ip: actualCameraIp
         }),
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         }
       });
     }).then(res => res.json())

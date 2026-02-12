@@ -12,6 +12,7 @@ import SimpleCameraManager from './components/camera/SimpleCameraManager';
 import StreamViewer from './components/StreamViewer';
 import AnimatedLoginPage from './components/auth/AnimatedLoginPage';
 import UserManagement from './components/admin/UserManagement';
+import Settings from './components/admin/Settings';
 import MainLayout from './components/layout/MainLayout';
 import useAuthStore from './store/authStore';
 import { detectBackendUrl, API_BASE_URL } from './utils/apiConfig';
@@ -93,6 +94,8 @@ const AppContent = () => {
         return <StreamViewer />;
       case 'users':
         return <UserManagement />;
+      case 'settings':
+        return <Settings />;
       default:
         return <Dashboard />;
     }

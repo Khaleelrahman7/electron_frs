@@ -11,6 +11,7 @@ const RegistrationWidget = () => {
     gender: 'Male',
     category: ''
   });
+  const [autoDetectAge, setAutoDetectAge] = useState(true);
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -160,7 +161,7 @@ const RegistrationWidget = () => {
       const formDataToSend = new FormData();
       formDataToSend.append('image', imageFile);
       formDataToSend.append('name', formData.name.trim());
-      formDataToSend.append('age', formData.age || '');
+      formDataToSend.append('age', autoDetectAge ? '' : (formData.age || ''));
       formDataToSend.append('gender', formData.gender);
       formDataToSend.append('category', formData.category.trim());
 
@@ -172,7 +173,10 @@ const RegistrationWidget = () => {
       const result = await response.json();
 
       if (response.ok && result.status === 'success') {
-        showMessage(`Successfully registered ${formData.name}!`, 'success');
+        const extra = result.age_range
+          ? ` Age range: ${result.age_range}${result.age_source ? ` (${result.age_source})` : ''}.`
+          : '';
+        showMessage(`Successfully registered ${formData.name}!${extra}`, 'success');
         resetForm();
       } else {
         // FastAPI returns error messages in the 'detail' field for HTTPException
@@ -316,6 +320,22 @@ const RegistrationWidget = () => {
               <div className="form-row">
                 <div className="form-group">
                   <label>Age</label>
+                  <div className="toggle-row">
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <input
+                        type="checkbox"
+                        checked={autoDetectAge}
+                        onChange={(e) => setAutoDetectAge(e.target.checked)}
+                        disabled={isLoading}
+                      />
+                      Auto-detect from photo
+                    </label>
+                    {autoDetectAge && (
+                      <span className="ai-badge">
+                        High Accuracy AI
+                      </span>
+                    )}
+                  </div>
                   <div className="age-stepper">
                     <button
                       type="button"
@@ -326,7 +346,7 @@ const RegistrationWidget = () => {
                         setAgeError('');
                         setFormData(prev => ({ ...prev, age: String(next) }));
                       }}
-                      disabled={isLoading || (() => {
+                      disabled={isLoading || autoDetectAge || (() => {
                         const v = parseInt(formData.age || '18', 10);
                         return !isFinite(v) || v <= 18;
                       })()}
@@ -345,7 +365,7 @@ const RegistrationWidget = () => {
                       min={18}
                       max={120}
                       step={1}
-                      disabled={isLoading}
+                      disabled={isLoading || autoDetectAge}
                     />
                     <button
                       type="button"
@@ -356,7 +376,7 @@ const RegistrationWidget = () => {
                         setAgeError('');
                         setFormData(prev => ({ ...prev, age: String(next) }));
                       }}
-                      disabled={isLoading || (() => {
+                      disabled={isLoading || autoDetectAge || (() => {
                         const v = parseInt(formData.age || '18', 10);
                         return !isFinite(v) || v >= 120;
                       })()}

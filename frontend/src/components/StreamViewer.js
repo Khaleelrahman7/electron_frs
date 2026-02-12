@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import MJPEGPlayer from './camera/MJPEGPlayer';
+import useAuthStore from '../store/authStore';
 import { Grid, Play, Square, RefreshCw, Settings, Monitor } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
 import './StreamViewer.css';
@@ -11,6 +12,7 @@ const StreamViewer = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [gridLayout, setGridLayout] = useState('2x2');
+  const { token } = useAuthStore();
   // Auto-refresh functionality removed
 
   // Grid layout configurations
@@ -30,7 +32,11 @@ const StreamViewer = () => {
       setLoading(true);
       setError(null);
       
-      const response = await axios.get(`${API_BASE_URL}/api/collections/cameras`);
+      const response = await axios.get(`${API_BASE_URL}/api/collections/cameras`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       
       if (response.data.cameras) {
         const allCameras = response.data.cameras;

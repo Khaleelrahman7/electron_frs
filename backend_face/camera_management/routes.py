@@ -627,3 +627,32 @@ async def delete_collection(
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy", "service": "camera_management"}
+
+@router.get("/{collection_id}/streams")
+async def get_collection_streams(
+    collection_id: str,
+    service: EnhancedCameraService = Depends(get_camera_service)
+):
+    """Get all streams for a collection (Compatibility with frontend)"""
+    try:
+        cameras = service._load_cameras()
+        collection_cameras = [c for c in cameras if c.collection_id == collection_id]
+        
+        streams = []
+        for camera in collection_cameras:
+            # Construct stream info expected by frontend
+            streams.append({
+                "camera_id": camera.id,
+                "camera_name": camera.name,
+                "stream_url": f"/api/collections/cameras/{camera.id}/stream",
+                "rtsp_url": camera.rtsp_url,
+                "camera_ip": camera.ip_address,
+                "collection_name": camera.collection_name or collection_id,
+                "room_id": f"{collection_id}_{camera.ip_address.replace('.', '_')}" if camera.ip_address else None,
+                "stream_id": f"stream_{camera.id}"
+            })
+            
+        return {"success": True, "streams": streams}
+    except Exception as e:
+        logger.error(f"Error getting collection streams: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get collection streams")

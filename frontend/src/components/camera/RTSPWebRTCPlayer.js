@@ -1,7 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
+import { getAugmentUrl } from '../../utils/apiConfig';
+import useAuthStore from '../../store/authStore';
 
 const RTSPWebRTCPlayer = ({ rtspUrl, onError, onPlay }) => {
+  const { token } = useAuthStore();
   const videoRef = useRef(null);
   const peerConnectionRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -46,10 +49,11 @@ const RTSPWebRTCPlayer = ({ rtspUrl, onError, onPlay }) => {
       await pc.setLocalDescription(offer);
 
       // Send the offer to the backend and get answer
-      const response = await fetch('/api/webrtc/connect', {
+      const response = await fetch(getAugmentUrl('api/webrtc/connect'), {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           rtspUrl: rtspUrl,

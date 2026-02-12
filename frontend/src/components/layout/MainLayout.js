@@ -12,7 +12,8 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
-  Menu
+  Menu,
+  Settings
 } from 'lucide-react';
 import './MainLayout.css';
 
@@ -30,6 +31,7 @@ const MainLayout = ({ children, activeTab, onTabChange }) => {
     { id: 'camera', label: 'Camera Management', icon: <Camera size={20} /> },
     { id: 'stream-viewer', label: 'Stream Viewer', icon: <MonitorPlay size={20} /> },
     { id: 'users', label: 'User Management', icon: <Users size={20} /> },
+    { id: 'settings', label: 'Settings', icon: <Settings size={20} /> },
   ];
 
   const visibleTabs = tabs.filter(tab => {
@@ -42,7 +44,7 @@ const MainLayout = ({ children, activeTab, onTabChange }) => {
       return normalizedMenus.includes(tab.id);
     }
     if (user?.role === 'SuperAdmin') return true;
-    if (user?.role === 'Admin') return ['dashboard', 'camera', 'users'].includes(tab.id);
+    if (user?.role === 'Admin') return ['dashboard', 'camera', 'users', 'settings'].includes(tab.id);
     return ['dashboard'].includes(tab.id);
   });
 
@@ -51,8 +53,7 @@ const MainLayout = ({ children, activeTab, onTabChange }) => {
       <aside className="sidebar">
         <div className="sidebar-header">
           <div className="logo-container">
-            <div className="logo-icon">FR</div>
-            {!collapsed && <span className="logo-text">Face Rec Sys</span>}
+            {!collapsed && <span className="logo-text">frs</span>}
           </div>
           <button 
             className="collapse-btn" 

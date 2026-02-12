@@ -13,6 +13,7 @@ class CreateUserRequest(BaseModel):
     username: str
     password: str
     role: str
+    email: Optional[str] = None
     max_users_limit: Optional[int] = 0
     max_cameras_limit: Optional[int] = 0
     assigned_menus: Optional[List[str]] = None
@@ -21,6 +22,7 @@ class CreateUserRequest(BaseModel):
 
 class UpdateUserRequest(BaseModel):
     is_active: Optional[bool] = None
+    email: Optional[str] = None
     assigned_cameras: Optional[List[str]] = None
     assigned_menus: Optional[List[str]] = None
     max_users_limit: Optional[int] = None
@@ -35,6 +37,12 @@ class SettingsRequest(BaseModel):
     max_cameras_per_admin: Optional[int] = None
     max_cameras_per_supervisor: Optional[int] = None
     require_approval_for_new_users: Optional[bool] = None
+    smtp_host: Optional[str] = None
+    smtp_port: Optional[int] = None
+    smtp_user: Optional[str] = None
+    smtp_password: Optional[str] = None
+    smtp_use_tls: Optional[bool] = None
+    email_from: Optional[str] = None
 
 @router.post("/")
 async def create_user_endpoint(request: CreateUserRequest, request_obj: Request):
@@ -58,7 +66,8 @@ async def create_user_endpoint(request: CreateUserRequest, request_obj: Request)
             max_cameras_limit=request.max_cameras_limit or 0,
             assigned_menus=request.assigned_menus,
             license_start_date=request.license_start_date,
-            license_end_date=request.license_end_date
+            license_end_date=request.license_end_date,
+            email=request.email
         )
         return {"message": "User created successfully", "user": user}
     except ValueError as e:

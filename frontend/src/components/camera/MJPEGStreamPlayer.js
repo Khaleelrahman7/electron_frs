@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { getBestCredentials, generateRTSPUrl, storeSuccessfulCredentials, maskCredentials } from '../../utils/cameraCredentials';
+import useAuthStore from '../../store/authStore';
 import './MJPEGStreamPlayer.css';
 
 import { API_BASE_URL } from '../../utils/apiConfig';
@@ -16,6 +17,7 @@ const MJPEGStreamPlayer = ({ camera }) => {
   const [retryCount, setRetryCount] = useState(0);
   const maxRetries = 3;
   const isStartingRef = useRef(false);
+  const { token } = useAuthStore();
 
   // Generate consistent stream ID based on camera
   const generateStreamId = () => {
@@ -60,7 +62,7 @@ const MJPEGStreamPlayer = ({ camera }) => {
       // CHECK 1: If camera has an ID, it's from camera management - use enhanced stream
       if (camera.id) {
         console.log(`Camera ${camera.id} is from camera management, using enhanced stream endpoint`);
-        const enhancedStreamUrl = `${API_BASE_URL}/api/collections/cameras/${camera.id}/stream`;
+        const enhancedStreamUrl = `${API_BASE_URL}/api/collections/cameras/${camera.id}/stream${token ? `?token=${token}` : ''}`;
         setStreamUrl(enhancedStreamUrl);
         setRetryCount(0);
         console.log(`Using enhanced stream: ${enhancedStreamUrl}`);
@@ -88,13 +90,22 @@ const MJPEGStreamPlayer = ({ camera }) => {
             camera_ip: camera.ip,
             collection_name: collectionName
           },
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
           timeout: 5000
         });
 
         if (existingStreamResponse.data.success && existingStreamResponse.data.exists && existingStreamResponse.data.is_running) {
           // Use existing stream
           const feedUrl = existingStreamResponse.data.feed_url;
-          const fullStreamUrl = feedUrl.startsWith('http') ? feedUrl : `${API_BASE_URL}${feedUrl}`;
+          let fullStreamUrl = feedUrl.startsWith('http') ? feedUrl : `${API_BASE_URL}${feedUrl}`;
+          
+          // Append auth token as query parameter
+          if (token) {
+            fullStreamUrl += (fullStreamUrl.includes('?') ? '&' : '?') + `token=${token}`;
+          }
+          
           setStreamUrl(fullStreamUrl);
           setStreamId(existingStreamResponse.data.stream_id);
           console.log(`Using existing MJPEG stream: ${fullStreamUrl}`);
@@ -128,12 +139,20 @@ const MJPEGStreamPlayer = ({ camera }) => {
         rtsp_url: rtspUrl,
         stream_id: newStreamId
       }, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
         timeout: 10000 // 10 second timeout
       });
 
       if (response.data.success) {
         const feedUrl = response.data.feed_url;
-        const fullStreamUrl = feedUrl.startsWith('http') ? feedUrl : `${API_BASE_URL}${feedUrl}`;
+        let fullStreamUrl = feedUrl.startsWith('http') ? feedUrl : `${API_BASE_URL}${feedUrl}`;
+
+        // Append auth token as query parameter
+        if (token) {
+          fullStreamUrl += (fullStreamUrl.includes('?') ? '&' : '?') + `token=${token}`;
+        }
 
         if (response.data.reused) {
           console.log(`MJPEG stream reused: ${fullStreamUrl}`);
@@ -177,6 +196,9 @@ const MJPEGStreamPlayer = ({ camera }) => {
       try {
         console.log(`Stopping stream: ${streamId}`);
         await axios.delete(`${API_BASE_URL}/api/stop_stream/${streamId}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
           timeout: 5000
         });
       } catch (error) {

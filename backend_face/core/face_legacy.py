@@ -1281,7 +1281,7 @@ class CameraService:
                                                 label,
                                                 (x1, y1 - 10),
                                                 cv2.FONT_HERSHEY_DUPLEX,
-                                                0.5,
+                                                0.8,
                                                 color,
                                                 1
                                             )

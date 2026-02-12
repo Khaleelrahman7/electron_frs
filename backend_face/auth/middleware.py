@@ -4,6 +4,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from .security import verify_token
 from .users import get_user
 from datetime import datetime, timezone
+from urllib.parse import parse_qs
 from .storage import get_tokens
 
 security = HTTPBearer()
@@ -12,6 +13,7 @@ PUBLIC_PATHS = {
     "/api/auth/login",
     "/api/auth/bootstrap/superadmin",
     "/api/status",
+    "/favicon.ico",
     "/"
 }
 
@@ -99,7 +101,12 @@ def check_path_permission(current_user: Dict[str, Any], path: str, method: str) 
             "/api/analytics",
             "/api/registration",
             "/api/collections",
-            "/api/events"
+            "/api/events",
+            "/api/webrtc",
+            "/api/get_stream_for_camera",
+            "/api/start_stream",
+            "/api/stop_stream",
+            "/api/start_collection_streams"
         ]
         return any(path.startswith(allowed) for allowed in allowed_paths)
     
@@ -110,10 +117,38 @@ class RBACMiddleware:
         self.app = app
     
     async def __call__(self, scope, receive, send):
+        if scope["type"] == "websocket":
+            # Extract token from query params or headers for WebSockets
+            query_string = scope.get("query_string", b"").decode()
+            token = None
+            if "token=" in query_string:
+                params = parse_qs(query_string)
+                if "token" in params:
+                    token = params["token"][0]
+            
+            if not token:
+                headers = dict(scope.get("headers", []))
+                auth_header = headers.get(b"authorization", b"").decode()
+                if auth_header.startswith("Bearer "):
+                    token = auth_header[7:]
+
+            if token:
+                current_user = get_current_user_from_token(token)
+                tokens = get_tokens()
+                if current_user and token in tokens:
+                    scope["user"] = current_user
+                    await self.app(scope, receive, send)
+                    return
+
+            # If no valid token, we can either reject or let the app handle it
+            # For now, let's reject to be safe
+            await send({"type": "websocket.close", "code": 4001})
+            return
+
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
-        
+            
         path = scope.get("path", "")
         method = scope.get("method", "GET")
         
@@ -127,15 +162,24 @@ class RBACMiddleware:
             await self.app(scope, receive, send)
             return
         
-        # Check for authorization header
+        # Check for authorization header or token in query params
         headers = dict(scope.get("headers", []))
         auth_header = headers.get(b"authorization", b"").decode()
         
-        if not auth_header.startswith("Bearer "):
+        token = None
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+        else:
+            # Fallback to query parameter for token (useful for <img> tags and MJPEG streams)
+            query_string = scope.get("query_string", b"").decode()
+            if "token=" in query_string:
+                params = parse_qs(query_string)
+                if "token" in params:
+                    token = params["token"][0]
+        
+        if not token:
             await self.send_unauthorized(send)
             return
-        
-        token = auth_header[7:]  # Remove "Bearer "
         current_user = get_current_user_from_token(token)
         
         if not current_user:

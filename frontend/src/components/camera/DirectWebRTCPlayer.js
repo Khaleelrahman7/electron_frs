@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { io } from 'socket.io-client';
+import useAuthStore from '../../store/authStore';
 import { API_BASE_URL } from '../../utils/apiConfig';
 import './CameraStream.css';
 
 const DirectWebRTCPlayer = ({ rtspUrl, onError, onPlay }) => {
+  const { token } = useAuthStore();
   const videoRef = useRef(null);
   const pcRef = useRef(null);
   const containerRef = useRef(null);
@@ -99,72 +100,87 @@ const DirectWebRTCPlayer = ({ rtspUrl, onError, onPlay }) => {
 
       // Connect to WebSocket server
       if (!socketRef.current) {
-        const wsUrl = new URL(API_BASE_URL);
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsPath = '/ws/socket.io';
+        const wsUrl = new URL(API_BASE_URL);
+        const wsPath = '/api/webrtc/ws/socket.io';
         
         console.log('Connecting to WebSocket server at:', `${wsProtocol}//${wsUrl.host}${wsPath}`);
         
         try {
-          socketRef.current = io(API_BASE_URL, {
-            path: wsPath,
-            transports: ['websocket'],
-            reconnectionAttempts: 5,
-            reconnectionDelay: 1000,
-            timeout: 20000,
-            autoConnect: true,
-            forceNew: true,
-            withCredentials: false,
-            extraHeaders: {}
-          });
+          // Check if we should use raw WebSocket instead of Socket.io for compatibility
+          const fullWsUrl = `${wsProtocol}//${wsUrl.host}${wsPath}${wsPath.includes('?') ? '&' : '?'}token=${token}`;
+          console.log('Using raw WebSocket for compatibility:', fullWsUrl);
           
-          // Add WebSocket event listeners for debugging
-          socketRef.current.on('connect', () => {
-            console.log('✅ WebSocket connected, socket ID:', socketRef.current.id);
-          });
+          const ws = new WebSocket(fullWsUrl);
           
-          socketRef.current.on('disconnect', (reason) => {
-            console.warn('❌ WebSocket disconnected:', reason);
-          });
+          ws.onopen = () => {
+            console.log('✅ WebSocket connected');
+            // Mock socket.io interface
+            socketRef.current = {
+              connected: true,
+              id: 'raw-ws-' + Date.now(),
+              emit: (event, data) => {
+                if (ws.readyState === WebSocket.OPEN) {
+                  ws.send(JSON.stringify({ event, ...data }));
+                }
+              },
+              on: (event, callback) => {
+                // Store callbacks to be triggered by message handler
+                if (!socketRef.current._listeners) socketRef.current._listeners = {};
+                if (!socketRef.current._listeners[event]) socketRef.current._listeners[event] = [];
+                socketRef.current._listeners[event].push(callback);
+              },
+              off: (event, callback) => {
+                if (socketRef.current._listeners && socketRef.current._listeners[event]) {
+                  socketRef.current._listeners[event] = socketRef.current._listeners[event].filter(cb => cb !== callback);
+                }
+              }
+            };
+            
+            // Trigger connect callbacks
+            if (socketRef.current._listeners && socketRef.current._listeners['connect']) {
+              socketRef.current._listeners['connect'].forEach(cb => cb());
+            }
+          };
           
-          socketRef.current.on('connect_error', (error) => {
-            console.error('WebSocket connection error:', error);
-            handleError('Connection error. Please check your network and try again.');
-          });
+          ws.onmessage = (event) => {
+            try {
+              const data = JSON.parse(event.data);
+              console.log('Received WebSocket message:', data);
+              
+              const type = data.type || data.event;
+              if (type && socketRef.current._listeners && socketRef.current._listeners[type]) {
+                socketRef.current._listeners[type].forEach(cb => cb(data));
+              }
+            } catch (e) {
+              console.error('Error parsing WebSocket message:', e);
+            }
+          };
           
-          socketRef.current.on('error', (error) => {
+          ws.onclose = (event) => {
+            console.warn('❌ WebSocket disconnected:', event.reason);
+            if (socketRef.current && socketRef.current._listeners && socketRef.current._listeners['disconnect']) {
+              socketRef.current._listeners['disconnect'].forEach(cb => cb(event.reason));
+            }
+          };
+          
+          ws.onerror = (error) => {
             console.error('WebSocket error:', error);
-          });
+            if (socketRef.current && socketRef.current._listeners && socketRef.current._listeners['error']) {
+              socketRef.current._listeners['error'].forEach(cb => cb(error));
+            }
+            handleError('Connection error. Please check your network and try again.');
+          };
           
-          socketRef.current.on('reconnect_attempt', (attempt) => {
-            console.log(`Attempting to reconnect (${attempt})...`);
-          });
+          // Store reference for cleanup
+          socketRef.current._ws = ws;
           
         } catch (error) {
           console.error('Failed to initialize WebSocket:', error);
           throw new Error('Failed to connect to the server');
         }
 
-        // Set up socket event handlers
-        socketRef.current.on('connect', async () => {
-          console.log('Connected to signaling server');
-          try {
-            cleanupPeerConnection = await setupPeerConnection();
-          } catch (error) {
-            console.error('Failed to set up peer connection:', error);
-            handleError('Failed to set up video connection');
-          }
-        });
-
-        socketRef.current.on('disconnect', () => {
-          console.log('Disconnected from signaling server');
-          handleError('Disconnected from server. Reconnecting...');
-        });
-
-        socketRef.current.on('error', (error) => {
-          console.error('Socket error:', error);
-          handleError(`Connection error: ${error}`);
-        });
+        // Socket event handlers will be set up below using the mocked socketRef.current.on
       } else {
         cleanupPeerConnection = await setupPeerConnection();
       }
@@ -173,6 +189,9 @@ const DirectWebRTCPlayer = ({ rtspUrl, onError, onPlay }) => {
       return () => {
         cleanupPeerConnection();
         if (socketRef.current) {
+          if (socketRef.current._ws) {
+            socketRef.current._ws.close();
+          }
           socketRef.current.off('connect');
           socketRef.current.off('disconnect');
           socketRef.current.off('error');

@@ -2,7 +2,7 @@ from typing import Dict, Any, Optional, List
 from .storage import get_users, save_users, get_settings, save_settings
 from .security import get_password_hash, verify_password
 
-def create_user(username: str, password: str, role: str, created_by: str, is_active: bool = True, max_users_limit: int = 0, max_cameras_limit: int = 0, assigned_menus: List[str] = None, license_start_date: Optional[str] = None, license_end_date: Optional[str] = None) -> Dict[str, Any]:
+def create_user(username: str, password: str, role: str, created_by: str, is_active: bool = True, max_users_limit: int = 0, max_cameras_limit: int = 0, assigned_menus: List[str] = None, license_start_date: Optional[str] = None, license_end_date: Optional[str] = None, email: Optional[str] = None) -> Dict[str, Any]:
     users = get_users()
     if username in users:
         raise ValueError("User already exists")
@@ -20,6 +20,7 @@ def create_user(username: str, password: str, role: str, created_by: str, is_act
         "username": username,
         "hashed_password": get_password_hash(password),
         "role": role,
+        "email": email,
         "is_active": is_active,
         "created_by": created_by,
         "created_at": "2024-01-01T00:00:00Z",  # Use proper timestamp in production
@@ -46,7 +47,7 @@ def update_user(username: str, updates: Dict[str, Any]) -> Optional[Dict[str, An
         return None
     
     user = users[username]
-    allowed_updates = ["is_active", "assigned_cameras", "assigned_menus", "max_users_limit", "max_cameras_limit", "license_start_date", "license_end_date"]
+    allowed_updates = ["is_active", "assigned_cameras", "assigned_menus", "max_users_limit", "max_cameras_limit", "license_start_date", "license_end_date", "email"]
     for key, value in updates.items():
         if key in allowed_updates:
             user[key] = value
