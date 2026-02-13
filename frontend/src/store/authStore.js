@@ -48,6 +48,9 @@ const useAuthStore = create(
 
           // Store token in localStorage for global fetch shim
           localStorage.setItem('auth_token', data.access_token);
+          if (window?.electronAPI?.setAuthToken) {
+            await window.electronAPI.setAuthToken(data.access_token);
+          }
           
           return { success: true };
         } catch (error) {
@@ -77,6 +80,9 @@ const useAuthStore = create(
           error: null,
         });
         localStorage.removeItem('auth_token');
+        if (window?.electronAPI?.clearAuthToken) {
+          window.electronAPI.clearAuthToken();
+        }
       },
 
       clearError: () => {
@@ -166,6 +172,20 @@ const useAuthStore = create(
         token: state.token, 
         isAuthenticated: state.isAuthenticated 
       }), // Only persist these fields
+      onRehydrateStorage: () => (state) => {
+        const token = state?.token;
+        if (token) {
+          localStorage.setItem('auth_token', token);
+          if (window?.electronAPI?.setAuthToken) {
+            window.electronAPI.setAuthToken(token);
+          }
+        } else {
+          localStorage.removeItem('auth_token');
+          if (window?.electronAPI?.clearAuthToken) {
+            window.electronAPI.clearAuthToken();
+          }
+        }
+      },
     }
   )
 );

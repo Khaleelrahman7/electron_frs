@@ -9,9 +9,20 @@ import pandas as pd
 from pydantic import BaseModel
 import shutil
 from datetime import datetime
-import face_recognition
-from retinaface import RetinaFace
-from deepface import DeepFace
+try:
+    import face_recognition
+except Exception:
+    face_recognition = None
+
+try:
+    from retinaface import RetinaFace
+except Exception:
+    RetinaFace = None
+
+try:
+    from deepface import DeepFace
+except Exception:
+    DeepFace = None
 from .aug import detect_face, augment_face
 import numpy as np
 import io
@@ -116,6 +127,10 @@ class MetadataManager:
         }
 
 # Helper functions
+def require_dependency(dependency, package_name: str):
+    if dependency is None:
+        raise HTTPException(status_code=503, detail=f"Optional dependency not installed: {package_name}")
+
 def is_face_already_registered(image_input) -> bool:
     """
     Check if the face is already registered
@@ -123,6 +138,7 @@ def is_face_already_registered(image_input) -> bool:
         image_input: Can be either a file path (str) or a numpy array (RGB image)
     """
     try:
+        require_dependency(face_recognition, "face_recognition")
         # Handle input image
         if isinstance(image_input, str):
             new_image = face_recognition.load_image_file(image_input)
@@ -206,6 +222,8 @@ class AgeEstimator:
         and DeepFace (DEX-like) for age estimation.
         """
         try:
+            if DeepFace is None:
+                return None
             # Convert BGR to RGB for DeepFace
             rgb_face = cv2.cvtColor(face_bgr, cv2.COLOR_BGR2RGB)
             
@@ -252,11 +270,14 @@ class FaceProcessor:
             else:
                 rgb_image = image
 
-            # Detect faces using RetinaFace for high accuracy
-            faces = RetinaFace.detect_faces(rgb_image)
+            if RetinaFace is not None:
+                faces = RetinaFace.detect_faces(rgb_image)
+            else:
+                faces = None
             
             if not faces or not isinstance(faces, dict):
                 # Fallback to face_recognition if RetinaFace fails
+                require_dependency(face_recognition, "face_recognition")
                 face_locations = face_recognition.face_locations(rgb_image)
                 if not face_locations:
                     return None
@@ -455,6 +476,7 @@ class FaceProcessor:
 
                     # Process first image to check for duplicates
                     first_image_path = os.path.join(person_folder, image_files[0])
+                    require_dependency(face_recognition, "face_recognition")
                     first_image = face_recognition.load_image_file(first_image_path)
                     
                     if is_face_already_registered(first_image):

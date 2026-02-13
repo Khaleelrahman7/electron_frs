@@ -49,7 +49,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // Event listeners
   onWindowClose: (callback) => ipcRenderer.on('window-close', callback),
-  removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel)
+  removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel),
+
+  setAuthToken: (token) => ipcRenderer.invoke('auth-set-token', token),
+  clearAuthToken: () => ipcRenderer.invoke('auth-clear-token')
 });
 
 // Log that preload script has loaded

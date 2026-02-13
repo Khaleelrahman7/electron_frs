@@ -1,4 +1,5 @@
 import axios from 'axios';
+import useAuthStore from '../store/authStore';
 
 // Global fetch shim to inject auth token
 (function() {
@@ -49,8 +50,15 @@ axios.interceptors.response.use(
   },
   function(error) {
     if (error?.response?.status === 401) {
-      localStorage.removeItem('auth_token');
-      console.warn('Authentication token invalid, please login again');
+      const requestUrl = String(error?.config?.url || '');
+      if (!requestUrl.includes('/api/auth/login') && !requestUrl.includes('/api/auth/logout')) {
+        useAuthStore.getState().logout();
+      } else {
+        localStorage.removeItem('auth_token');
+        if (window?.electronAPI?.clearAuthToken) {
+          window.electronAPI.clearAuthToken();
+        }
+      }
     }
     return Promise.reject(error);
   }

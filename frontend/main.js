@@ -31,6 +31,32 @@ loadEnvVariables();
 const API_BASE_URL = process.env.API_BASE_URL || process.env.REACT_APP_API_BASE_URL || 'http://192.168.1.209:8005' || 'http://localhost:8005';
 console.log('[Electron] API_BASE_URL configured as:', API_BASE_URL);
 
+let authToken = null;
+
+axios.interceptors.request.use(
+  (config) => {
+    const url = config?.url || '';
+    if (authToken && typeof url === 'string' && url.startsWith(API_BASE_URL)) {
+      config.headers = config.headers || {};
+      if (!config.headers.Authorization && !config.headers.authorization) {
+        config.headers.Authorization = `Bearer ${authToken}`;
+      }
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+ipcMain.handle('auth-set-token', async (event, token) => {
+  authToken = token || null;
+  return { success: true };
+});
+
+ipcMain.handle('auth-clear-token', async () => {
+  authToken = null;
+  return { success: true };
+});
+
 function loadFallbackPage(mainWindow) {
   const fallbackHtml = `
     <!DOCTYPE html>
