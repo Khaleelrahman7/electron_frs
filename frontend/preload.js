@@ -3,6 +3,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
 contextBridge.exposeInMainWorld('electronAPI', {
+  setAuthToken: (token) => ipcRenderer.invoke('set-auth-token', token),
+  clearAuthToken: () => ipcRenderer.invoke('clear-auth-token'),
   // Video processing APIs
   checkBackendStatus: () => ipcRenderer.invoke('check-backend-status'),
   selectVideoFile: () => ipcRenderer.invoke('select-video-file'),

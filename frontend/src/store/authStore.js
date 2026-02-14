@@ -70,6 +70,9 @@ const useAuthStore = create(
 
           // Store token in localStorage for global fetch shim
           localStorage.setItem('auth_token', data.access_token);
+          if (window && window.electronAPI && typeof window.electronAPI.setAuthToken === 'function') {
+            window.electronAPI.setAuthToken(data.access_token).catch(() => {});
+          }
           
           return { success: true };
         } catch (error) {
@@ -99,6 +102,9 @@ const useAuthStore = create(
           error: null,
         });
         localStorage.removeItem('auth_token');
+        if (window && window.electronAPI && typeof window.electronAPI.clearAuthToken === 'function') {
+          window.electronAPI.clearAuthToken().catch(() => {});
+        }
       },
 
       clearError: () => {

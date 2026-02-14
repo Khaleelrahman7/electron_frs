@@ -5,6 +5,22 @@ const axios = require('axios');
 const FormData = require('form-data');
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
+let AUTH_TOKEN = null;
+
+axios.interceptors.request.use(
+  function(config) {
+    const url = config && config.url ? config.url : '';
+    if (AUTH_TOKEN && url.includes('/api/')) {
+      config.headers = config.headers || {};
+      config.headers.Authorization = `Bearer ${AUTH_TOKEN}`;
+    }
+    return config;
+  },
+  function(error) {
+    return Promise.reject(error);
+  }
+);
+
 function loadEnvVariables() {
   try {
     const envPath = path.join(__dirname, '.env');
@@ -161,10 +177,32 @@ function createWindow() {
 }
 
 // IPC Handlers for Video Processing
+ipcMain.handle('set-auth-token', async (event, token) => {
+  AUTH_TOKEN = token || null;
+  if (AUTH_TOKEN) {
+    axios.defaults.headers.common = axios.defaults.headers.common || {};
+    axios.defaults.headers.common['Authorization'] = `Bearer ${AUTH_TOKEN}`;
+  } else {
+    if (axios.defaults.headers.common) {
+      delete axios.defaults.headers.common['Authorization'];
+    }
+  }
+  return { success: true };
+});
+
+ipcMain.handle('clear-auth-token', async () => {
+  AUTH_TOKEN = null;
+  if (axios.defaults.headers.common) {
+    delete axios.defaults.headers.common['Authorization'];
+  }
+  return { success: true };
+});
+
 ipcMain.handle('check-backend-status', async () => {
   try {
     const response = await axios.get(`${API_BASE_URL}/api/status`, { timeout: 5000 });
     return {
+      success: true,
       success: true,
       available: true,
       status: response.data
