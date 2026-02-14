@@ -3,6 +3,7 @@ import logging
 from datetime import datetime, timezone, timedelta
 from .storage import get_users
 from .email_utils import send_email
+from .license_dates import parse_license_datetime
 
 logger = logging.getLogger(__name__)
 
@@ -29,9 +30,8 @@ async def check_licenses_and_notify():
                 if not end_str:
                     continue
                 
-                try:
-                    end_dt = datetime.fromisoformat(end_str.replace("Z", "+00:00"))
-                except Exception:
+                end_dt = parse_license_datetime(end_str)
+                if not end_dt:
                     continue
                 
                 days_left = (end_dt - now).days

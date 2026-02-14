@@ -20,7 +20,7 @@ import { detectBackendUrl, API_BASE_URL } from './utils/apiConfig';
 const AppContent = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isCheckingBackend, setIsCheckingBackend] = useState(true);
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, getCurrentUser } = useAuthStore();
 
   useEffect(() => {
     // Auto-detect backend URL and switch if necessary
@@ -59,6 +59,11 @@ const AppContent = () => {
     
     checkBackend();
   }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    getCurrentUser();
+  }, [isAuthenticated, getCurrentUser]);
 
   const renderActiveComponent = () => {
     if (isCheckingBackend) {

@@ -26,6 +26,8 @@ async def get_my_cameras(request: Request):
             camera_data = all_cameras[camera_id].copy()
             camera_data["id"] = camera_id
             user_cameras.append(camera_data)
+        else:
+            user_cameras.append({"id": camera_id})
     
     return CameraAssignmentResponse(
         cameras=user_cameras,

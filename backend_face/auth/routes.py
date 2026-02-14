@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from .security import authenticate_user, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
 from .users import create_user, get_user, list_users
 from .storage import ensure_auth_data_dir, get_tokens, save_tokens
+from .license_dates import parse_license_datetime
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -59,10 +60,7 @@ async def login(request: LoginRequest):
     if auth_user["role"] == "Admin":
         end_str = auth_user.get("license_end_date")
         if end_str:
-            try:
-                end_dt = datetime.fromisoformat(end_str.replace("Z", "+00:00"))
-            except Exception:
-                end_dt = None
+            end_dt = parse_license_datetime(end_str)
             now = datetime.now(timezone.utc)
             if end_dt and end_dt < now:
                 raise HTTPException(status_code=403, detail="License expired. Contact SuperAdmin.")

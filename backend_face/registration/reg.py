@@ -9,9 +9,20 @@ import pandas as pd
 from pydantic import BaseModel
 import shutil
 from datetime import datetime
-import face_recognition
-from retinaface import RetinaFace
-from deepface import DeepFace
+try:
+    import face_recognition
+except Exception:
+    face_recognition = None
+
+try:
+    from retinaface import RetinaFace
+except Exception:
+    RetinaFace = None
+
+try:
+    from deepface import DeepFace
+except Exception:
+    DeepFace = None
 from .aug import detect_face, augment_face
 import numpy as np
 import io

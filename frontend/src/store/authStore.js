@@ -2,6 +2,28 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { API_BASE_URL } from '../utils/apiConfig';
 
+const parseLicenseEndMs = (value) => {
+  if (!value) return null;
+  const s = String(value).trim();
+  if (!s) return null;
+
+  const dt = new Date(s);
+  const ms = dt.getTime();
+  if (!Number.isNaN(ms)) return ms;
+
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) {
+    const day = parseInt(m[1], 10);
+    const month = parseInt(m[2], 10);
+    const year = parseInt(m[3], 10);
+    if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
+      return Date.UTC(year, month - 1, day, 23, 59, 59, 999);
+    }
+  }
+
+  return null;
+};
+
 const useAuthStore = create(
   persist(
     (set, get) => ({
@@ -154,9 +176,10 @@ const useAuthStore = create(
         const { user } = get();
         if (!user) return false;
         if (user.role !== 'Admin') return false;
-        const end = user.license_end_date ? new Date(user.license_end_date) : null;
-        if (!end) return true;
-        return end.getTime() < Date.now();
+        if (!user.license_end_date) return false;
+        const endMs = parseLicenseEndMs(user.license_end_date);
+        if (endMs === null) return true;
+        return endMs < Date.now();
       },
     }),
     {

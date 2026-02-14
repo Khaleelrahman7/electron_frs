@@ -118,12 +118,12 @@ def assign_cameras_to_user(admin_username: str, target_username: str, camera_ids
     if not admin or not target:
         return False, "User not found"
     
-    # Validation: Admin can only assign cameras they have access to
     if admin["role"] == "Admin":
-        admin_cameras = set(admin.get("assigned_cameras", []))
-        cameras_to_assign = set(camera_ids)
-        if not cameras_to_assign.issubset(admin_cameras):
-            return False, "You can only assign cameras that you have access to"
+        admin_cameras = set(admin.get("assigned_cameras") or [])
+        if admin_cameras:
+            cameras_to_assign = set(camera_ids)
+            if not cameras_to_assign.issubset(admin_cameras):
+                return False, "You can only assign cameras that you have access to"
 
     can_assign, reason = can_assign_cameras(admin_username, target_username, len(camera_ids))
     if not can_assign:

@@ -6,6 +6,7 @@ from .users import get_user
 from datetime import datetime, timezone
 from urllib.parse import parse_qs
 from .storage import get_tokens
+from .license_dates import parse_license_datetime
 
 security = HTTPBearer()
 
@@ -50,9 +51,8 @@ def is_admin_license_valid(user: Dict[str, Any]) -> bool:
     if not end_str:
         # No license specified -> treat as valid (unlimited) for backward compatibility
         return True
-    try:
-        end_dt = datetime.fromisoformat(end_str.replace("Z", "+00:00"))
-    except Exception:
+    end_dt = parse_license_datetime(end_str)
+    if not end_dt:
         return False
     now = datetime.now(timezone.utc)
     return end_dt >= now
