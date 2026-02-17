@@ -148,7 +148,7 @@ const AnimatedLoginPage = () => {
     // Show failed message
     if (successMessage) {
       successMessage.textContent = '✗ AUTHENTICATION FAILED';
-      successMessage.style.background = 'linear-gradient(90deg, var(--error-color), #f87171)';
+      successMessage.style.background = 'linear-gradient(90deg, var(--error-color), #cc0000)';
       successMessage.classList.add('show');
     }
   };
@@ -189,7 +189,7 @@ const AnimatedLoginPage = () => {
           {/* Left Side - Login Form */}
           <div className="login-section">
             <div className="login-header">
-              <h1 className="login-title">FACE AUTH</h1>
+              <h1 className="login-title">TITAN X</h1>
             </div>
 
             <form onSubmit={handleSubmit} id="loginForm" className="login-form">

@@ -55,6 +55,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.options("/{path:path}")
+async def options_handler(path: str):
+    """
+    Handle OPTIONS requests for CORS preflight checks.
+    This ensures that browsers don't get 405 Method Not Allowed errors
+    when checking permissions before making actual requests.
+    """
+    return JSONResponse(
+        content={"message": "OK"},
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+        },
+    )
+
 class PersonDetails(BaseModel):
     name: str  # Only name is required
     age: str | None = None  # Optional
@@ -104,14 +121,37 @@ class MetadataManager:
     @staticmethod
     def get_statistics():
         """Get registration statistics"""
-        metadata = MetadataManager.load_metadata()
-        persons = metadata.get("persons", {})
+        try:
+            if os.path.exists(METADATA_FILE):
+                with open(METADATA_FILE, 'r') as f:
+                    metadata = json.load(f)
+            else:
+                metadata = {}
+        except Exception:
+            metadata = {}
+
+        # Filter valid person entries (must be dict and have 'name')
+        persons = {}
+        if isinstance(metadata, dict):
+             for k, v in metadata.items():
+                 if isinstance(v, dict) and 'name' in v:
+                     persons[k] = v
         
         # Count by category
         categories = {}
+        today_count = 0
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        
         for data in persons.values():
-            category = data.get("category", "Uncategorized")
+            category = data.get("category", "unknown")
+            if not category: 
+                category = "unknown"
+            category = category.lower()
             categories[category] = categories.get(category, 0) + 1
+            
+            reg_date = data.get("registration_date", "")
+            if reg_date and reg_date.startswith(today_str):
+                today_count += 1
         
         # Count by gender
         genders = {}
@@ -123,7 +163,8 @@ class MetadataManager:
             "total_registered": len(persons),
             "categories": categories,
             "genders": genders,
-            "last_updated": metadata.get("last_updated", datetime.now().isoformat())
+            "last_updated": datetime.now().isoformat(),
+            "registered_today": today_count
         }
 
 # Helper functions
@@ -803,8 +844,8 @@ async def get_registered_faces():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/gallery", response_model=Dict)
-async def get_gallery():
-    """Get gallery data with image filenames"""
+async def get_gallery(name: Optional[str] = None, category: Optional[str] = None):
+    """Get gallery data with image filenames, optionally filtered by name and category"""
     try:
         if os.path.exists(METADATA_FILE):
             with open(METADATA_FILE, 'r') as f:
@@ -813,6 +854,14 @@ async def get_gallery():
             # Process metadata to include image filename for frontend
             processed_data = {}
             for person_id, person_data in metadata.items():
+                # Filter by name if provided (case-insensitive partial match)
+                if name and name.lower() not in person_data.get('name', '').lower():
+                    continue
+                
+                # Filter by category if provided (case-insensitive exact match)
+                if category and category.lower() != 'all' and category.lower() != person_data.get('category', '').lower():
+                    continue
+
                 processed_data[person_id] = person_data.copy()
 
                 # Extract image filename from photo_path

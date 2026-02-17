@@ -229,9 +229,6 @@ const TabbedCameraManager = ({ onClose }) => {
           <Camera size={24} />
           <h2>Camera Management</h2>
         </div>
-        <button className="close-button" onClick={onClose}>
-          ✕
-        </button>
       </div>
 
       {/* Collection Selector */}

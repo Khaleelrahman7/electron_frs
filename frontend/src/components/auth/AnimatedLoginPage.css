@@ -1,15 +1,19 @@
-/* Professional Cyber-Security Face Recognition System Styles */
+/* Professional Cyber-Security Face Recognition System Styles - TITAN X Theme */
 
 :root {
-  --cyber-primary: #00d4ff;
-  --cyber-secondary: #6c5ce7;
-  --cyber-accent: #ff2d75;
-  --cyber-dark: #0a0a0a;
-  --cyber-dark-secondary: #1a1a2e;
-  --cyber-glow: rgba(0, 212, 255, 0.3);
-  --cyber-glow-strong: rgba(0, 212, 255, 0.6);
-  --success-color: #10b981;
-  --error-color: #ef4444;
+  --cyber-primary: #ff0055;
+  --cyber-secondary: #ff3366;
+  --cyber-accent: #cc0044;
+  --cyber-dark: #050505;
+  --cyber-dark-secondary: #111111;
+  --cyber-glow: rgba(255, 0, 85, 0.2);
+  --cyber-glow-strong: rgba(255, 0, 85, 0.4);
+  --success-color: #05CD99;
+  --error-color: #EE5D50;
+  --text-main: #ffffff;
+  --text-secondary: #a0a0a0;
+  --input-bg: rgba(255, 255, 255, 0.05);
+  --card-border: rgba(255, 255, 255, 0.1);
 }
 
 /* Reset & Container */
@@ -20,8 +24,9 @@
   width: 100vw;
   height: 100vh;
   z-index: 9999;
-  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
-  font-family: 'Orbitron', 'Poppins', 'Inter', sans-serif;
+  background: #000000;
+  font-family: 'DM Sans', 'Inter', sans-serif;
+  color: var(--text-main);
 }
 
 .main-container {
@@ -43,9 +48,10 @@
   border-radius: 30px;
   overflow: hidden;
   box-shadow: 
-    0 25px 50px -12px rgba(0, 0, 0, 0.5),
-    0 0 40px rgba(0, 212, 255, 0.2);
-  border: 1px solid rgba(0, 212, 255, 0.1);
+    0 10px 25px -5px rgba(0, 0, 0, 0.5),
+    0 0 20px rgba(255, 0, 85, 0.1);
+  border: 1px solid var(--card-border);
+  background: var(--cyber-dark-secondary);
   /* Optimization: Force GPU layer */
   transform: translateZ(0);
   will-change: transform; 
@@ -54,16 +60,14 @@
 /* Left Side - Login Form (Glass) */
 .login-section {
   flex: 1;
-  background: rgba(10, 10, 10, 0.6); /* Slightly darker to reduce reliance on blur */
-  /* Optimization: Reduce blur radius or remove if very slow. 
-     Keeping it but moderate. */
+  background: rgba(10, 10, 10, 0.95);
   backdrop-filter: blur(10px); 
   -webkit-backdrop-filter: blur(10px);
   padding: 40px 50px;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  border-right: 1px solid rgba(0, 212, 255, 0.2);
+  border-right: 1px solid var(--card-border);
   position: relative;
   /* Optimization */
   will-change: backdrop-filter;
@@ -77,8 +81,8 @@
   right: 0;
   bottom: 0;
   background: 
-    linear-gradient(45deg, transparent 49%, rgba(0, 212, 255, 0.1) 50%, transparent 51%),
-    linear-gradient(-45deg, transparent 49%, rgba(0, 212, 255, 0.1) 50%, transparent 51%);
+    linear-gradient(45deg, transparent 49%, rgba(255, 0, 85, 0.03) 50%, transparent 51%),
+    linear-gradient(-45deg, transparent 49%, rgba(255, 0, 85, 0.03) 50%, transparent 51%);
   background-size: 20px 20px;
   opacity: 0.3;
   pointer-events: none;
@@ -88,9 +92,8 @@
 .visual-section {
   flex: 1;
   background: 
-    radial-gradient(circle at 30% 30%, rgba(0, 212, 255, 0.1) 0%, transparent 50%),
-    radial-gradient(circle at 70% 70%, rgba(108, 92, 231, 0.1) 0%, transparent 50%),
-    linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
+    radial-gradient(circle at 70% 30%, rgba(255, 0, 85, 0.15) 0%, transparent 50%),
+    linear-gradient(135deg, #111111 0%, #050505 100%);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -109,11 +112,11 @@
 .login-title {
   font-size: 32px;
   font-weight: 700;
-  color: var(--cyber-primary);
+  color: var(--text-main);
   margin-bottom: 10px;
-  text-shadow: 0 0 20px var(--cyber-glow);
   letter-spacing: 2px;
   text-transform: uppercase;
+  text-shadow: 0 0 10px rgba(255, 0, 85, 0.3);
 }
 
 /* Form Elements */
@@ -132,10 +135,10 @@
 
 .form-label {
   display: block;
-  font-size: 14px;
-  color: var(--cyber-primary);
+  font-size: 12px;
+  color: var(--text-secondary);
   margin-bottom: 8px;
-  font-weight: 500;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 1px;
 }
@@ -148,34 +151,34 @@
 
 .form-input {
   width: 100%;
-  padding: 12px 0;
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid var(--cyber-primary);
+  padding: 15px;
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 8px; /* Slightly rounded for Titan theme */
   font-size: 16px;
-  color: #ffffff;
+  color: var(--text-main);
   transition: all 0.3s ease;
-  border-radius: 0;
-  font-family: 'Orbitron', monospace;
+  font-family: 'DM Sans', monospace;
 }
 
 .form-input:focus {
   outline: none;
-  border-bottom-color: var(--cyber-accent);
-  box-shadow: 0 2px 10px var(--cyber-glow);
+  border-color: var(--cyber-primary);
+  box-shadow: 0 0 10px rgba(255, 0, 85, 0.2);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .form-input::placeholder {
-  color: rgba(255, 255, 255, 0.4);
+  color: #666;
 }
 
 /* Icons positioned absolute right */
 .input-icon, .toggle-password {
   position: absolute;
-  right: 0;
+  right: 15px;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--cyber-primary);
+  color: var(--text-secondary);
   background: none;
   border: none;
   cursor: pointer;
@@ -184,15 +187,15 @@
 }
 
 .input-icon:hover, .toggle-password:hover {
-  color: var(--cyber-accent);
+  color: var(--cyber-primary);
 }
 
 .password-wrapper .form-input {
-  padding-right: 35px;
+  padding-right: 45px;
 }
 
 .toggle-password {
-  right: 30px;
+  right: 45px;
 }
 
 .password-icon {
@@ -203,14 +206,14 @@
 .login-button {
   width: 100%;
   padding: 15px;
-  background: linear-gradient(90deg, var(--cyber-primary) 0%, var(--cyber-secondary) 100%);
+  background: linear-gradient(135deg, #ff0055 0%, #cc0044 100%);
   border: none;
-  border-radius: 25px;
-  color: #000;
+  border-radius: 8px; /* Matching input radius */
+  color: #ffffff;
   font-size: 16px;
   font-weight: 700;
   cursor: pointer;
-  box-shadow: 0 0 20px var(--cyber-glow);
+  box-shadow: 0 4px 15px rgba(255, 0, 85, 0.4);
   transition: all 0.3s ease;
   margin-top: 10px;
   text-transform: uppercase;
@@ -226,7 +229,7 @@
   left: -100%;
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
   transition: left 0.5s;
 }
 
@@ -236,12 +239,13 @@
 
 .login-button:hover {
   transform: translateY(-2px);
-  box-shadow: 0 5px 30px var(--cyber-glow-strong);
+  box-shadow: 0 6px 20px rgba(255, 0, 85, 0.6);
 }
 
 .login-button:disabled {
   opacity: 0.7;
   cursor: not-allowed;
+  background: #333;
 }
 
 /* Footer */
@@ -254,9 +258,10 @@
 
 .login-help-text {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 1px;
+  opacity: 0.7;
 }
 
 /* Professional Face Recognition 3D Model */
@@ -302,17 +307,13 @@
   position: absolute;
   width: 200px;
   height: 200px;
-  /* Optimization: Replaced complex gradient with solid color + simple opacity */
-  background: rgba(10, 10, 20, 0.9);
-  border: 2px solid var(--cyber-primary);
-  /* Optimization: REMOVED backdrop-filter */
+  background: rgba(20, 20, 20, 0.8);
+  border: 1px solid rgba(255, 0, 85, 0.3);
   display: flex;
   justify-content: center;
   align-items: center;
-  /* Optimization: REMOVED box-shadow from moving face */
-  box-shadow: none; 
+  box-shadow: 0 0 15px rgba(255, 0, 85, 0.1);
   transition: all 0.3s ease;
-  /* Optimization */
   backface-visibility: hidden; /* Hide back faces */
   will-change: transform;
 }
@@ -323,10 +324,10 @@
   position: absolute;
   width: 90%;
   height: 90%;
-  border: 1px solid var(--cyber-secondary);
+  border: 1px solid var(--cyber-primary);
   border-radius: 10px;
   /* Optimization: Simple border, no shadow */
-  opacity: 0.5;
+  opacity: 0.3;
   pointer-events: none;
 }
 
@@ -338,6 +339,7 @@
   /* Optimization: No text-shadow */
   animation: faceScan 2s ease-in-out infinite;
   will-change: transform, opacity;
+  filter: drop-shadow(0 0 5px var(--cyber-primary));
 }
 
 @keyframes faceScan {
@@ -361,14 +363,14 @@
 @keyframes successCyberGlow {
   0%, 100% { 
     box-shadow: 
-      inset 0 0 20px var(--cyber-glow),
-      0 0 15px var(--cyber-glow);
+      inset 0 0 10px var(--cyber-glow),
+      0 0 5px var(--cyber-glow);
     border-color: var(--cyber-primary);
   }
   50% { 
     box-shadow: 
-      inset 0 0 30px rgba(16, 185, 129, 0.5),
-      0 0 30px rgba(16, 185, 129, 0.8); /* Reduced spread */
+      inset 0 0 15px rgba(5, 205, 153, 0.3),
+      0 0 15px rgba(5, 205, 153, 0.5); /* Reduced spread */
     border-color: var(--success-color);
   }
 }
@@ -386,15 +388,14 @@
 
 .particle {
   position: absolute;
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 4px;
   background: var(--cyber-primary);
   border-radius: 50%;
   animation: cyberParticleFloat 15s infinite linear;
-  /* Optimization: REMOVED box-shadow */
-  /* box-shadow: 0 0 5px var(--cyber-glow); */
-  opacity: 0.6; /* Static opacity instead of shadow */
-  will-change: transform, opacity; /* Optimization */
+  opacity: 0.4;
+  will-change: transform, opacity;
+  box-shadow: 0 0 5px var(--cyber-primary);
 }
 
 .particle:nth-child(1) { left: 10%; animation-delay: 0s; }
@@ -405,8 +406,8 @@
 
 @keyframes cyberParticleFloat {
   0% { transform: translateY(100vh) scale(0); opacity: 0; }
-  10% { opacity: 1; transform: scale(1); }
-  90% { opacity: 1; transform: scale(1); }
+  10% { opacity: 0.8; transform: scale(1); }
+  90% { opacity: 0.8; transform: scale(1); }
   100% { transform: translateY(-100px) scale(0); opacity: 0; }
 }
 
@@ -419,25 +420,23 @@
   width: 90px;
   height: 90px;
   border-radius: 50%;
-  /* Optimization: Simplified background */
-  background: var(--cyber-primary);
+  background: #111;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
   z-index: 20;
-  /* Optimization: Reduced shadow */
-  box-shadow: 0 0 10px rgba(0, 212, 255, 0.5); 
-  border: 3px solid var(--cyber-primary);
-  font-family: 'Orbitron', monospace;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+  border: 4px solid var(--cyber-primary);
+  font-family: 'DM Sans', monospace;
   font-weight: 700;
   font-size: 9px;
   text-transform: uppercase;
   letter-spacing: 1px;
-  color: #000;
+  color: var(--cyber-primary);
   animation: authCoinFloat 3s ease-in-out infinite;
   transition: all 0.5s ease;
-  will-change: transform, top; /* Optimization */
+  will-change: transform, top;
 }
 
 .auth-coin::before {
@@ -445,7 +444,7 @@
   position: absolute;
   width: 70px;
   height: 70px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
+  border: 2px solid rgba(255, 255, 255, 0.1);
   border-radius: 50%;
   animation: authCoinRotate 4s linear infinite;
   will-change: transform;
@@ -465,16 +464,18 @@
 }
 
 .auth-coin.success {
-  background: linear-gradient(135deg, var(--success-color), #34d399);
+  background: linear-gradient(135deg, var(--success-color), #00ff88);
   border-color: var(--success-color);
-  box-shadow: 0 0 40px rgba(16, 185, 129, 0.8);
+  box-shadow: 0 0 15px rgba(5, 205, 153, 0.8);
+  color: #000;
   animation: successCoin 2s ease-in-out;
 }
 
 .auth-coin.failed {
-  background: linear-gradient(135deg, var(--error-color), #f87171);
+  background: linear-gradient(135deg, var(--error-color), #ff3333);
   border-color: var(--error-color);
-  box-shadow: 0 0 40px rgba(239, 68, 68, 0.8);
+  box-shadow: 0 0 15px rgba(238, 93, 80, 0.8);
+  color: #fff;
   animation: failedCoin 1s ease-in-out;
 }
 
@@ -497,30 +498,30 @@
 
 /* Role-based enhanced coin styles */
 .coin-supervisor {
-  background: linear-gradient(135deg, #ff2d75 0%, #ff6b6b 50%, #ff8e53 100%);
-  border: 3px solid #ff2d75;
-  color: #fff;
-  box-shadow: 0 0 25px rgba(255, 45, 117, 0.6);
+  background: linear-gradient(135deg, #111 0%, #222 100%);
+  border: 3px solid #ffaa00;
+  color: #ffaa00;
+  box-shadow: 0 0 10px rgba(255, 170, 0, 0.3);
 }
 
 .coin-admin {
-  background: linear-gradient(135deg, var(--cyber-secondary) 0%, #a29bfe 50%, #6c5ce7 100%);
-  border: 3px solid var(--cyber-secondary);
-  color: #fff;
-  box-shadow: 0 0 25px rgba(108, 92, 231, 0.6);
+  background: linear-gradient(135deg, #111 0%, #222 100%);
+  border: 3px solid #00aaff;
+  color: #00aaff;
+  box-shadow: 0 0 10px rgba(0, 170, 255, 0.3);
 }
 
 .coin-superadmin {
-  background: linear-gradient(135deg, var(--cyber-primary) 0%, #55a3ff 50%, #00d4ff 100%);
+  background: linear-gradient(135deg, #111 0%, #222 100%);
   border: 3px solid var(--cyber-primary);
-  color: #000;
-  box-shadow: 0 0 30px rgba(0, 212, 255, 0.8), 0 0 50px rgba(0, 212, 255, 0.4);
+  color: var(--cyber-primary);
+  box-shadow: 0 0 10px rgba(255, 0, 85, 0.5);
 }
 
 .auth-coin-icon {
   font-size: 20px;
   margin-bottom: 2px;
-  text-shadow: 0 0 15px currentColor;
+  text-shadow: 0 0 5px currentColor;
 }
 
 .auth-coin-text {
@@ -536,17 +537,17 @@
   bottom: -100px;
   left: 50%;
   transform: translateX(-50%);
-  background: linear-gradient(90deg, var(--success-color), #00d4ff);
-  color: white;
+  background: linear-gradient(90deg, var(--success-color), #00ff88);
+  color: #000;
   padding: 12px 24px;
-  border-radius: 25px;
+  border-radius: 8px;
   white-space: nowrap;
   opacity: 0;
   transition: all 0.5s ease;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 1px;
-  box-shadow: 0 5px 15px rgba(16, 185, 129, 0.4); /* Reduced shadow */
+  box-shadow: 0 4px 15px rgba(5, 205, 153, 0.4);
   z-index: 30;
   will-change: transform, opacity, bottom;
 }
@@ -558,16 +559,17 @@
 
 /* Error Message */
 .error-message {
-  background: linear-gradient(90deg, var(--error-color), #f87171);
-  color: white;
+  background: rgba(238, 93, 80, 0.1);
+  border: 1px solid var(--error-color);
+  color: var(--error-color);
   padding: 12px 18px;
-  border-radius: 20px;
+  border-radius: 8px;
   font-size: 14px;
   margin-bottom: 20px;
-  font-weight: 500;
+  font-weight: 600;
   text-align: center;
   /* backdrop-filter: blur(10px); REMOVED for performance */
-  box-shadow: 0 5px 10px rgba(239, 68, 68, 0.3); /* Reduced shadow */
+  box-shadow: 0 2px 10px rgba(238, 93, 80, 0.1);
   text-transform: uppercase;
   letter-spacing: 1px;
 }

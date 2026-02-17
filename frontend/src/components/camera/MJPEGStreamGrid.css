@@ -3,9 +3,9 @@
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background-color: #1a1a1a;
-  color: white;
-  font-family: 'Inter', sans-serif;
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  font-family: var(--font-family);
 }
 
 .stream-controls {
@@ -13,10 +13,11 @@
   justify-content: space-between;
   align-items: center;
   padding: 1rem;
-  background-color: #2d2d2d;
-  border-bottom: 1px solid #444;
+  background-color: var(--bg-panel);
+  border-bottom: 1px solid var(--border-color);
   flex-wrap: wrap;
   gap: 1rem;
+  box-shadow: var(--shadow-sm);
 }
 
 .control-group {
@@ -35,22 +36,23 @@
 }
 
 .btn-primary {
-  background-color: #FFFFFF;
-  color: black;
-  border: 1px solid #000000;
+  background-color: var(--primary-color);
+  color: white;
+  border: 1px solid transparent;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background-color: #F8F9FA;
+  background-color: var(--primary-hover);
 }
 
 .btn-secondary {
-  background-color: #6b7280;
-  color: white;
+  background-color: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background-color: #4b5563;
+  background-color: var(--bg-hover);
 }
 
 .btn:disabled {
@@ -60,10 +62,10 @@
 
 .grid-selector {
   padding: 0.5rem;
-  border: 1px solid #444;
+  border: 1px solid var(--border-color);
   border-radius: 4px;
-  background-color: #374151;
-  color: white;
+  background-color: var(--bg-input);
+  color: var(--text-primary);
   cursor: pointer;
 }
 
@@ -71,16 +73,17 @@
   display: flex;
   gap: 1rem;
   font-size: 0.875rem;
-  color: #d1d5db;
+  color: var(--text-secondary);
 }
 
 .error-message {
-  background-color: #dc2626;
-  color: white;
+  background-color: rgba(239, 68, 68, 0.1);
+  color: var(--danger-color);
   padding: 1rem;
   margin: 1rem;
   border-radius: 4px;
-  border-left: 4px solid #b91c1c;
+  border-left: 4px solid var(--danger-color);
+  border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
 .video-grid {
@@ -88,23 +91,25 @@
   display: grid;
   gap: 2px;
   padding: 2px;
-  background-color: #111;
+  background-color: var(--bg-app);
   overflow: hidden;
 }
 
 .video-cell {
-  background-color: #2d2d2d;
+  background-color: var(--bg-panel);
   border-radius: 4px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
   position: relative;
   min-height: 200px;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
 }
 
 .video-cell.empty {
-  background-color: #1f1f1f;
-  border: 2px dashed #444;
+  background-color: var(--bg-hover);
+  border: 2px dashed var(--border-color);
 }
 
 .empty-placeholder {
@@ -112,7 +117,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #6b7280;
+  color: var(--text-secondary);
   font-size: 0.875rem;
 }
 
@@ -121,17 +126,18 @@
   justify-content: space-between;
   align-items: center;
   padding: 0.5rem;
-  background-color: #00091a;
+  background-color: var(--bg-panel);
   font-size: 0.75rem;
-  font-weight: 500;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .camera-label {
-  color: #f3f4f6;
+  color: var(--text-primary);
 }
 
 .stream-status {
-  color: #10b981;
+  color: var(--success-color);
   font-size: 0.625rem;
 }
 
@@ -151,18 +157,19 @@
 
 .video-footer {
   padding: 0.25rem 0.5rem;
-  background-color: #1f2937;
+  background-color: var(--bg-panel);
   font-size: 0.625rem;
-  color: #9ca3af;
+  color: var(--text-secondary);
   text-align: center;
+  border-top: 1px solid var(--border-color);
 }
 
 .overflow-notice {
   padding: 1rem;
-  background-color: #1f2937;
-  border-top: 1px solid #444;
+  background-color: var(--bg-panel);
+  border-top: 1px solid var(--border-color);
   text-align: center;
-  color: #d1d5db;
+  color: var(--text-secondary);
   font-size: 0.875rem;
 }
 
@@ -206,7 +213,7 @@
 
 /* Loading animation */
 .video-stream[src=""] {
-  background: linear-gradient(90deg, #2d2d2d 25%, #3d3d3d 50%, #2d2d2d 75%);
+  background: linear-gradient(90deg, var(--bg-hover) 25%, var(--bg-input) 50%, var(--bg-hover) 75%);
   background-size: 200% 100%;
   animation: loading 1.5s infinite;
 }
@@ -222,13 +229,13 @@
 
 /* Stream connection indicators */
 .video-cell:hover .video-header {
-  background-color: #4b5563;
+  background-color: var(--bg-hover);
 }
 
 .video-stream:not([src]) + .stream-status {
-  color: #ef4444;
+  color: var(--danger-color);
 }
 
 .video-stream[src]:not([src=""]) + .stream-status {
-  color: #10b981;
+  color: var(--success-color);
 }

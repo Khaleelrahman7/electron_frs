@@ -107,36 +107,6 @@ function createWindow() {
   // Clear cache to ensure fresh load
   mainWindow.webContents.session.clearCache();
 
-  // Load the app
-  if (isDev) {
-    // In development, try to load from development server first
-    mainWindow.loadURL('http://192.168.11.107:3000').catch(() => {
-      // If dev server is not running, fall back to build
-      const buildPath = path.join(__dirname, 'build/index.html');
-      if (fs.existsSync(buildPath)) {
-        mainWindow.loadFile(buildPath);
-      } else {
-        // Show fallback page
-        loadFallbackPage(mainWindow);
-      }
-    });
-    // Open dev tools in development mode
-    mainWindow.webContents.openDevTools();
-  } else {
-    // In production, load from build directory
-    const buildPath = path.join(__dirname, 'build/index.html');
-    if (fs.existsSync(buildPath)) {
-      mainWindow.loadFile(buildPath);
-    } else {
-      // Show fallback page
-      loadFallbackPage(mainWindow);
-    }
-  }
-
-  mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
-  });
-
   // Create application menu
   const template = [
     {
@@ -174,6 +144,44 @@ function createWindow() {
 
   const menu = Menu.buildFromTemplate(template);
   Menu.setApplicationMenu(menu);
+
+  // Show window when ready
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+  });
+
+  // Load the app
+  if (isDev) {
+    // In development, try to load from development server first
+    mainWindow.loadURL('http://localhost:3000')
+      .then(() => {
+        console.log('Loaded development server');
+      })
+      .catch((err) => {
+        console.log('Failed to load dev server:', err.message);
+        // If dev server is not running, fall back to build
+        const buildPath = path.join(__dirname, 'build/index.html');
+        if (fs.existsSync(buildPath)) {
+          console.log('Falling back to build:', buildPath);
+          mainWindow.loadFile(buildPath);
+        } else {
+          // Show fallback page
+          console.log('No build found, showing fallback page');
+          loadFallbackPage(mainWindow);
+        }
+      });
+    // Open dev tools in development mode
+    mainWindow.webContents.openDevTools();
+  } else {
+    // In production, load from build directory
+    const buildPath = path.join(__dirname, 'build/index.html');
+    if (fs.existsSync(buildPath)) {
+      mainWindow.loadFile(buildPath);
+    } else {
+      // Show fallback page
+      loadFallbackPage(mainWindow);
+    }
+  }
 }
 
 // IPC Handlers for Video Processing

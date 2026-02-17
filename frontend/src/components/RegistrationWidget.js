@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { User, Image as ImageIcon, Upload, Check, Info, RefreshCw, FileSpreadsheet, Folder, AlertCircle } from 'lucide-react';
 import './RegistrationWidget.css';
 
 import { API_BASE_URL as BASE_URL } from '../utils/apiConfig';
@@ -191,8 +192,6 @@ const RegistrationWidget = () => {
     }
   };
 
-
-
   const handleExcelFileSelect = (event) => {
     const file = event.target.files[0];
     if (file) {
@@ -278,120 +277,171 @@ const RegistrationWidget = () => {
 
   return (
     <div className="registration-widget">
-      <div className="registration-header">
-        <h2>Person Registration</h2>
-        <div className="mode-selector">
+      <div className="registration-header-clean">
+        <div className="header-title">
+          <h2>Registration</h2>
+          <p>Add new persons to the database</p>
+        </div>
+        <div className="mode-selector-pill">
           <button
-            className={`mode-btn ${activeMode === 'single' ? 'active' : ''}`}
+            className={`mode-pill ${activeMode === 'single' ? 'active' : ''}`}
             onClick={() => setActiveMode('single')}
           >
-            Single Registration
+            Single Entry
           </button>
           <button
-            className={`mode-btn ${activeMode === 'bulk' ? 'active' : ''}`}
+            className={`mode-pill ${activeMode === 'bulk' ? 'active' : ''}`}
             onClick={() => setActiveMode('bulk')}
           >
-            Bulk Registration
+            Bulk Import
           </button>
         </div>
       </div>
 
+      {activeMode === 'single' && (
+        <div className="stepper-header">
+          <div className="step active">
+            <span className="step-num">1</span>
+            <span className="step-text">Person Info</span>
+          </div>
+          <div className="step-line"></div>
+          <div className="step active">
+            <span className="step-num">2</span>
+            <span className="step-text">Photo Upload</span>
+          </div>
+          <div className="step-line"></div>
+          <div className="step">
+            <span className="step-num">3</span>
+            <span className="step-text">Review & Submit</span>
+          </div>
+        </div>
+      )}
+
       {message && (
-        <div className={`message ${messageType}`}>
-          {message}
+        <div className={`message-banner ${messageType}`}>
+          {messageType === 'error' ? <AlertCircle size={18} /> : <Check size={18} />}
+          <span>{message}</span>
         </div>
       )}
 
       {activeMode === 'single' && (
-        <div className="single-registration">
-          <div className="registration-form">
-            <div className="form-section">
-              <h3>Person Information</h3>
+        <div className="single-registration-layout">
+          {/* Left Panel: Person Info */}
+          <div className="reg-card person-info-card">
+            <div className="card-header">
+              <div className="icon-box blue">
+                <User size={20} />
+              </div>
+              <div className="header-text">
+                <h3>Person Information</h3>
+                <p>Fill in the individual's basic identity details</p>
+              </div>
+            </div>
+
+            <div className="card-content">
               <div className="form-group">
-                <label>Name *</label>
+                <label>Full Name <span className="required">*</span></label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => handleInputChange('name', e.target.value)}
-                  placeholder="Enter person's name"
+                  placeholder="Enter person's full name"
                   disabled={isLoading}
+                  className="input-clean"
                 />
               </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Age</label>
-                  <div className="toggle-row">
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <input
-                        type="checkbox"
-                        checked={autoDetectAge}
-                        onChange={(e) => setAutoDetectAge(e.target.checked)}
-                        disabled={isLoading}
-                      />
-                      Auto-detect from photo
-                    </label>
-                    {autoDetectAge && (
-                      <span className="ai-badge">
-                        High Accuracy AI
-                      </span>
-                    )}
-                  </div>
-                  <div className="age-stepper">
-                    <button
-                      type="button"
-                      className="step-btn"
-                      onClick={() => {
-                        const current = parseInt(formData.age || '18', 10);
-                        const next = isNaN(current) ? 18 : Math.max(18, current - 1);
-                        setAgeError('');
-                        setFormData(prev => ({ ...prev, age: String(next) }));
-                      }}
-                      disabled={isLoading || autoDetectAge || (() => {
-                        const v = parseInt(formData.age || '18', 10);
-                        return !isFinite(v) || v <= 18;
-                      })()}
+
+              <div className="form-row-split">
+                <div className="form-group age-group">
+                  <label>
+                    Age 
+                    <span className="ai-badge-clean">AI</span>
+                  </label>
+                  
+                  {autoDetectAge ? (
+                    <div 
+                      className="auto-detect-box selected"
+                      onClick={() => setAutoDetectAge(false)}
+                      title="Click to switch to manual age entry"
                     >
-                      −
-                    </button>
-                    <input
-                      type="number"
-                      value={(() => {
-                        const ageValue = formData.age || '18';
-                        const ageNum = parseInt(ageValue, 10);
-                        const finalValue = (isNaN(ageNum) || ageNum < 18) ? '18' : String(Math.min(120, ageNum));
-                        return finalValue;
-                      })()}
-                      readOnly
-                      min={18}
-                      max={120}
-                      step={1}
-                      disabled={isLoading || autoDetectAge}
-                    />
-                    <button
-                      type="button"
-                      className="step-btn"
-                      onClick={() => {
-                        const current = parseInt(formData.age || '18', 10);
-                        const next = isNaN(current) ? 18 : Math.min(120, current + 1);
-                        setAgeError('');
-                        setFormData(prev => ({ ...prev, age: String(next) }));
-                      }}
-                      disabled={isLoading || autoDetectAge || (() => {
-                        const v = parseInt(formData.age || '18', 10);
-                        return !isFinite(v) || v >= 120;
-                      })()}
-                    >
-                      +
-                    </button>
-                  </div>
+                      <div className="check-circle">
+                        <Check size={14} />
+                      </div>
+                      <div className="auto-detect-text">
+                        <strong>Auto-detect from photo</strong>
+                        <span>Uses AI to estimate age range from the uploaded photo</span>
+                      </div>
+                    </div>
+                  ) : (
+                     <div className="manual-age-container-clean">
+                      <div className="age-stepper-clean">
+                        <button
+                          type="button"
+                          className="step-btn-clean"
+                          onClick={() => {
+                            const current = parseInt(formData.age || '18', 10);
+                            const next = isNaN(current) ? 18 : Math.max(18, current - 1);
+                            setAgeError('');
+                            setFormData(prev => ({ ...prev, age: String(next) }));
+                          }}
+                          disabled={isLoading || (() => {
+                            const v = parseInt(formData.age || '18', 10);
+                            return !isFinite(v) || v <= 18;
+                          })()}
+                        >
+                          −
+                        </button>
+                        <input
+                          type="number"
+                          value={(() => {
+                            const ageValue = formData.age || '18';
+                            const ageNum = parseInt(ageValue, 10);
+                            const finalValue = (isNaN(ageNum) || ageNum < 18) ? '18' : String(Math.min(120, ageNum));
+                            return finalValue;
+                          })()}
+                          readOnly
+                          min={18}
+                          max={120}
+                          step={1}
+                          disabled={isLoading}
+                        />
+                        <button
+                          type="button"
+                          className="step-btn-clean"
+                          onClick={() => {
+                            const current = parseInt(formData.age || '18', 10);
+                            const next = isNaN(current) ? 18 : Math.min(120, current + 1);
+                            setAgeError('');
+                            setFormData(prev => ({ ...prev, age: String(next) }));
+                          }}
+                          disabled={isLoading || (() => {
+                            const v = parseInt(formData.age || '18', 10);
+                            return !isFinite(v) || v >= 120;
+                          })()}
+                        >
+                          +
+                        </button>
+                      </div>
+                      <button 
+                        type="button"
+                        className="btn-link"
+                        onClick={() => setAutoDetectAge(true)}
+                      >
+                        Use Auto-detect
+                      </button>
+                    </div>
+                  )}
+
                   {ageError && <span className="field-error">{ageError}</span>}
                 </div>
-                <div className="form-group">
+
+                <div className="form-group gender-group">
                   <label>Gender</label>
                   <select
                     value={formData.gender}
                     onChange={(e) => handleInputChange('gender', e.target.value)}
                     disabled={isLoading}
+                    className="select-clean"
                   >
                     <option value="Male">Male</option>
                     <option value="Female">Female</option>
@@ -399,6 +449,7 @@ const RegistrationWidget = () => {
                   </select>
                 </div>
               </div>
+
               <div className="form-group">
                 <label>Category</label>
                 <input
@@ -408,38 +459,55 @@ const RegistrationWidget = () => {
                   placeholder="e.g., Employee, Visitor, Student (letters only)"
                   disabled={isLoading}
                   pattern="[a-zA-Z\s\-']+"
-                  title="Category should only contain letters and spaces (no numbers)"
+                  className="input-clean"
                 />
                 {categoryError && <span className="field-error">{categoryError}</span>}
               </div>
+
+              <div className="info-alert">
+                <Info size={16} />
+                <span>Ensure the person's details match official identification documents for accuracy.</span>
+              </div>
             </div>
-            <div className="form-actions">
+            
+            <div className="card-footer">
               <button
                 type="button"
-                className="btn-secondary"
+                className="btn-reset-clean"
                 onClick={resetForm}
                 disabled={isLoading}
               >
+                <RefreshCw size={14} />
                 Reset
               </button>
             </div>
           </div>
-          <div className="right-panel">
-            <div className="form-section upload-section">
-              <h3>Upload Photo</h3>
+
+          {/* Right Panel: Upload Photo */}
+          <div className="reg-card photo-card">
+            <div className="card-header">
+              <div className="icon-box blue">
+                <ImageIcon size={20} />
+              </div>
+              <div className="header-text">
+                <h3>Upload Photo</h3>
+                <p>Clear front-facing portrait recommended</p>
+              </div>
+            </div>
+
+            <div className="card-content fill-height">
               <div
-                className="image-upload-area"
+                className={`upload-area-clean ${imagePreview ? 'has-image' : ''}`}
                 onClick={() => {
                   if (!isLoading) fileInputRef.current?.click();
                 }}
-                style={{ cursor: isLoading ? 'not-allowed' : 'pointer' }}
               >
                 {imagePreview ? (
-                  <div className="image-preview">
+                  <div className="image-preview-clean">
                     <img src={imagePreview} alt="Preview" />
                     <button
                       type="button"
-                      className="remove-image"
+                      className="remove-image-btn"
                       onClick={(e) => {
                         e.stopPropagation();
                         setImageFile(null);
@@ -452,10 +520,17 @@ const RegistrationWidget = () => {
                     </button>
                   </div>
                 ) : (
-                  <div className="upload-placeholder">
-                    <div className="upload-icon">📷</div>
-                    <p>Click to select an image</p>
-                    <small>Supported: JPG, PNG, JPEG</small>
+                  <div className="upload-placeholder-clean">
+                    <div className="upload-icon-circle">
+                      <ImageIcon size={32} />
+                    </div>
+                    <h4>Click to select an image</h4>
+                    <p>or drag & drop here</p>
+                    <div className="file-types">
+                      <span>JPG</span>
+                      <span>PNG</span>
+                      <span>JPEG</span>
+                    </div>
                   </div>
                 )}
                 <input
@@ -468,13 +543,15 @@ const RegistrationWidget = () => {
                 />
               </div>
             </div>
-            <div className="form-actions">
+
+            <div className="card-footer">
               <button
                 type="button"
-                className="btn-primary"
+                className="btn-submit-clean"
                 onClick={registerSingle}
                 disabled={isLoading || !imageFile || !formData.name.trim()}
               >
+                <Check size={18} />
                 {isLoading ? 'Registering...' : 'Register Person'}
               </button>
             </div>
@@ -483,65 +560,76 @@ const RegistrationWidget = () => {
       )}
 
       {activeMode === 'bulk' && (
-        <div className="excel-bulk-registration">
-          <div className="bulk-info">
-            <h3>Bulk Registration</h3>
-            <p>Register multiple people using an Excel file with person data and a folder containing their images.</p>
-            <ul>
-              <li>Excel file must have a 'name' column (required)</li>
-              <li>Optional columns: 'age', 'gender', 'category'</li>
-              <li>Data folder should contain images named of each person</li>
-              {/* <li>Each person's subfolder should contain their image (JPG, PNG, JPEG)</li> */}
-              <li>Valid categories: criminal, offender, chain snatching, eve teasing, unknown, eagle employee</li>
-            </ul>
-          </div>
-
-          <div className="excel-bulk-form">
-            <div className="form-row">
-              <div className="form-section">
-                <h4>1. Select Excel File</h4>
-                <div
-                  className="file-upload-area"
-                  onClick={() => {
-                    if (!isLoading) excelFileInputRef.current?.click();
-                  }}
-                  style={{ cursor: isLoading ? 'not-allowed' : 'pointer' }}
-                >
-                  <input
-                    ref={excelFileInputRef}
-                    type="file"
-                    accept=".xlsx,.xls"
-                    onChange={handleExcelFileSelect}
-                    style={{ display: 'none' }}
-                    disabled={isLoading}
-                  />
-                  <div className="upload-placeholder">
-                    <div className="upload-icon">📊</div>
-                    <p>{excelFile ? excelFile.name : 'Click to select Excel file'}</p>
-                    <small>Supported: .xlsx, .xls</small>
-                  </div>
-                </div>
+        <div className="bulk-registration-layout">
+          <div className="reg-card full-width">
+            <div className="card-header">
+              <div className="icon-box blue">
+                <Folder size={20} />
               </div>
-
-              <div className="form-section">
-                <h4>2. Select Data Folder</h4>
-                <div
-                  className="folder-select-area"
-                  onClick={handleFolderSelect}
-                  style={{ cursor: isLoading ? 'not-allowed' : 'pointer' }}
-                >
-                  <div className="upload-placeholder">
-                    <div className="upload-icon">📂</div>
-                    <p>{selectedFolder || 'Click to select data folder'}</p>
-                    <small>Folder containing person images</small>
-                  </div>
-                </div>
+              <div className="header-text">
+                <h3>Bulk Registration</h3>
+                <p>Register multiple people using an Excel file and image folder</p>
               </div>
             </div>
 
-            <div className="form-actions">
+            <div className="card-content">
+              <div className="bulk-grid">
+                <div className="bulk-step">
+                  <h4>1. Select Excel File</h4>
+                  <div
+                    className={`file-select-box ${excelFile ? 'selected' : ''}`}
+                    onClick={() => {
+                      if (!isLoading) excelFileInputRef.current?.click();
+                    }}
+                  >
+                    <input
+                      ref={excelFileInputRef}
+                      type="file"
+                      accept=".xlsx,.xls"
+                      onChange={handleExcelFileSelect}
+                      style={{ display: 'none' }}
+                      disabled={isLoading}
+                    />
+                    <div className="box-icon">
+                      <FileSpreadsheet size={32} />
+                    </div>
+                    <div className="box-info">
+                      <p className="box-title">{excelFile ? excelFile.name : 'Click to select Excel file'}</p>
+                      <small>Supported: .xlsx, .xls</small>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bulk-step">
+                  <h4>2. Select Data Folder</h4>
+                  <div
+                    className={`file-select-box ${selectedFolder ? 'selected' : ''}`}
+                    onClick={handleFolderSelect}
+                  >
+                    <div className="box-icon">
+                      <Folder size={32} />
+                    </div>
+                    <div className="box-info">
+                      <p className="box-title">{selectedFolder || 'Click to select data folder'}</p>
+                      <small>Folder containing person images</small>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bulk-instructions">
+                 <h4>Instructions</h4>
+                 <ul>
+                    <li>Excel file must have a 'name' column (required)</li>
+                    <li>Optional columns: 'age', 'gender', 'category'</li>
+                    <li>Data folder should contain images named of each person</li>
+                 </ul>
+              </div>
+            </div>
+
+            <div className="card-footer right-align">
               <button
-                className="btn-primary"
+                className="btn-submit-clean"
                 onClick={handleBulkRegistration}
                 disabled={isLoading || !excelFile || !selectedFolder}
               >

@@ -2,8 +2,8 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: #1a1a1a;
-  color: #fff;
+  background: var(--bg-app);
+  color: var(--text-primary);
 }
 
 .dashboard-header {
@@ -11,14 +11,16 @@
   justify-content: space-between;
   align-items: center;
   padding: 20px;
-  background: #2a2a2a;
-  border-bottom: 1px solid #333;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
 }
 
 .header-info h1 {
   margin: 0 0 10px 0;
   font-size: 1.8rem;
   font-weight: 600;
+  color: var(--text-primary);
 }
 
 .camera-stats {
@@ -27,17 +29,17 @@
 }
 
 .stat {
-  color: #ccc;
+  color: var(--text-secondary);
   font-size: 0.9rem;
 }
 
 .stat strong {
-  color: #4CAF50;
+  color: var(--success-color);
   font-size: 1.1rem;
 }
 
 .add-camera-btn {
-  background: #4CAF50;
+  background: var(--success-color);
   color: white;
   border: none;
   padding: 12px 24px;
@@ -48,7 +50,7 @@
 }
 
 .add-camera-btn:hover {
-  background: #45a049;
+  background: #04b888;
 }
 
 .header-actions {
@@ -59,10 +61,11 @@
 
 .view-mode-toggle {
   display: flex;
-  background: #3a3a3a;
+  background: var(--bg-input);
   border-radius: 8px;
   padding: 4px;
   gap: 2px;
+  border: 1px solid var(--border-color);
 }
 
 .view-mode-btn {
@@ -75,19 +78,19 @@
   border-radius: 6px;
   cursor: pointer;
   font-size: 14px;
-  color: #ccc;
+  color: var(--text-secondary);
   transition: all 0.2s;
 }
 
 .view-mode-btn:hover {
-  background: #4a4a4a;
-  color: #fff;
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 .view-mode-btn.active {
-  background: #4CAF50;
+  background: var(--primary-color);
   color: white;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-sm);
 }
 
 .settings-btn {
@@ -96,25 +99,25 @@
   justify-content: center;
   width: 40px;
   height: 40px;
-  background: #3a3a3a;
-  border: 1px solid #555;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   cursor: pointer;
-  color: #ccc;
+  color: var(--text-secondary);
   transition: all 0.2s;
 }
 
 .settings-btn:hover {
-  background: #4a4a4a;
-  color: #fff;
-  border-color: #666;
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--primary-color);
 }
 
 .error-banner {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #f44336;
+  background: var(--danger-color);
   color: white;
   padding: 12px 20px;
   margin: 0;
@@ -137,8 +140,8 @@
 
 .sidebar {
   width: 300px;
-  background: #2a2a2a;
-  border-right: 1px solid #333;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border-color);
   padding: 20px;
   overflow-y: auto;
 }
@@ -150,14 +153,14 @@
 .collection-filter h3 {
   margin: 0 0 10px 0;
   font-size: 1.1rem;
-  color: #ccc;
+  color: var(--text-secondary);
 }
 
 .collection-select {
   width: 100%;
-  background: #333;
-  color: #fff;
-  border: 1px solid #555;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
   padding: 8px 12px;
   border-radius: 4px;
   font-size: 0.9rem;
@@ -190,22 +193,23 @@
   font-size: 4rem;
   margin-bottom: 20px;
   opacity: 0.5;
+  color: var(--text-secondary);
 }
 
 .empty-state h3 {
   margin: 0 0 10px 0;
   font-size: 1.5rem;
-  color: #ccc;
+  color: var(--text-primary);
 }
 
 .empty-state p {
   margin: 0 0 30px 0;
-  color: #888;
+  color: var(--text-secondary);
   font-size: 1rem;
 }
 
 .add-first-camera-btn {
-  background: #4CAF50;
+  background: var(--success-color);
   color: white;
   border: none;
   padding: 12px 24px;
@@ -216,7 +220,7 @@
 }
 
 .add-first-camera-btn:hover {
-  background: #45a049;
+  background: #04b888;
 }
 
 .pagination {
@@ -228,9 +232,9 @@
 }
 
 .pagination-btn {
-  background: #333;
-  color: #fff;
-  border: 1px solid #555;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
   padding: 8px 16px;
   border-radius: 4px;
   cursor: pointer;
@@ -238,8 +242,8 @@
 }
 
 .pagination-btn:hover:not(:disabled) {
-  background: #444;
-  border-color: #666;
+  background: var(--bg-hover);
+  border-color: var(--primary-color);
 }
 
 .pagination-btn:disabled {
@@ -248,7 +252,7 @@
 }
 
 .page-info {
-  color: #ccc;
+  color: var(--text-secondary);
   font-size: 0.9rem;
 }
 
@@ -263,8 +267,8 @@
 .spinner {
   width: 40px;
   height: 40px;
-  border: 4px solid #333;
-  border-top: 4px solid #4CAF50;
+  border: 4px solid var(--border-color);
+  border-top: 4px solid var(--primary-color);
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin-bottom: 20px;
@@ -285,7 +289,7 @@
     width: 100%;
     height: auto;
     border-right: none;
-    border-bottom: 1px solid #333;
+    border-bottom: 1px solid var(--border-color);
   }
   
   .cameras-grid {
@@ -310,21 +314,24 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.8);
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 2000;
+  backdrop-filter: blur(4px);
 }
 
 .modal-content {
-  background: #1a1a1a;
+  background: var(--bg-panel);
   border-radius: 8px;
   max-width: 90vw;
   max-height: 90vh;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  box-shadow: var(--shadow-lg);
+  color: var(--text-primary);
 }
 
 .modal-header {
@@ -332,20 +339,20 @@
   justify-content: space-between;
   align-items: center;
   padding: 20px;
-  background: #2a2a2a;
-  border-bottom: 1px solid #333;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .modal-header h2 {
   margin: 0;
-  color: #fff;
+  color: var(--text-primary);
   font-size: 1.3rem;
 }
 
 .close-modal-btn {
   background: none;
   border: none;
-  color: #ccc;
+  color: var(--text-secondary);
   font-size: 1.5rem;
   cursor: pointer;
   padding: 5px 10px;
@@ -354,6 +361,6 @@
 }
 
 .close-modal-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }

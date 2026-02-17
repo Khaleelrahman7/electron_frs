@@ -233,11 +233,6 @@ const AddCameraForm = ({ collectionId, onClose, editingCamera = null }) => {
     <div className="add-camera-form">
       <div className="form-header">
         <h3>{editingCamera ? 'Edit Camera' : 'Add New Camera'}</h3>
-        {onClose && (
-          <button className="close-button" onClick={handleCancel}>
-            ✕
-          </button>
-        )}
       </div>
       <form onSubmit={handleSubmit}>
         {error && <div className="error-message">{error}</div>}

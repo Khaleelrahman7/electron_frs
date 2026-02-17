@@ -5,17 +5,8 @@
         "gender": "Male",
         "category": "eagle employee",
         "registration_date": "2025-03-11T17:20:23.481686",
-        "gallery_path": "C:\\Users\\e629\\Desktop\\GUI_Face\\backend_face\\data\\gallery\\logesh",
-        "photo_path": "C:\\Users\\e629\\Desktop\\GUI_Face\\backend_face\\data\\gallery\\logesh\\original.jpg"
-    },
-    "sathish": {
-        "name": "sathish",
-        "age": "25",
-        "gender": "Male",
-        "category": "eagle",
-        "registration_date": "2025-10-31T17:16:45.902239",
-        "gallery_path": "C:\\python programs\\electron_frs\\backend_face\\data\\gallery\\sathish",
-        "photo_path": "C:\\python programs\\electron_frs\\backend_face\\data\\gallery\\sathish\\1.jpg"
+        "gallery_path": "c:\\Users\\e629\\Documents\\GitHub\\electron_frs\\backend_face\\data\\gallery\\logesh",
+        "photo_path": "c:\\Users\\e629\\Documents\\GitHub\\electron_frs\\backend_face\\data\\gallery\\logesh\\original.jpg"
     },
     "rahman": {
         "name": "Rahman",
@@ -23,7 +14,7 @@
         "gender": "Male",
         "category": "employee",
         "registration_date": "2025-11-08T11:33:04.153329",
-        "gallery_path": "C:\\python programs\\electron_frs\\backend_face\\data\\gallery\\rahman",
-        "photo_path": "C:\\python programs\\electron_frs\\backend_face\\data\\gallery\\rahman\\1.jpg"
+        "gallery_path": "c:\\Users\\e629\\Documents\\GitHub\\electron_frs\\backend_face\\data\\gallery\\rahman",
+        "photo_path": "c:\\Users\\e629\\Documents\\GitHub\\electron_frs\\backend_face\\data\\gallery\\rahman\\1.jpg"
     }
 }

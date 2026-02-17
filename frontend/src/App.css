@@ -1,41 +1,235 @@
 :root {
-  /* Color Palette - Enterprise Dark Theme */
-  --bg-app: #0f172a;        /* Deep Blue/Slate Background */
-  --bg-panel: #1e293b;      /* Lighter Slate for Panels */
-  --bg-sidebar: #0b1120;    /* Darker Sidebar */
-  --bg-input: #334155;      /* Input Background */
-  --bg-hover: #334155;      /* Hover State */
-  
-  /* Text Colors */
-  --text-primary: #f8fafc;  /* Primary Text (White-ish) */
-  --text-secondary: #94a3b8;/* Secondary Text (Slate Gray) */
-  --text-muted: #64748b;    /* Muted Text */
-  
-  /* Brand Colors */
-  --primary-color: #3b82f6; /* Bright Blue */
-  --primary-hover: #2563eb; /* Darker Blue */
-  --secondary-color: #64748b;
-  
-  /* Status Colors */
-  --success-color: #10b981; /* Emerald */
-  --warning-color: #f59e0b; /* Amber */
-  --danger-color: #ef4444;  /* Red */
-  --info-color: #0ea5e9;    /* Sky Blue */
-
-  /* Borders & Spacing */
-  --border-color: #334155;
+  /* Common Variables */
   --border-radius-sm: 4px;
   --border-radius: 8px;
   --border-radius-lg: 12px;
+  --font-family: 'DM Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   
-  /* Shadows */
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  /* Default Theme (Dark Enterprise) */
+  --bg-app: #0b1120;
+  --bg-panel: rgba(17, 25, 40, 0.75);
+  --bg-sidebar: #0f172a;
+  --bg-header: rgba(15, 23, 42, 0.8);
+  --bg-input: rgba(30, 41, 59, 0.5);
+  --bg-hover: rgba(56, 189, 248, 0.1);
+  
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  
+  --sidebar-text: #f8fafc;
+  --sidebar-text-secondary: #94a3b8;
+  --sidebar-text-muted: #64748b;
+  --sidebar-hover: rgba(56, 189, 248, 0.1);
+  --sidebar-active-bg: rgba(14, 165, 233, 0.2);
+  --sidebar-border: rgba(148, 163, 184, 0.1);
 
-  /* Typography */
-  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  --primary-color: #0ea5e9;
+  --primary-rgb: 14, 165, 233;
+  --primary-hover: #38bdf8;
+  --secondary-color: #10b981;
+  
+  --primary-gradient: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%);
+  
+  --success-color: #10b981;
+  --warning-color: #f59e0b;
+  --danger-color: #ef4444;
+  --info-color: #06b6d4;
+
+  --border-color: rgba(56, 189, 248, 0.2);
+  
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+  --shadow-neon: 0 0 5px rgba(14, 165, 233, 0.2);
+
+  /* Dashboard Specific */
+  --bg-center-panel-gradient: radial-gradient(circle at center, rgba(14, 165, 233, 0.1) 0%, rgba(17, 25, 40, 0.8) 70%);
+  --bg-face-frame: rgba(0, 0, 0, 0.5);
+  --bg-metric-wrapper: rgba(0, 0, 0, 0.3);
+  --bg-metric-details: rgba(0, 0, 0, 0.2);
+  --text-contrast: #ffffff;
+}
+
+/* Light Theme (Blue Sidebar) */
+[data-theme="light"] {
+  --bg-app: #f1f5f9;
+  --bg-panel: #ffffff;
+  --bg-sidebar: #1e293b; /* Dark Slate Sidebar for contrast */
+  --bg-header: #ffffff;
+  --bg-input: #f8fafc;
+  --bg-hover: #f1f5f9;
+  
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  
+  --sidebar-text: #f8fafc;
+  --sidebar-text-secondary: #94a3b8;
+  --sidebar-text-muted: #64748b;
+  --sidebar-hover: rgba(255, 255, 255, 0.1);
+  --sidebar-active-bg: rgba(56, 189, 248, 0.2);
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+
+  --primary-color: #0284c7;
+  --primary-rgb: 2, 132, 199;
+  --primary-hover: #0ea5e9;
+  --secondary-color: #10b981;
+  
+  --primary-gradient: linear-gradient(135deg, #0284c7 0%, #2563eb 100%);
+  
+  --border-color: #e2e8f0;
+  
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.05);
+  --shadow-neon: 0 0 5px rgba(2, 132, 199, 0.1);
+
+  /* Dashboard Specific */
+  --bg-center-panel-gradient: radial-gradient(circle at center, rgba(14, 165, 233, 0.05) 0%, #f8fafc 70%);
+  --bg-face-frame: rgba(255, 255, 255, 0.9);
+  --bg-metric-wrapper: rgba(0, 0, 0, 0.05);
+  --bg-metric-details: rgba(0, 0, 0, 0.03);
+  --text-contrast: #0f172a;
+}
+
+/* Professional Navy Theme */
+[data-theme="navy"] {
+  --bg-app: #f0f4f8;
+  --bg-panel: #ffffff;
+  --bg-sidebar: #1a365d; /* Navy Blue */
+  --bg-header: #ffffff;
+  --bg-input: #f8fafc;
+  --bg-hover: #edf2f7;
+  
+  --text-primary: #1a202c;
+  --text-secondary: #4a5568;
+  --text-muted: #718096;
+  
+  --sidebar-text: #ffffff;
+  --sidebar-text-secondary: #a0aec0;
+  --sidebar-text-muted: #718096;
+  --sidebar-hover: rgba(255, 255, 255, 0.1);
+  --sidebar-active-bg: rgba(255, 255, 255, 0.2);
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+
+  --primary-color: #2b6cb0;
+  --primary-rgb: 43, 108, 176;
+  --primary-hover: #3182ce;
+  --secondary-color: #2f855a;
+  
+  --primary-gradient: linear-gradient(135deg, #2b6cb0 0%, #2c5282 100%);
+  
+  --border-color: #e2e8f0;
+  
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.05);
+  --shadow-neon: none;
+
+  /* Dashboard Specific */
+  --bg-center-panel-gradient: radial-gradient(circle at center, rgba(43, 108, 176, 0.1) 0%, #f0f4f8 70%);
+  --bg-face-frame: rgba(255, 255, 255, 0.9);
+  --bg-metric-wrapper: rgba(0, 0, 0, 0.05);
+  --bg-metric-details: rgba(0, 0, 0, 0.03);
+  --text-contrast: #1a202c;
+}
+
+/* Phoenix Theme (Orange/Black) */
+[data-theme="phoenix"] {
+  --bg-app: #050505; /* Deep black/grey */
+  --bg-panel: #121212; /* Dark card background */
+  --bg-sidebar: #0a0a0a; /* Slightly darker sidebar */
+  --bg-header: #0a0a0a;
+  --bg-input: #1f1f1f;
+  --bg-hover: rgba(249, 115, 22, 0.1); /* Orange hover */
+
+  --text-primary: #ffffff;
+  --text-secondary: #a1a1aa;
+  --text-muted: #52525b;
+
+  --sidebar-text: #ffffff;
+  --sidebar-text-secondary: #a1a1aa;
+  --sidebar-text-muted: #52525b;
+  --sidebar-hover: rgba(249, 115, 22, 0.1);
+  --sidebar-active-bg: rgba(249, 115, 22, 0.2);
+  --sidebar-border: #27272a;
+
+  --primary-color: #f97316; /* Orange */
+  --primary-rgb: 249, 115, 22;
+  --primary-hover: #ea580c;
+  --secondary-color: #10b981;
+
+  --primary-gradient: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+
+  --border-color: #27272a;
+
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
+  --shadow-neon: 0 0 5px rgba(249, 115, 22, 0.2);
+
+  /* Dashboard Specific */
+  --bg-center-panel-gradient: radial-gradient(circle at center, rgba(249, 115, 22, 0.05) 0%, #050505 70%);
+  --bg-face-frame: rgba(0, 0, 0, 0.7);
+  --bg-metric-wrapper: rgba(255, 255, 255, 0.03);
+  --bg-metric-details: rgba(255, 255, 255, 0.02);
+  --text-contrast: #ffffff;
+}
+
+/* Nexus / Cyberpunk Theme */
+[data-theme="nexus"] {
+  --bg-app: #020617; /* Very dark blue/black */
+  --bg-panel: rgba(2, 6, 23, 0.85);
+  --bg-sidebar: #020617;
+  --bg-header: rgba(2, 6, 23, 0.9);
+  --bg-input: rgba(6, 182, 212, 0.1);
+  --bg-hover: rgba(6, 182, 212, 0.15); /* Cyan hover */
+
+  --text-primary: #06b6d4; /* Cyan */
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --text-contrast: #ffffff;
+
+  --sidebar-text: #06b6d4;
+  --sidebar-text-secondary: #94a3b8;
+  --sidebar-text-muted: #64748b;
+  --sidebar-hover: rgba(6, 182, 212, 0.1);
+  --sidebar-active-bg: rgba(6, 182, 212, 0.2);
+  --sidebar-border: rgba(6, 182, 212, 0.2);
+
+  --primary-color: #06b6d4; /* Cyan */
+  --primary-rgb: 6, 182, 212;
+  --primary-hover: #0891b2;
+  --secondary-color: #10b981;
+
+  --primary-gradient: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%);
+
+  --success-color: #10b981;
+  --warning-color: #f59e0b;
+  --danger-color: #ef4444;
+  --info-color: #06b6d4;
+
+  --border-color: rgba(6, 182, 212, 0.5); /* Stronger cyan border */
+  --border-radius-sm: 2px;
+  --border-radius: 4px;
+  --border-radius-lg: 6px;
+
+  --shadow-sm: 0 0 5px rgba(6, 182, 212, 0.2);
+  --shadow-md: 0 0 10px rgba(6, 182, 212, 0.2);
+  --shadow-lg: 0 0 15px rgba(6, 182, 212, 0.2);
+  --shadow-xl: 0 0 20px rgba(6, 182, 212, 0.2);
+  --shadow-neon: 0 0 8px rgba(6, 182, 212, 0.8);
+
+  /* Dashboard Specific */
+  --bg-center-panel-gradient: radial-gradient(circle at center, rgba(6, 182, 212, 0.15) 0%, #020617 80%);
+  --bg-face-frame: rgba(6, 182, 212, 0.1);
+  --bg-metric-wrapper: rgba(6, 182, 212, 0.05);
+  --bg-metric-details: rgba(6, 182, 212, 0.02);
 }
 
 /* Global Reset & Base Styles */
@@ -230,7 +424,7 @@ body {
 }
 
 .data-table tr:hover td {
-  background-color: rgba(255, 255, 255, 0.02);
+  background-color: var(--bg-hover);
 }
 
 /* Badges */
@@ -376,4 +570,110 @@ body {
 @keyframes modalSlideIn {
   from { transform: translateY(20px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
+}
+
+/* -----------------------------
+   Nexus / Cyberpunk Theme Overrides
+   ----------------------------- */
+
+/* Grid Background */
+[data-theme="nexus"] {
+  background-image: 
+    linear-gradient(rgba(6, 182, 212, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(6, 182, 212, 0.05) 1px, transparent 1px);
+  background-size: 30px 30px;
+}
+
+/* Card Styling - HUD Effect */
+[data-theme="nexus"] .card {
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  box-shadow: 0 0 15px rgba(6, 182, 212, 0.1), inset 0 0 20px rgba(6, 182, 212, 0.05);
+  position: relative;
+  backdrop-filter: blur(5px);
+  border-radius: 4px; /* Sharper corners */
+}
+
+/* Corner Accents for Cards */
+[data-theme="nexus"] .card::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: 10px;
+  height: 10px;
+  border-top: 2px solid var(--primary-color);
+  border-left: 2px solid var(--primary-color);
+  border-top-left-radius: 4px;
+  z-index: 1;
+}
+
+[data-theme="nexus"] .card::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 10px;
+  height: 10px;
+  border-bottom: 2px solid var(--primary-color);
+  border-right: 2px solid var(--primary-color);
+  border-bottom-right-radius: 4px;
+  z-index: 1;
+}
+
+/* Sidebar & Header */
+[data-theme="nexus"] .sidebar {
+  border-right: 1px solid rgba(6, 182, 212, 0.2);
+  box-shadow: 5px 0 15px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="nexus"] .top-header {
+  border-bottom: 1px solid rgba(6, 182, 212, 0.2);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+}
+
+/* Active Nav Items */
+[data-theme="nexus"] .nav-item.active {
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.4);
+  border: 1px solid rgba(6, 182, 212, 0.5);
+  background: rgba(6, 182, 212, 0.15);
+}
+
+/* Buttons */
+[data-theme="nexus"] .btn-primary {
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.4);
+  border: 1px solid rgba(6, 182, 212, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 600;
+}
+
+[data-theme="nexus"] .btn-primary:hover {
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.6);
+  background-color: rgba(6, 182, 212, 0.8);
+}
+
+/* Inputs */
+[data-theme="nexus"] .input-field, 
+[data-theme="nexus"] .select-field, 
+[data-theme="nexus"] .textarea-field {
+  background-color: rgba(2, 6, 23, 0.8);
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  color: var(--primary-color);
+}
+
+[data-theme="nexus"] .input-field:focus, 
+[data-theme="nexus"] .select-field:focus, 
+[data-theme="nexus"] .textarea-field:focus {
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.3);
+  border-color: var(--primary-color);
+}
+
+/* Typography */
+[data-theme="nexus"] .card-title,
+[data-theme="nexus"] h1, 
+[data-theme="nexus"] h2, 
+[data-theme="nexus"] h3 {
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  text-shadow: 0 0 5px rgba(6, 182, 212, 0.5);
 }

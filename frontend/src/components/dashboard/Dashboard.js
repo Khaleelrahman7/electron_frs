@@ -42,6 +42,61 @@ const Dashboard = () => {
   const [personFrequencyData, setPersonFrequencyData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [themeColors, setThemeColors] = useState({
+    textPrimary: '#f8fafc',
+    textSecondary: '#94a3b8',
+    bgSidebar: 'rgba(15, 23, 42, 0.9)',
+    bgPanel: '#ffffff', // Added default
+    primaryColor: '#0ea5e9',
+    secondaryColor: '#10b981',
+    dangerColor: '#ef4444',
+    gridColor: 'rgba(56, 189, 248, 0.1)'
+  });
+
+  const hexToRgba = (hex, alpha) => {
+    if (!hex) return `rgba(0, 0, 0, ${alpha})`;
+    let r = 0, g = 0, b = 0;
+    if (hex.length === 4) {
+      r = parseInt("0x" + hex[1] + hex[1]);
+      g = parseInt("0x" + hex[2] + hex[2]);
+      b = parseInt("0x" + hex[3] + hex[3]);
+    } else if (hex.length === 7) {
+      r = parseInt("0x" + hex[1] + hex[2]);
+      g = parseInt("0x" + hex[3] + hex[4]);
+      b = parseInt("0x" + hex[5] + hex[6]);
+    }
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  };
+
+  useEffect(() => {
+    // Update chart colors based on current theme
+    const updateThemeColors = () => {
+      const styles = getComputedStyle(document.body);
+      
+      const getStyle = (prop, fallback) => {
+        const val = styles.getPropertyValue(prop).trim();
+        return val || fallback;
+      };
+
+      setThemeColors({
+        textPrimary: getStyle('--text-primary', '#f8fafc'),
+        textSecondary: getStyle('--text-secondary', '#94a3b8'),
+        bgSidebar: getStyle('--bg-sidebar', 'rgba(15, 23, 42, 0.9)'),
+        bgPanel: getStyle('--bg-panel', '#ffffff'),
+        primaryColor: getStyle('--primary-color', '#0ea5e9'),
+        secondaryColor: getStyle('--secondary-color', '#10b981'),
+        dangerColor: getStyle('--danger-color', '#ef4444'),
+        gridColor: getStyle('--border-color', 'rgba(56, 189, 248, 0.1)')
+      });
+    };
+
+    updateThemeColors();
+    // Create an observer to watch for theme changes on the body element
+    const observer = new MutationObserver(updateThemeColors);
+    observer.observe(document.body, { attributes: true, attributeFilter: ['data-theme'] });
+
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     fetchDashboardData();
@@ -52,6 +107,65 @@ const Dashboard = () => {
       fetchPersonAnalytics(selectedPerson);
     }
   }, [selectedPerson]);
+
+  const fetchProfilesData = async () => {
+    try {
+      const [galleryRes, eventsRes] = await Promise.all([
+        axios.get(getApiUrl('/api/registration/gallery')),
+        axios.get(getApiUrl('/api/events/filter'), { params: { face_type: 'known' } })
+      ]);
+
+      const gallery = galleryRes.data || {};
+      const events = Array.isArray(eventsRes.data) ? eventsRes.data : [];
+      const personMap = new Map();
+
+      // 1. Initialize with Gallery data
+      Object.values(gallery).forEach(person => {
+        const imgFilename = person.image_filename || 'original.jpg';
+        // Construct clean URL for gallery image
+        const imgUrl = getApiUrl(`/api/gallery/image/${person.name}/${imgFilename}`);
+        
+        personMap.set(person.name, {
+          name: person.name,
+          count: 0,
+          profile_image: imgUrl,
+          last_seen: null
+        });
+      });
+
+      // 2. Process Events to update counts and add missing persons
+      events.forEach(event => {
+        if (!personMap.has(event.name)) {
+          personMap.set(event.name, {
+            name: event.name,
+            count: 0,
+            profile_image: fixImageUrl(event.image_path),
+            last_seen: null
+          });
+        }
+        
+        const p = personMap.get(event.name);
+        p.count += 1;
+        
+        // Update last_seen
+        if (!p.last_seen || new Date(event.timestamp) > new Date(p.last_seen)) {
+          p.last_seen = event.timestamp;
+          // If not in gallery (no official photo), use latest event image
+          if (!gallery[event.name]) {
+            p.profile_image = fixImageUrl(event.image_path);
+          }
+        }
+      });
+
+      // Convert to array and sort by count (descending)
+      return {
+        data: Array.from(personMap.values()).sort((a, b) => b.count - a.count)
+      };
+    } catch (err) {
+      console.error('Error fetching profiles data:', err);
+      return { data: [] };
+    }
+  };
 
   const fetchDashboardData = async () => {
     try {
@@ -66,7 +180,7 @@ const Dashboard = () => {
         personFreqRes
       ] = await Promise.all([
         axios.get(getApiUrl('/api/analytics/overview')),
-        axios.get(getApiUrl('/api/analytics/persons-list')),
+        fetchProfilesData(),
         axios.get(getApiUrl('/api/analytics/face-detection-trend?days=7')),
         axios.get(getApiUrl('/api/analytics/hourly-activity')),
         axios.get(getApiUrl('/api/analytics/camera-activity')),
@@ -75,18 +189,10 @@ const Dashboard = () => {
       ]);
 
       setOverviewData(overviewRes.data);
-     
-      // Fix image URLs in persons list if they contain localhost
-      const persons = Array.isArray(personsRes.data) ? personsRes.data.map(person => {
-        if (person.profile_image) {
-          return {
-            ...person,
-            profile_image: fixImageUrl(person.profile_image)
-          };
-        }
-        return person;
-      }) : [];
-     
+      
+      // Persons list is already processed by fetchProfilesData
+      const persons = personsRes.data;
+      
       setPersonsList(persons);
       setTrendData(trendRes.data);
       setHourlyData(hourlyRes.data);
@@ -117,6 +223,140 @@ const Dashboard = () => {
       setPersonAnalytics(null);
     }
   };
+
+  const getChartOptions = (title, horizontal = false) => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        display: true,
+        position: 'top',
+        labels: {
+          color: themeColors.textPrimary, // Dynamic text color
+          font: {
+            size: 12,
+            weight: '500',
+            family: "'Courier New', monospace",
+          },
+          padding: 15,
+          usePointStyle: true,
+          pointStyle: 'rectRot',
+        },
+      },
+      tooltip: {
+        backgroundColor: themeColors.bgSidebar, // Dynamic background
+        titleColor: themeColors.primaryColor, // Dynamic primary color
+        bodyColor: themeColors.textPrimary,
+        borderColor: themeColors.primaryColor,
+        borderWidth: 1,
+        padding: 12,
+        displayColors: true,
+        callbacks: {
+          label: function(context) {
+            return `${context.dataset.label}: ${context.parsed.y || context.parsed.x}`;
+          },
+        },
+      },
+    },
+    scales: horizontal ? {
+      x: {
+        beginAtZero: true,
+        ticks: {
+          color: themeColors.textSecondary,
+          font: {
+            size: 11,
+            family: "'Courier New', monospace",
+          },
+        },
+        grid: {
+          color: themeColors.gridColor,
+          drawBorder: false,
+          borderDash: [5, 5],
+        },
+      },
+      y: {
+        ticks: {
+          color: themeColors.textSecondary,
+          font: {
+            size: 11,
+            family: "'Courier New', monospace",
+          },
+        },
+        grid: {
+          display: false,
+          drawBorder: false,
+        },
+      },
+    } : {
+      x: {
+        ticks: {
+          color: themeColors.textSecondary,
+          font: {
+            size: 11,
+            family: "'Courier New', monospace",
+          },
+        },
+        grid: {
+          display: false,
+          drawBorder: false,
+        },
+      },
+      y: {
+        beginAtZero: true,
+        ticks: {
+          color: themeColors.textSecondary,
+          font: {
+            size: 11,
+            family: "'Courier New', monospace",
+          },
+        },
+        grid: {
+          color: themeColors.gridColor,
+          drawBorder: false,
+          borderDash: [5, 5],
+        },
+      },
+    },
+  });
+
+  const getDoughnutOptions = () => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        display: true,
+        position: 'right',
+        labels: {
+          color: themeColors.textPrimary,
+          font: {
+            size: 12,
+            weight: '500',
+            family: "'Courier New', monospace",
+          },
+          padding: 15,
+          usePointStyle: true,
+          pointStyle: 'rectRot',
+        },
+      },
+      tooltip: {
+        backgroundColor: themeColors.bgSidebar,
+        titleColor: themeColors.primaryColor,
+        bodyColor: themeColors.textPrimary,
+        borderColor: themeColors.primaryColor,
+        borderWidth: 1,
+        padding: 12,
+        callbacks: {
+          label: function(context) {
+            const label = context.label || '';
+            const value = context.parsed || 0;
+            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+            const percentage = ((value / total) * 100).toFixed(1);
+            return `${label}: ${value} (${percentage}%)`;
+          },
+        },
+      },
+    },
+  });
 
   if (loading) {
     return (
@@ -199,7 +439,7 @@ const Dashboard = () => {
                     cy="60"
                     r="50"
                     fill="none"
-                    stroke="rgba(255, 255, 255, 0.1)"
+                    stroke={themeColors.gridColor}
                     strokeWidth="8"
                   />
                   <circle
@@ -207,7 +447,7 @@ const Dashboard = () => {
                     cy="60"
                     r="50"
                     fill="none"
-                    stroke="#4FC3F7"
+                    stroke={themeColors.primaryColor}
                     strokeWidth="8"
                     strokeDasharray={`${overviewData.recognition_rate * 3.14} 314`}
                     strokeDashoffset="0"
@@ -257,15 +497,7 @@ const Dashboard = () => {
                     </div>
                   )}
                   <div className="face-overlay">
-                    <div className="face-detection-box"></div>
-                    <div className="face-landmarks">
-                      {[...Array(5)].map((_, i) => (
-                        <div key={i} className="landmark-dot" style={{
-                          left: `${20 + i * 15}%`,
-                          top: `${30 + (i % 2) * 20}%`
-                        }}></div>
-                      ))}
-                    </div>
+                    <div className="scanning-animation"></div>
                   </div>
                 </div>
               </div>
@@ -348,29 +580,29 @@ const Dashboard = () => {
                       {
                         label: 'Known Faces',
                         data: trendData.known,
-                        borderColor: '#4FC3F7',
-                        backgroundColor: 'rgba(79, 195, 247, 0.1)',
+                        borderColor: themeColors.primaryColor,
+                        backgroundColor: hexToRgba(themeColors.primaryColor, 0.1),
                         borderWidth: 2,
                         fill: true,
                         tension: 0.4,
                         pointRadius: 4,
                         pointHoverRadius: 6,
-                        pointBackgroundColor: '#4FC3F7',
-                        pointBorderColor: '#ffffff',
+                        pointBackgroundColor: themeColors.primaryColor,
+                        pointBorderColor: themeColors.bgPanel,
                         pointBorderWidth: 2,
                       },
                       {
                         label: 'Unknown Faces',
                         data: trendData.unknown,
-                        borderColor: '#FF6B6B',
-                        backgroundColor: 'rgba(255, 107, 107, 0.1)',
+                        borderColor: themeColors.dangerColor,
+                        backgroundColor: hexToRgba(themeColors.dangerColor, 0.1),
                         borderWidth: 2,
                         fill: true,
                         tension: 0.4,
                         pointRadius: 4,
                         pointHoverRadius: 6,
-                        pointBackgroundColor: '#FF6B6B',
-                        pointBorderColor: '#ffffff',
+                        pointBackgroundColor: themeColors.dangerColor,
+                        pointBorderColor: themeColors.bgPanel,
                         pointBorderWidth: 2,
                       },
                     ],
@@ -397,8 +629,8 @@ const Dashboard = () => {
                       {
                         label: 'Detections',
                         data: hourlyData.data,
-                        backgroundColor: 'rgba(79, 195, 247, 0.8)',
-                        borderColor: '#4FC3F7',
+                        backgroundColor: hexToRgba(themeColors.primaryColor, 0.8),
+                        borderColor: themeColors.primaryColor,
                         borderWidth: 1,
                         borderRadius: 8,
                         borderSkipped: false,
@@ -427,20 +659,20 @@ const Dashboard = () => {
                       {
                         data: cameraData.data,
                         backgroundColor: [
-                          'rgba(79, 195, 247, 0.8)',
-                          'rgba(255, 107, 107, 0.8)',
-                          'rgba(255, 206, 86, 0.8)',
-                          'rgba(75, 192, 192, 0.8)',
-                          'rgba(153, 102, 255, 0.8)',
-                          'rgba(255, 159, 64, 0.8)',
+                          hexToRgba(themeColors.primaryColor, 0.8),
+                          hexToRgba(themeColors.dangerColor, 0.8),
+                          hexToRgba(themeColors.secondaryColor, 0.8),
+                          hexToRgba(themeColors.primaryColor, 0.5),
+                          hexToRgba(themeColors.dangerColor, 0.5),
+                          hexToRgba(themeColors.secondaryColor, 0.5),
                         ],
                         borderColor: [
-                          '#4FC3F7',
-                          '#FF6B6B',
-                          '#FFCE56',
-                          '#4BC0C0',
-                          '#9966FF',
-                          '#FF9F40',
+                          themeColors.primaryColor,
+                          themeColors.dangerColor,
+                          themeColors.secondaryColor,
+                          themeColors.primaryColor,
+                          themeColors.dangerColor,
+                          themeColors.secondaryColor,
                         ],
                         borderWidth: 2,
                       },
@@ -469,18 +701,18 @@ const Dashboard = () => {
                         label: 'Count',
                         data: confidenceData.data,
                         backgroundColor: [
-                          'rgba(255, 107, 107, 0.8)',
-                          'rgba(255, 159, 64, 0.8)',
-                          'rgba(255, 206, 86, 0.8)',
-                          'rgba(75, 192, 192, 0.8)',
-                          'rgba(79, 195, 247, 0.8)',
+                          hexToRgba(themeColors.dangerColor, 0.8),
+                          hexToRgba(themeColors.dangerColor, 0.6),
+                          hexToRgba(themeColors.secondaryColor, 0.6),
+                          hexToRgba(themeColors.secondaryColor, 0.8),
+                          hexToRgba(themeColors.primaryColor, 0.8),
                         ],
                         borderColor: [
-                          '#FF6B6B',
-                          '#FF9F40',
-                          '#FFCE56',
-                          '#4BC0C0',
-                          '#4FC3F7',
+                          themeColors.dangerColor,
+                          themeColors.dangerColor,
+                          themeColors.secondaryColor,
+                          themeColors.secondaryColor,
+                          themeColors.primaryColor,
                         ],
                         borderWidth: 2,
                         borderRadius: 8,
@@ -509,8 +741,8 @@ const Dashboard = () => {
                       {
                         label: 'Detections',
                         data: personFrequencyData.data,
-                        backgroundColor: 'rgba(79, 195, 247, 0.8)',
-                        borderColor: '#4FC3F7',
+                        backgroundColor: hexToRgba(themeColors.primaryColor, 0.8),
+                        borderColor: themeColors.primaryColor,
                         borderWidth: 2,
                         borderRadius: 8,
                       },
@@ -538,15 +770,15 @@ const Dashboard = () => {
                       {
                         label: 'Detections',
                         data: personAnalytics.daily_distribution.data,
-                        borderColor: '#4FC3F7',
-                        backgroundColor: 'rgba(79, 195, 247, 0.1)',
+                        borderColor: themeColors.primaryColor,
+                        backgroundColor: hexToRgba(themeColors.primaryColor, 0.1),
                         borderWidth: 2,
                         fill: true,
                         tension: 0.4,
                         pointRadius: 4,
                         pointHoverRadius: 6,
-                        pointBackgroundColor: '#4FC3F7',
-                        pointBorderColor: '#ffffff',
+                        pointBackgroundColor: themeColors.primaryColor,
+                        pointBorderColor: themeColors.bgPanel,
                         pointBorderWidth: 2,
                       },
                     ],
@@ -575,9 +807,9 @@ const Dashboard = () => {
                           const value = context.parsed.y;
                           const max = Math.max(...personAnalytics.hourly_distribution);
                           const intensity = value / max;
-                          return `rgba(79, 195, 247, ${0.3 + intensity * 0.7})`;
+                          return hexToRgba(themeColors.primaryColor, 0.3 + intensity * 0.7);
                         },
-                        borderColor: '#4FC3F7',
+                        borderColor: themeColors.primaryColor,
                         borderWidth: 1,
                         borderRadius: 6,
                       },
@@ -596,135 +828,9 @@ const Dashboard = () => {
   );
 };
 
-const getChartOptions = (title, horizontal = false) => ({
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      display: true,
-      position: 'top',
-      labels: {
-        color: '#ffffff',
-        font: {
-          size: 12,
-          weight: '500',
-        },
-        padding: 15,
-        usePointStyle: true,
-        pointStyle: 'circle',
-      },
-    },
-    tooltip: {
-      backgroundColor: 'rgba(26, 47, 74, 0.95)',
-      titleColor: '#ffffff',
-      bodyColor: '#4FC3F7',
-      borderColor: 'rgba(79, 195, 247, 0.3)',
-      borderWidth: 1,
-      padding: 12,
-      displayColors: true,
-      callbacks: {
-        label: function(context) {
-          return `${context.dataset.label}: ${context.parsed.y || context.parsed.x}`;
-        },
-      },
-    },
-  },
-  scales: horizontal ? {
-    x: {
-      beginAtZero: true,
-      ticks: {
-        color: 'rgba(255, 255, 255, 0.6)',
-        font: {
-          size: 11,
-        },
-      },
-      grid: {
-        color: 'rgba(79, 195, 247, 0.1)',
-        drawBorder: false,
-      },
-    },
-    y: {
-      ticks: {
-        color: 'rgba(255, 255, 255, 0.6)',
-        font: {
-          size: 11,
-        },
-      },
-      grid: {
-        color: 'rgba(79, 195, 247, 0.1)',
-        drawBorder: false,
-      },
-    },
-  } : {
-    x: {
-      ticks: {
-        color: 'rgba(255, 255, 255, 0.6)',
-        font: {
-          size: 11,
-        },
-      },
-      grid: {
-        color: 'rgba(79, 195, 247, 0.1)',
-        drawBorder: false,
-      },
-    },
-    y: {
-      beginAtZero: true,
-      ticks: {
-        color: 'rgba(255, 255, 255, 0.6)',
-        font: {
-          size: 11,
-        },
-      },
-      grid: {
-        color: 'rgba(79, 195, 247, 0.1)',
-        drawBorder: false,
-      },
-    },
-  },
-});
-
-const getDoughnutOptions = () => ({
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      display: true,
-      position: 'right',
-      labels: {
-        color: '#ffffff',
-        font: {
-          size: 12,
-          weight: '500',
-        },
-        padding: 15,
-        usePointStyle: true,
-        pointStyle: 'circle',
-      },
-    },
-    tooltip: {
-      backgroundColor: 'rgba(26, 47, 74, 0.95)',
-      titleColor: '#ffffff',
-      bodyColor: '#4FC3F7',
-      borderColor: 'rgba(79, 195, 247, 0.3)',
-      borderWidth: 1,
-      padding: 12,
-      callbacks: {
-        label: function(context) {
-          const label = context.label || '';
-          const value = context.parsed || 0;
-          const total = context.dataset.data.reduce((a, b) => a + b, 0);
-          const percentage = ((value / total) * 100).toFixed(1);
-          return `${label}: ${value} (${percentage}%)`;
-        },
-      },
-    },
-  },
-});
-
 const MetricBar = ({ label, value, max }) => {
   const percentage = Math.min(100, (value / max) * 100);
- 
+
   return (
     <div className="metric-bar-container">
       <div className="metric-label">{label}</div>

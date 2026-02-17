@@ -13,13 +13,37 @@ import {
   ChevronLeft,
   ChevronRight,
   Menu,
-  Settings
+  Settings,
+  Palette
 } from 'lucide-react';
 import './MainLayout.css';
 
 const MainLayout = ({ children, activeTab, onTabChange }) => {
   const { user, logout, isLicenseExpired } = useAuthStore();
   const [collapsed, setCollapsed] = React.useState(false);
+  
+  const themes = [
+    { id: 'default', label: 'Dark Enterprise', color: '#0b1120' },
+    { id: 'light', label: 'Light Blue', color: '#ffffff' },
+    { id: 'navy', label: 'Navy Professional', color: '#1a365d' },
+    { id: 'phoenix', label: 'Phoenix Orange', color: '#f97316' },
+    { id: 'nexus', label: 'Nexus Cyberpunk', color: '#06b6d4' },
+  ];
+
+  const [theme, setTheme] = React.useState(() => {
+    const saved = localStorage.getItem('theme');
+    return themes.some(t => t.id === saved) ? saved : 'default';
+  });
+  const [showThemeMenu, setShowThemeMenu] = React.useState(false);
+
+  React.useEffect(() => {
+    if (theme === 'default') {
+      document.body.removeAttribute('data-theme');
+    } else {
+      document.body.setAttribute('data-theme', theme);
+    }
+    localStorage.setItem('theme', theme);
+  }, [theme]);
 
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
@@ -110,6 +134,36 @@ const MainLayout = ({ children, activeTab, onTabChange }) => {
             </h1>
           </div>
           <div className="header-right">
+            <div className="theme-switcher-container">
+              <button 
+                className="theme-toggle-btn"
+                onClick={() => setShowThemeMenu(!showThemeMenu)}
+                title="Change Theme"
+              >
+                <Palette size={20} />
+              </button>
+              
+              {showThemeMenu && (
+                <div className="theme-menu">
+                  <div className="theme-menu-header">Select Theme</div>
+                  {themes.map(t => (
+                    <button
+                      key={t.id}
+                      className={`theme-option ${theme === t.id ? 'active' : ''}`}
+                      onClick={() => {
+                        setTheme(t.id);
+                        setShowThemeMenu(false);
+                      }}
+                    >
+                      <div className="theme-preview" style={{ backgroundColor: t.color }}></div>
+                      <span className="theme-label">{t.label}</span>
+                      {theme === t.id && <div className="theme-check">✓</div>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="system-status">
               <span className="status-dot online"></span>
               <span className="status-text">System Online</span>
