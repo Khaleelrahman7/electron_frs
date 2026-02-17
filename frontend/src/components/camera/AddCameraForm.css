@@ -63,7 +63,7 @@
   color: var(--text-primary);
   font-size: 0.9rem;
   box-sizing: border-box;
-  transition: all 0.2s ease;
+  transition: var(--transition-fast);
 }
 
 .form-group input:focus {
@@ -90,7 +90,7 @@
   border: none;
   cursor: pointer;
   font-size: 0.85rem;
-  transition: all 0.2s ease;
+  transition: var(--transition-normal);
   font-weight: 500;
 }
 
@@ -260,7 +260,7 @@
   background: var(--danger-color);
   color: white;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: var(--transition-normal);
   font-weight: 500;
 }
 

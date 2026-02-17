@@ -34,6 +34,15 @@ const MainLayout = ({ children, activeTab, onTabChange }) => {
     const saved = localStorage.getItem('theme');
     return themes.some(t => t.id === saved) ? saved : 'default';
   });
+  
+  // Transition effect for theme changes
+  React.useEffect(() => {
+    document.body.style.transition = 'background-color 0.3s ease, color 0.3s ease';
+    const timer = setTimeout(() => {
+      document.body.style.transition = '';
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [theme]);
   const [showThemeMenu, setShowThemeMenu] = React.useState(false);
 
   React.useEffect(() => {
@@ -178,7 +187,9 @@ const MainLayout = ({ children, activeTab, onTabChange }) => {
         )}
         
         <div className="content-wrapper">
-          {children}
+          <div key={activeTab} className="animate-slide-up">
+            {children}
+          </div>
         </div>
       </main>
     </div>

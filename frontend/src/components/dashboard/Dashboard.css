@@ -33,7 +33,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  transition: all 0.2s ease;
+  transition: var(--transition-normal);
   box-shadow: var(--shadow-sm);
 }
 
@@ -69,6 +69,14 @@
   backdrop-filter: blur(12px); /* Glassmorphism */
   position: relative;
   overflow: hidden;
+  transition: var(--transition-smooth);
+}
+
+.left-panel:hover,
+.center-panel:hover,
+.right-panel:hover {
+  box-shadow: var(--shadow-xl), 0 0 15px rgba(var(--primary-rgb), 0.15);
+  border-color: rgba(var(--primary-rgb), 0.4);
 }
 
 /* Tech Grid Background Effect */
@@ -157,7 +165,7 @@
   padding: 12px;
   border-radius: var(--border-radius-sm);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: var(--transition-normal);
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid transparent;
 }
@@ -639,6 +647,13 @@
   box-shadow: var(--shadow-sm);
   display: flex;
   flex-direction: column;
+  transition: var(--transition-smooth);
+}
+
+.chart-card:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+  border-color: rgba(var(--primary-rgb), 0.3);
 }
 
 .chart-header {

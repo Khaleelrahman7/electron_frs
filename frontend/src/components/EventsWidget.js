@@ -8,19 +8,25 @@ const EventsWidget = () => {
 
   return (
     <div className="events-widget">
-      <div className="events-tabs">
-        <button
-          className={`tab-button ${activeTab === 'face-events' ? 'active' : ''}`}
-          onClick={() => setActiveTab('face-events')}
-        >
-          Face Events
-        </button>
-        <button
-          className={`tab-button ${activeTab === 'find-occurrence' ? 'active' : ''}`}
-          onClick={() => setActiveTab('find-occurrence')}
-        >
-          Find Occurrence
-        </button>
+      <div className="events-header-clean">
+        <div className="header-title">
+          <h2>Events</h2>
+          <p>Monitor face recognition events and search occurrences</p>
+        </div>
+        <div className="mode-selector-pill">
+          <button
+            className={`mode-pill ${activeTab === 'face-events' ? 'active' : ''}`}
+            onClick={() => setActiveTab('face-events')}
+          >
+            Face Events
+          </button>
+          <button
+            className={`mode-pill ${activeTab === 'find-occurrence' ? 'active' : ''}`}
+            onClick={() => setActiveTab('find-occurrence')}
+          >
+            Find Occurrence
+          </button>
+        </div>
       </div>
       
       <div className="tab-content">

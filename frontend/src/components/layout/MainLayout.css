@@ -54,7 +54,7 @@
   cursor: pointer;
   padding: 8px;
   border-radius: 50%;
-  transition: all 0.2s;
+  transition: var(--transition-normal);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -63,6 +63,7 @@
 .collapse-btn:hover {
   background-color: var(--sidebar-hover);
   color: var(--sidebar-text);
+  transform: scale(1.1);
 }
 
 .main-layout.collapsed .collapse-btn {
@@ -150,7 +151,7 @@
   border-radius: 12px; /* More rounded */
   cursor: pointer;
   color: var(--sidebar-text-secondary);
-  transition: all 0.2s;
+  transition: var(--transition-smooth);
   position: relative;
   text-align: left;
   width: 100%;
@@ -165,6 +166,7 @@
 .nav-item:hover {
   background-color: var(--sidebar-hover);
   color: var(--sidebar-text);
+  transform: translateX(4px);
 }
 
 .nav-item.active {
@@ -211,7 +213,7 @@
   border: none;
   border-radius: 12px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: var(--transition-normal);
   justify-content: center;
 }
 
@@ -222,6 +224,8 @@
 .logout-btn:hover {
   background-color: rgba(239, 68, 68, 0.2);
   color: #ff8080;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 /* Content Area */
@@ -342,12 +346,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: var(--transition-normal);
 }
 
 .theme-toggle-btn:hover {
   background-color: var(--sidebar-hover);
   color: var(--primary-color);
+  transform: rotate(15deg);
 }
 
 .theme-menu {

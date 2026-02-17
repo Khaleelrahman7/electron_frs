@@ -1,39 +1,61 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import DatePicker from 'react-datepicker';
-import { format, subDays } from 'date-fns';
+import { format, subDays, differenceInDays } from 'date-fns';
+import { 
+  Search, 
+  X, 
+  Download, 
+  List, 
+  Grid, 
+  Calendar, 
+  Filter,
+  User,
+  Camera,
+  ChevronDown
+} from 'lucide-react';
 import FaceCard from './FaceCard';
 import "react-datepicker/dist/react-datepicker.css";
 import './FaceEvents.css';
 
-import { API_BASE_URL as BASE_URL } from '../utils/apiConfig';
+import { API_BASE_URL as BASE_URL, fixImageUrl } from '../utils/apiConfig';
 const API_BASE_URL = `${BASE_URL}/api/events`;
 
 const FaceEvents = () => {
+  // Filter States
   const [cameras, setCameras] = useState(['All Cameras']);
   const [selectedCamera, setSelectedCamera] = useState('All Cameras');
   const [nameFilter, setNameFilter] = useState('');
   const [fromDate, setFromDate] = useState(subDays(new Date(), 7));
   const [toDate, setToDate] = useState(new Date());
+  
+  // Data States
   const [faces, setFaces] = useState([]);
   const [activeTab, setActiveTab] = useState('all');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [viewMode, setViewMode] = useState('list'); // 'list' or 'grid'
+
+  // Helper to calculate date range text
+  const getDateRangeText = () => {
+    if (!fromDate || !toDate) return '';
+    const days = differenceInDays(toDate, fromDate);
+    return `Date range: ${days} days selected`;
+  };
 
   const loadCameras = useCallback(async () => {
     try {
       const cameraUrl = `${BASE_URL}/api/collections/cameras`;
       const response = await axios.get(cameraUrl, {
         timeout: 5000,
-        headers: {
-          'Content-Type': 'application/json',
-        }
+        headers: { 'Content-Type': 'application/json' }
       });
       if (response.data.cameras) {
         const cameraNames = response.data.cameras.map(camera => camera.name);
         setCameras(['All Cameras', ...cameraNames]);
       }
     } catch (err) {
+      console.error("Failed to load cameras", err);
     }
   }, []);
 
@@ -44,9 +66,7 @@ const FaceEvents = () => {
       const response = await axios.get(`${API_BASE_URL}/filter`, {
         params,
         timeout: 10000,
-        headers: {
-          'Content-Type': 'application/json',
-        }
+        headers: { 'Content-Type': 'application/json' }
       });
       return Array.isArray(response.data) ? response.data : [];
     } catch (err) {
@@ -55,10 +75,6 @@ const FaceEvents = () => {
         errorMessage = 'Request timed out. Please check if the backend server is running.';
       } else if (err.response?.status === 400) {
         errorMessage = err.response.data.detail || 'Invalid request';
-      } else if (err.response) {
-        errorMessage = `Server error: ${err.response.status} - ${err.response.data?.detail || err.response.statusText}`;
-      } else if (err.request) {
-        errorMessage = `Cannot connect to backend server. Please ensure the server is running on ${BASE_URL}`;
       } else {
         errorMessage = `Error: ${err.message}`;
       }
@@ -82,197 +98,305 @@ const FaceEvents = () => {
     return params;
   }, [fromDate, toDate, selectedCamera, nameFilter]);
 
-  const ensureValidDates = useCallback(() => {
-    if (fromDate > toDate) {
-      setError('From date cannot be later than To date');
-      return false;
-    }
-    setError(null); // Clear error if dates are valid
-    return true;
-  }, [fromDate, toDate]);
-
-  const handleFromDateChange = (date) => {
-    if (date && toDate && date > toDate) {
-      setError('From date cannot be later than To date. Please select a valid date range.');
-      return; // Don't update if invalid
-    }
-    setFromDate(date);
-    setError(null); // Clear error if valid
-  };
-
-  const handleToDateChange = (date) => {
-    if (date && fromDate && date < fromDate) {
-      setError('To date cannot be earlier than From date. Please select a valid date range.');
-      return; // Don't update if invalid
-    }
-    setToDate(date);
-    setError(null); // Clear error if valid
-  };
-
   const getTabOverrides = useCallback((tab) => {
-    if (tab === 'known') {
-      return { face_type: 'known' };
-    }
-    if (tab === 'unknown') {
-      return { face_type: 'unknown' };
-    }
+    if (tab === 'known') return { face_type: 'known' };
+    if (tab === 'unknown') return { face_type: 'unknown' };
     return {};
   }, []);
 
   const handleFilter = useCallback(async (overrides = {}, targetTab = null) => {
-    // Use current activeTab if targetTab is not provided
     const tabToUse = targetTab !== null ? targetTab : activeTab;
     
-    if (!ensureValidDates()) {
+    if (fromDate > toDate) {
+      setError('From date cannot be later than To date');
       return;
     }
 
     const mergedOverrides = { ...getTabOverrides(tabToUse), ...overrides };
     const params = buildParams(mergedOverrides);
     
-    console.log('Filtering with params:', params, 'for tab:', tabToUse);
     const data = await fetchFaces(params);
-    console.log('Received faces:', data.length, 'faces');
-    
-    // Backend already filters by face_type, no need for additional client-side filtering
     setFaces(data);
-  }, [ensureValidDates, fetchFaces, buildParams, getTabOverrides, activeTab]);
+  }, [fromDate, toDate, fetchFaces, buildParams, getTabOverrides, activeTab]);
 
   const handleTabChange = useCallback((tab) => {
-    console.log('Tab changed to:', tab);
     setActiveTab(tab);
     handleFilter({}, tab);
   }, [handleFilter]);
-
-  const refreshData = () => {
-    console.log('Refreshing data for tab:', activeTab);
-    loadCameras();
-    handleFilter({}, activeTab);
-  };
 
   const onSearch = () => {
     handleFilter({}, activeTab);
   };
 
-  const handleCameraChange = (value) => {
-    setSelectedCamera(value);
-    handleFilter({ camera: value === 'All Cameras' ? 'all_cameras' : value }, activeTab);
+  const onClear = () => {
+    setSelectedCamera('All Cameras');
+    setNameFilter('');
+    setFromDate(subDays(new Date(), 7));
+    setToDate(new Date());
+    // Optionally trigger search immediately after clear
+    // handleFilter({ camera: 'all_cameras', name: '', from_date: ..., to_date: ... }, activeTab);
+  };
+
+  const removeFilter = (type) => {
+    if (type === 'camera') setSelectedCamera('All Cameras');
+    if (type === 'date') {
+      setFromDate(subDays(new Date(), 7));
+      setToDate(new Date());
+    }
+    // Trigger re-fetch? Usually users expect re-fetch.
+    // implementing naive re-fetch for now
+    setTimeout(() => onSearch(), 0);
   };
 
   useEffect(() => {
     loadCameras();
-    // Load all faces on initial mount
     handleFilter({}, 'all');
-  }, []); // Only run once on mount
+  }, []);
 
   return (
-    <div className="face-events">
-      <div className="navigation-buttons">
-        <button
+    <div className="face-events-page">
+      {/* Tabs */}
+      <div className="face-events-tabs">
+        <button 
+          className={`face-events-tab ${activeTab === 'all' ? 'active' : ''}`}
           onClick={() => handleTabChange('all')}
-          className={`nav-btn ${activeTab === 'all' ? 'active-btn' : ''}`}
         >
-          All Faces
+          <span className="dot all"></span> All Faces
         </button>
-        <button
+        <button 
+          className={`face-events-tab ${activeTab === 'known' ? 'active' : ''}`}
           onClick={() => handleTabChange('known')}
-          className={`nav-btn known-btn ${activeTab === 'known' ? 'active-btn' : ''}`}
         >
           Known Faces
         </button>
-        <button
+        <button 
+          className={`face-events-tab ${activeTab === 'unknown' ? 'active' : ''}`}
           onClick={() => handleTabChange('unknown')}
-          className={`nav-btn unknown-btn ${activeTab === 'unknown' ? 'active-btn' : ''}`}
         >
           Unknown Faces
         </button>
-        <button onClick={refreshData} className="nav-btn refresh-btn">
-          Refresh
-        </button>
       </div>
 
-      <div className="filters">
-        <div className="filter-group">
-          <label>Camera:</label>
-          <select
-            value={selectedCamera}
-            onChange={(e) => handleCameraChange(e.target.value)}
-          >
-            {cameras.map(camera => (
-              <option key={camera} value={camera}>{camera}</option>
-            ))}
-          </select>
-        </div>
-
-        <div className="filter-group">
-          <label>Name:</label>
-          <input
-            type="text"
-            placeholder="Filter by name..."
-            value={nameFilter}
-            onChange={(e) => setNameFilter(e.target.value)}
-          />
-        </div>
-
-        <div className="filter-group">
-          <label>From:</label>
-          <DatePicker
-            selected={fromDate}
-            onChange={handleFromDateChange}
-            dateFormat="yyyy-MM-dd"
-            className="date-picker"
-            maxDate={toDate}
-            showYearDropdown
-            showMonthDropdown
-            dropdownMode="select"
-          />
-        </div>
-
-        <div className="filter-group">
-          <label>To:</label>
-          <DatePicker
-            selected={toDate}
-            onChange={handleToDateChange}
-            dateFormat="yyyy-MM-dd"
-            className="date-picker"
-            minDate={fromDate}
-            maxDate={new Date()}
-            showYearDropdown
-            showMonthDropdown
-            dropdownMode="select"
-          />
-        </div>
-
-        <button onClick={onSearch} className="search-btn">
-          Search
-        </button>
-      </div>
-
-      {error && <div className="error-message">{error}</div>}
-
-      <div className="faces-container">
-        {loading ? (
-          <div className="loading">Loading faces...</div>
-        ) : faces.length > 0 ? (
-          <div className="faces-grid">
-            {faces.map((face, index) => (
-              <FaceCard
-                key={`${face.image_path}-${index}`}
-                imagePath={face.image_path}
-                name={face.name}
-                camera={face.camera}
-                timestamp={face.timestamp}
-              />
-            ))}
+      {/* Filter Card */}
+      <div className="filter-card">
+        <div className="filter-row">
+          <div className="filter-group">
+            <label><Camera size={14} /> CAMERA</label>
+            <div className="select-wrapper">
+              <select 
+                value={selectedCamera} 
+                onChange={(e) => setSelectedCamera(e.target.value)}
+              >
+                {cameras.map(camera => (
+                  <option key={camera} value={camera}>{camera}</option>
+                ))}
+              </select>
+              <ChevronDown size={14} className="select-arrow" />
+            </div>
           </div>
-        ) : (
-          <div className="empty-state">
-            No faces found matching the criteria
+
+          <div className="filter-group">
+            <label><User size={14} /> NAME</label>
+            <div className="input-wrapper">
+              <Search size={14} className="input-icon" />
+              <input 
+                type="text" 
+                placeholder="Filter by name..." 
+                value={nameFilter}
+                onChange={(e) => setNameFilter(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="filter-group">
+            <label><Calendar size={14} /> FROM</label>
+            <div className="date-wrapper">
+              <DatePicker
+                selected={fromDate}
+                onChange={date => setFromDate(date)}
+                dateFormat="dd-MM-yyyy"
+                maxDate={toDate}
+                className="custom-datepicker"
+              />
+              <Calendar size={14} className="date-icon" />
+            </div>
+          </div>
+
+          <div className="filter-group">
+            <label><Calendar size={14} /> TO</label>
+            <div className="date-wrapper">
+              <DatePicker
+                selected={toDate}
+                onChange={date => setToDate(date)}
+                dateFormat="dd-MM-yyyy"
+                minDate={fromDate}
+                maxDate={new Date()}
+                className="custom-datepicker"
+              />
+              <Calendar size={14} className="date-icon" />
+            </div>
+          </div>
+        </div>
+
+        <div className="filter-footer">
+          <span className="date-range-info">
+            <ClockIcon /> {getDateRangeText()}
+          </span>
+          <div className="action-buttons">
+            <button className="btn-clear" onClick={onClear}>
+              <X size={14} /> Clear
+            </button>
+            <button className="btn-search" onClick={onSearch}>
+              <Search size={14} /> Search Events
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Active Filters */}
+      <div className="active-filters-bar">
+        {selectedCamera !== 'All Cameras' && (
+          <div className="filter-chip">
+            <span className="chip-label">Camera:</span> 
+            <span className="chip-value">{selectedCamera}</span>
+            <button onClick={() => removeFilter('camera')}><X size={12} /></button>
           </div>
         )}
+        <div className="filter-chip">
+          <span className="chip-label">Date:</span> 
+          <span className="chip-value">
+            {format(fromDate, 'yyyy-MM-dd')} &rarr; {format(toDate, 'yyyy-MM-dd')}
+          </span>
+          <button onClick={() => removeFilter('date')}><X size={12} /></button>
+        </div>
+      </div>
+
+      {/* Results Section */}
+      <div className="results-card">
+        <div className="results-header">
+          <div className="header-left">
+            <div className="icon-box"><List size={18} /></div>
+            <div className="title-group">
+              <h3>Event Results</h3>
+              <span className="count">{faces.length} records found</span>
+            </div>
+          </div>
+          <div className="view-actions">
+            <button className="action-icon-btn" title="Download">
+              <Download size={18} />
+            </button>
+            <div className="view-toggle">
+              <button 
+                className={`toggle-btn ${viewMode === 'list' ? 'active' : ''}`}
+                onClick={() => setViewMode('list')}
+              >
+                <List size={18} />
+              </button>
+              <button 
+                className={`toggle-btn ${viewMode === 'grid' ? 'active' : ''}`}
+                onClick={() => setViewMode('grid')}
+              >
+                <Grid size={18} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {error && <div className="error-message">{error}</div>}
+
+        <div className="results-content">
+          {loading ? (
+            <div className="loading-state">
+              <div className="spinner"></div>
+              <p>Loading events...</p>
+            </div>
+          ) : faces.length === 0 ? (
+            <div className="empty-state">
+              <Search size={48} />
+              <p>No records found</p>
+            </div>
+          ) : viewMode === 'list' ? (
+            <div className="table-responsive">
+              <table className="events-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>NAME</th>
+                    <th>CAMERA</th>
+                    <th>DATE & TIME</th>
+                    <th>TYPE</th>
+                    <th>CONFIDENCE</th>
+                    <th>ACTION</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {faces.map((face, index) => (
+                    <tr key={`${face.image_path}-${index}`}>
+                      <td>{index + 1}</td>
+                      <td>
+                        <div className="user-cell">
+                          <div className="avatar-small">
+                            <img 
+                              src={fixImageUrl(face.image_path)} 
+                              alt={face.name}
+                              onError={(e) => {e.target.style.display='none'}} 
+                            />
+                          </div>
+                          <span>{face.name}</span>
+                        </div>
+                      </td>
+                      <td>{face.camera}</td>
+                      <td>{format(new Date(face.timestamp), 'yyyy-MM-dd HH:mm:ss')}</td>
+                      <td>
+                        <span className={`badge ${face.name === 'Unknown' ? 'badge-unknown' : 'badge-known'}`}>
+                          {face.name === 'Unknown' ? 'Unknown' : 'Known'}
+                        </span>
+                      </td>
+                      <td>
+                        {face.confidence !== undefined && face.confidence !== null ? (
+                          <div className="confidence-bar">
+                            <div 
+                              className="fill" 
+                              style={{width: `${face.confidence * 100}%`}}
+                            ></div>
+                            <span>{(face.confidence * 100).toFixed(1)}%</span>
+                          </div>
+                        ) : (
+                          <span className="text-muted">-</span>
+                        )}
+                      </td>
+                      <td>
+                        <button className="btn-action">View</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="faces-grid">
+              {faces.map((face, index) => (
+                <FaceCard
+                  key={`${face.image_path}-${index}`}
+                  imagePath={face.image_path}
+                  name={face.name}
+                  camera={face.camera}
+                  timestamp={face.timestamp}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 };
+
+const ClockIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"></circle>
+    <polyline points="12 6 12 12 16 14"></polyline>
+  </svg>
+);
 
 export default FaceEvents;

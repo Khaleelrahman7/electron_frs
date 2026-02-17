@@ -27,24 +27,24 @@
 
 .matching-tabs {
   display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  background-color: var(--bg-app);
-  padding: 8px;
-  border-radius: var(--border-radius);
+  gap: 4px;
+  background-color: var(--bg-input);
+  padding: 4px;
+  border-radius: 999px;
   border: 1px solid var(--border-color);
+  width: fit-content;
 }
 
 .tab-btn {
   background-color: transparent;
   color: var(--text-secondary);
-  border: 1px solid transparent;
-  padding: 12px 20px;
-  border-radius: var(--border-radius-sm);
+  border: none;
+  padding: 6px 20px;
+  border-radius: 999px;
   cursor: pointer;
-  font-size: 0.9rem;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  font-weight: 500;
+  font-size: 0.85rem;
+  transition: var(--transition-smooth);
+  font-weight: 600;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -52,37 +52,16 @@
   overflow: hidden;
 }
 
-.tab-btn::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, var(--primary-color), var(--primary-hover));
-  transform: translateX(-100%);
-  transition: transform 0.3s ease;
-}
-
 .tab-btn:hover {
-  background-color: var(--bg-hover);
   color: var(--text-primary);
-  transform: translateY(-1px);
-}
-
-.tab-btn:hover::before {
-  transform: translateX(0);
+  background-color: var(--bg-hover);
 }
 
 .tab-btn.active {
   background-color: var(--bg-panel);
   color: var(--primary-color);
   box-shadow: var(--shadow-sm);
-  border-color: var(--primary-color);
-}
-
-.tab-btn.active::before {
-  transform: translateX(0);
+  transform: scale(1.02);
 }
 
 .tab-icon {
@@ -128,7 +107,7 @@
   border: 2px dashed var(--border-color);
   border-radius: var(--border-radius);
   background-color: var(--bg-app);
-  transition: all 0.3s ease;
+  transition: var(--transition-smooth);
   min-width: 200px;
   position: relative;
 }
@@ -137,6 +116,7 @@
   border-color: var(--primary-color);
   background-color: rgba(59, 130, 246, 0.05);
   box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
 }
 
 .image-upload h4 {
@@ -240,7 +220,7 @@
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: var(--transition-normal);
   border: none;
   display: flex;
   align-items: center;
@@ -257,7 +237,7 @@
 
 .action-btn.primary:hover:not(:disabled) {
   background-color: var(--primary-hover);
-  transform: translateY(-1px);
+  transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
 }
 
@@ -302,7 +282,7 @@
   border-radius: var(--border-radius);
   padding: 16px;
   border: 1px solid var(--border-color);
-  transition: all 0.2s ease;
+  transition: var(--transition-smooth);
   box-shadow: var(--shadow-sm);
 }
 
@@ -423,7 +403,7 @@
   border-radius: var(--border-radius);
   padding: 24px;
   text-align: center;
-  transition: all 0.2s ease;
+  transition: var(--transition-smooth);
   box-shadow: var(--shadow-sm);
 }
 
