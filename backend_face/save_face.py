@@ -165,7 +165,8 @@ def save_face_image(
     label_s = sanitize_label(label)
 
     # Check face confidence before saving (must be > 70% for quality)
-    if confidence is not None and confidence < 0.7:
+    if confidence is not None and confidence < 0.6:
+        print(f"Skipping save: Low confidence {confidence:.2f} < 0.6 for {label_s}")
         return None
 
     try:

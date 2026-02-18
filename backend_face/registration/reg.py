@@ -130,12 +130,20 @@ class MetadataManager:
         except Exception:
             metadata = {}
 
-        # Filter valid person entries (must be dict and have 'name')
+        # Helper to extract persons from mixed/flat/nested metadata
         persons = {}
         if isinstance(metadata, dict):
-             for k, v in metadata.items():
-                 if isinstance(v, dict) and 'name' in v:
-                     persons[k] = v
+            # Check for nested "persons" key first
+            if "persons" in metadata and isinstance(metadata["persons"], dict):
+                for k, v in metadata["persons"].items():
+                    if isinstance(v, dict) and 'name' in v:
+                        persons[k] = v
+            
+            # Also check top level for flat/mixed entries
+            for k, v in metadata.items():
+                if k == "persons": continue
+                if isinstance(v, dict) and 'name' in v:
+                    persons[k] = v
         
         # Count by category
         categories = {}
@@ -851,9 +859,24 @@ async def get_gallery(name: Optional[str] = None, category: Optional[str] = None
             with open(METADATA_FILE, 'r') as f:
                 metadata = json.load(f)
 
+            # Helper to extract persons from mixed/flat/nested metadata
+            persons = {}
+            if isinstance(metadata, dict):
+                # Check for nested "persons" key first
+                if "persons" in metadata and isinstance(metadata["persons"], dict):
+                    for k, v in metadata["persons"].items():
+                        if isinstance(v, dict) and 'name' in v:
+                            persons[k] = v
+                
+                # Also check top level for flat/mixed entries
+                for k, v in metadata.items():
+                    if k == "persons": continue
+                    if isinstance(v, dict) and 'name' in v:
+                        persons[k] = v
+
             # Process metadata to include image filename for frontend
             processed_data = {}
-            for person_id, person_data in metadata.items():
+            for person_id, person_data in persons.items():
                 # Filter by name if provided (case-insensitive partial match)
                 if name and name.lower() not in person_data.get('name', '').lower():
                     continue
@@ -867,10 +890,13 @@ async def get_gallery(name: Optional[str] = None, category: Optional[str] = None
                 # Extract image filename from photo_path
                 if 'photo_path' in person_data:
                     photo_path = person_data['photo_path']
-                    # Ensure we only get the filename, not the full path
-                    image_filename = os.path.basename(photo_path)
-                    # Additional safety: remove any path separators that might have been included
-                    image_filename = image_filename.replace('\\', '').replace('/', '')
+                    # Handle both Windows and Unix style paths to ensure we get just the filename
+                    # This fixes issues when migrating data between different OSs
+                    if photo_path:
+                        image_filename = photo_path.replace('\\', '/').split('/')[-1]
+                    else:
+                        image_filename = 'original.jpg'
+                    
                     processed_data[person_id]['image_filename'] = image_filename
                 else:
                     # Default fallback

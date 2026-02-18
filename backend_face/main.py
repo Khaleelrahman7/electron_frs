@@ -860,6 +860,46 @@ def convert_file_path_to_url(file_path: str) -> str:
             if len(parts) >= 1:
                 camera_name = parts[0] if parts[0] else "default"
                 return f"{API_BASE_URL}/api/captured/image/unknown/{camera_name}/unknown/{image_name}"
+
+        # Robust fallback for cross-platform paths (e.g. Windows paths on Linux)
+        path_str = file_path.replace('\\', '/')
+        
+        # Try to detect gallery images
+        if '/gallery/' in path_str:
+            parts = path_str.split('/gallery/')
+            if len(parts) > 1:
+                relative_part = parts[-1]
+                path_segments = relative_part.split('/')
+                if len(path_segments) >= 2:
+                    person = path_segments[0]
+                    img = path_segments[-1]
+                    return f"{API_BASE_URL}/api/gallery/image/{person}/{img}"
+
+        # Try to detect captured known faces
+        if '/captured_faces/known/' in path_str:
+            parts = path_str.split('/captured_faces/known/')
+            if len(parts) > 1:
+                relative_part = parts[-1]
+                path_segments = relative_part.split('/')
+                img = path_segments[-1]
+                if len(path_segments) >= 2:
+                    cam = path_segments[0]
+                    person = path_segments[1]
+                    return f"{API_BASE_URL}/api/captured/image/known/{cam}/{person}/{img}"
+                elif len(path_segments) == 1:
+                    # Maybe just person/image or just image? Assume default structure
+                    return f"{API_BASE_URL}/api/captured/image/known/default/default/{img}"
+
+        # Try to detect captured unknown faces
+        if '/captured_faces/unknown/' in path_str:
+            parts = path_str.split('/captured_faces/unknown/')
+            if len(parts) > 1:
+                relative_part = parts[-1]
+                path_segments = relative_part.split('/')
+                img = path_segments[-1]
+                if len(path_segments) >= 1:
+                    cam = path_segments[0] if path_segments[0] else "default"
+                    return f"{API_BASE_URL}/api/captured/image/unknown/{cam}/unknown/{img}"
         
         return normalized_path
     except Exception as e:

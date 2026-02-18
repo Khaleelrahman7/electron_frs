@@ -5,16 +5,22 @@
         "gender": "Male",
         "category": "eagle employee",
         "registration_date": "2025-03-11T17:20:23.481686",
-        "gallery_path": "c:\\Users\\e629\\Documents\\GitHub\\electron_frs\\backend_face\\data\\gallery\\logesh",
-        "photo_path": "c:\\Users\\e629\\Documents\\GitHub\\electron_frs\\backend_face\\data\\gallery\\logesh\\original.jpg"
+        "gallery_path": "C:\\Users\\e629\\Documents\\GitHub\\electron_frs\\backend_face\\data\\gallery\\logesh",
+        "photo_path": "C:\\Users\\e629\\Documents\\GitHub\\electron_frs\\backend_face\\data\\gallery\\logesh\\1.jpg",
+        "age_range": "N/A",
+        "age_source": "unknown",
+        "predicted_age": null
     },
     "rahman": {
-        "name": "Rahman",
+        "name": "rahman",
         "age": "22",
         "gender": "Male",
         "category": "employee",
         "registration_date": "2025-11-08T11:33:04.153329",
-        "gallery_path": "c:\\Users\\e629\\Documents\\GitHub\\electron_frs\\backend_face\\data\\gallery\\rahman",
-        "photo_path": "c:\\Users\\e629\\Documents\\GitHub\\electron_frs\\backend_face\\data\\gallery\\rahman\\1.jpg"
+        "gallery_path": "C:\\Users\\e629\\Documents\\GitHub\\electron_frs\\backend_face\\data\\gallery\\rahman",
+        "photo_path": "C:\\Users\\e629\\Documents\\GitHub\\electron_frs\\backend_face\\data\\gallery\\rahman\\1.jpg",
+        "age_range": "N/A",
+        "age_source": "unknown",
+        "predicted_age": null
     }
 }

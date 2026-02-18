@@ -14,7 +14,7 @@ from .config import KNOWN_FACES_DIR, UNKNOWN_FACES_DIR
 
 # API base URL for constructing image URLs
 # Defaults to localhost, can be overridden via environment variable
-API_BASE_URL = os.getenv("API_BASE_URL", "http://192.168.1.209:8005")
+API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8005")
 
 def convert_file_path_to_url(file_path: str) -> str:
     try:
@@ -44,6 +44,42 @@ def convert_file_path_to_url(file_path: str) -> str:
             else:
                 camera_name = "default"
             return f"{API_BASE_URL}/api/captured/image/unknown/{camera_name}/unknown/{image_name}"
+
+        # Robust fallback for cross-platform paths (e.g. Windows paths on Linux)
+        path_str = file_path.replace('\\', '/')
+
+        # Try to detect captured known faces
+        if '/captured_faces/known/' in path_str:
+            parts = path_str.split('/captured_faces/known/')
+            if len(parts) > 1:
+                relative_part = parts[-1]
+                path_segments = relative_part.split('/')
+                img = path_segments[-1]
+                if len(path_segments) >= 2:
+                    # Could be camera/person/img or person/img
+                    # Usually camera/person/img in full path
+                    # Let's try to infer
+                    if len(path_segments) >= 3:
+                         cam = path_segments[0]
+                         person = path_segments[1]
+                         return f"{API_BASE_URL}/api/captured/image/known/{cam}/{person}/{img}"
+                    
+                    cam = path_segments[0]
+                    person = path_segments[1]
+                    return f"{API_BASE_URL}/api/captured/image/known/{cam}/{person}/{img}"
+                elif len(path_segments) == 1:
+                     return f"{API_BASE_URL}/api/captured/image/known/default/default/{img}"
+
+        # Try to detect captured unknown faces
+        if '/captured_faces/unknown/' in path_str:
+            parts = path_str.split('/captured_faces/unknown/')
+            if len(parts) > 1:
+                relative_part = parts[-1]
+                path_segments = relative_part.split('/')
+                img = path_segments[-1]
+                if len(path_segments) >= 1:
+                    cam = path_segments[0] if path_segments[0] else "default"
+                    return f"{API_BASE_URL}/api/captured/image/unknown/{cam}/unknown/{img}"
 
         return normalized_path
     except Exception as e:

@@ -15,7 +15,7 @@ const getApiBaseUrl = () => {
   // Smart default: use current hostname
   // This allows the app to work on both localhost and when accessed via IP
   const hostname = window.location.hostname;
-  return `http://localhost:8005`;
+  return `http://${hostname}:8005`;
 };
 
 export const API_BASE_URL = getApiBaseUrl();

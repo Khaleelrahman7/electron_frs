@@ -31,6 +31,16 @@ FRAME_DISPLAY_SCALE = 1.0
 # InsightFace detection settings
 INSIGHT_CTX = 0                 # -1 = CPU; 0 = GPU if you have onnxruntime-gpu & CUDA
 INSIGHT_DET_SIZE = (640, 640)   # detector input size (increase to e.g. (1024,1024) for tiny faces)
+
+# Folders to ignore when loading known faces
+IGNORE_FOLDERS = {
+    "gallery", 
+    "auth", 
+    "camera_management", 
+    "temp_bulk", 
+    "__pycache__", 
+    ".ipynb_checkpoints"
+}
 # --------------------------------------------------
 
 
@@ -41,7 +51,11 @@ def load_known_faces(data_dir: str) -> Tuple[List[np.ndarray], List[str]]:
     if not os.path.isdir(data_dir):
         raise ValueError(f"Data directory does not exist: {data_dir}")
 
-    person_dirs = [d for d in sorted(os.listdir(data_dir)) if os.path.isdir(os.path.join(data_dir, d))]
+    # Filter out system folders and non-directories
+    person_dirs = [
+        d for d in sorted(os.listdir(data_dir)) 
+        if os.path.isdir(os.path.join(data_dir, d)) and d not in IGNORE_FOLDERS
+    ]
     print(f"[INFO] Found {len(person_dirs)} person folders in dataset")
 
     for person in person_dirs:
