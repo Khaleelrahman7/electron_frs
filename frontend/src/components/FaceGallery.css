@@ -47,6 +47,7 @@
   gap: 16px;
   align-items: center;
   flex-wrap: wrap;
+  min-height: 40px;
 }
 
 .status-badge {
@@ -61,6 +62,7 @@
   align-items: center;
   gap: 8px;
   box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  height: 40px;
 }
 
 .status-dot {
@@ -88,12 +90,13 @@
   width: 100%;
   padding: 10px 12px 10px 36px;
   border: 1px solid var(--gallery-border);
-  border-radius: 8px;
+  border-radius: 999px;
   font-size: 0.9rem;
   outline: none;
   background-color: white;
   transition: var(--transition-fast);
   color: var(--gallery-text-main);
+  height: 40px;
 }
 
 .search-input:focus {
@@ -104,7 +107,7 @@
 .filter-select {
   padding: 10px 16px;
   border: 1px solid var(--gallery-border);
-  border-radius: 8px;
+  border-radius: 999px;
   background-color: white;
   font-size: 0.9rem;
   color: var(--gallery-text-main);
@@ -112,6 +115,7 @@
   cursor: pointer;
   min-width: 150px;
   transition: var(--transition-fast);
+  height: 40px;
 }
 
 .filter-select:hover {
@@ -127,6 +131,8 @@
   border-radius: 999px;
   border: 1px solid var(--gallery-border);
   width: fit-content;
+  height: 40px;
+  align-items: center;
 }
 
 .view-btn {
@@ -140,6 +146,7 @@
   align-items: center;
   justify-content: center;
   transition: var(--transition-smooth);
+  height: 32px;
 }
 
 .view-btn:hover {
@@ -165,7 +172,7 @@ body:not([data-theme]) .view-btn.active,
   color: white;
   border: none;
   padding: 10px 20px;
-  border-radius: 8px;
+  border-radius: 999px;
   font-weight: 600;
   font-size: 0.9rem;
   cursor: pointer;
@@ -174,6 +181,7 @@ body:not([data-theme]) .view-btn.active,
   gap: 8px;
   transition: var(--transition-normal);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  height: 40px;
 }
 
 .refresh-btn:hover {
@@ -291,18 +299,34 @@ body:not([data-theme]) .gallery-container,
   --gallery-border: var(--border-color);
 }
 
+/* Nexus / Cyberpunk Theme Overrides */
+[data-theme="nexus"] .gallery-container {
+  --gallery-bg: var(--bg-app);
+  --gallery-card-bg: var(--bg-panel);
+  --gallery-text-main: var(--text-primary);
+  --gallery-text-sub: var(--text-secondary);
+  --gallery-border: var(--border-color);
+  --gallery-primary: var(--primary-color);
+}
+
 body:not([data-theme]) .stat-card,
 [data-theme="phoenix"] .stat-card,
+[data-theme="nexus"] .stat-card,
 body:not([data-theme]) .status-badge,
 [data-theme="phoenix"] .status-badge,
+[data-theme="nexus"] .status-badge,
 body:not([data-theme]) .search-input,
 [data-theme="phoenix"] .search-input,
+[data-theme="nexus"] .search-input,
 body:not([data-theme]) .filter-select,
 [data-theme="phoenix"] .filter-select,
+[data-theme="nexus"] .filter-select,
 body:not([data-theme]) .view-toggles,
 [data-theme="phoenix"] .view-toggles,
+[data-theme="nexus"] .view-toggles,
 body:not([data-theme]) .count-badge,
 [data-theme="phoenix"] .count-badge,
+[data-theme="nexus"] .count-badge,
 body:not([data-theme]) .empty-state,
 [data-theme="phoenix"] .empty-state {
   background-color: var(--bg-input);
@@ -311,7 +335,8 @@ body:not([data-theme]) .empty-state,
 }
 
 body:not([data-theme]) .stat-icon,
-[data-theme="phoenix"] .stat-icon {
+[data-theme="phoenix"] .stat-icon,
+[data-theme="nexus"] .stat-icon {
   background-color: var(--bg-hover);
 }
 
@@ -322,7 +347,8 @@ body:not([data-theme]) .stat-icon.orange, [data-theme="phoenix"] .stat-icon.oran
 body:not([data-theme]) .stat-icon.gray, [data-theme="phoenix"] .stat-icon.gray { color: #94a3b8; }
 
 body:not([data-theme]) .view-btn.active,
-[data-theme="phoenix"] .view-btn.active {
+[data-theme="phoenix"] .view-btn.active,
+[data-theme="nexus"] .view-btn.active {
   background-color: var(--bg-hover);
   color: var(--primary-color);
 }

@@ -116,6 +116,8 @@
   position: absolute;
   color: var(--text-muted);
   pointer-events: none;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .input-icon { left: 12px; }
@@ -143,9 +145,17 @@
   padding-right: 32px;
 }
 
-.custom-datepicker {
-  padding-left: 12px; /* Date picker doesn't have left icon inside usually, icon is on right */
-  padding-right: 36px;
+.date-wrapper .react-datepicker-wrapper,
+.date-wrapper .react-datepicker__input-container {
+  display: block;
+  width: 100%;
+}
+
+.filter-group .custom-datepicker {
+  padding-left: 12px;
+  padding-right: 40px; /* More space for right icon */
+  border-radius: 999px;
+  height: 42px;
 }
 
 .filter-group input:focus,

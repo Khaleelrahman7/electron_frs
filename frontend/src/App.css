@@ -1,8 +1,8 @@
 :root {
   /* Common Variables */
-  --border-radius-sm: 4px;
-  --border-radius: 8px;
-  --border-radius-lg: 12px;
+  --border-radius-sm: 12px;
+  --border-radius: 18px;
+  --border-radius-lg: 26px;
   --font-family: 'DM Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   
   /* Transitions */
@@ -220,19 +220,19 @@
   --danger-color: #ef4444;
   --info-color: #06b6d4;
 
-  --border-color: rgba(6, 182, 212, 0.5); /* Stronger cyan border */
-  --border-radius-sm: 2px;
-  --border-radius: 4px;
-  --border-radius-lg: 6px;
+  --border-color: rgba(6, 182, 212, 0.3);
+  --border-radius-sm: 12px;
+  --border-radius: 18px;
+  --border-radius-lg: 26px;
 
-  --shadow-sm: 0 0 5px rgba(6, 182, 212, 0.2);
-  --shadow-md: 0 0 10px rgba(6, 182, 212, 0.2);
-  --shadow-lg: 0 0 15px rgba(6, 182, 212, 0.2);
-  --shadow-xl: 0 0 20px rgba(6, 182, 212, 0.2);
-  --shadow-neon: 0 0 8px rgba(6, 182, 212, 0.8);
+  --shadow-sm: 0 0 4px rgba(6, 182, 212, 0.12);
+  --shadow-md: 0 0 8px rgba(6, 182, 212, 0.15);
+  --shadow-lg: 0 0 12px rgba(6, 182, 212, 0.18);
+  --shadow-xl: 0 0 16px rgba(6, 182, 212, 0.2);
+  --shadow-neon: 0 0 6px rgba(6, 182, 212, 0.25);
 
   /* Dashboard Specific */
-  --bg-center-panel-gradient: radial-gradient(circle at center, rgba(6, 182, 212, 0.15) 0%, #020617 80%);
+  --bg-center-panel-gradient: radial-gradient(circle at center, rgba(6, 182, 212, 0.1) 0%, #020617 80%);
   --bg-face-frame: rgba(6, 182, 212, 0.1);
   --bg-metric-wrapper: rgba(6, 182, 212, 0.05);
   --bg-metric-details: rgba(6, 182, 212, 0.02);
@@ -366,7 +366,7 @@ body {
   justify-content: center;
   gap: 8px;
   padding: 10px 16px;
-  border-radius: var(--border-radius-sm);
+  border-radius: 999px;
   font-weight: 500;
   font-size: 0.9rem;
   cursor: pointer;
@@ -670,18 +670,18 @@ body {
 /* Grid Background */
 [data-theme="nexus"] {
   background-image: 
-    linear-gradient(rgba(6, 182, 212, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(6, 182, 212, 0.05) 1px, transparent 1px);
+    linear-gradient(rgba(6, 182, 212, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(6, 182, 212, 0.03) 1px, transparent 1px);
   background-size: 30px 30px;
 }
 
 /* Card Styling - HUD Effect */
 [data-theme="nexus"] .card {
   border: 1px solid rgba(6, 182, 212, 0.3);
-  box-shadow: 0 0 15px rgba(6, 182, 212, 0.1), inset 0 0 20px rgba(6, 182, 212, 0.05);
+  box-shadow: 0 0 8px rgba(6, 182, 212, 0.06), inset 0 0 12px rgba(6, 182, 212, 0.04);
   position: relative;
   backdrop-filter: blur(5px);
-  border-radius: 4px; /* Sharper corners */
+  border-radius: var(--border-radius);
   transition: all 0.3s ease;
 }
 
@@ -725,23 +725,23 @@ body {
 
 /* Active Nav Items */
 [data-theme="nexus"] .nav-item.active {
-  box-shadow: 0 0 10px rgba(6, 182, 212, 0.4);
-  border: 1px solid rgba(6, 182, 212, 0.5);
-  background: rgba(6, 182, 212, 0.15);
+  box-shadow: 0 0 6px rgba(6, 182, 212, 0.25);
+  border: 1px solid rgba(6, 182, 212, 0.35);
+  background: rgba(6, 182, 212, 0.12);
 }
 
 /* Buttons */
 [data-theme="nexus"] .btn-primary {
-  box-shadow: 0 0 10px rgba(6, 182, 212, 0.4);
-  border: 1px solid rgba(6, 182, 212, 0.5);
+  box-shadow: 0 0 6px rgba(6, 182, 212, 0.3);
+  border: 1px solid rgba(6, 182, 212, 0.35);
   text-transform: uppercase;
   letter-spacing: 1px;
   font-weight: 600;
 }
 
 [data-theme="nexus"] .btn-primary:hover {
-  box-shadow: 0 0 20px rgba(6, 182, 212, 0.6);
-  background-color: rgba(6, 182, 212, 0.8);
+  box-shadow: 0 0 12px rgba(6, 182, 212, 0.4);
+  background-color: rgba(6, 182, 212, 0.6);
 }
 
 /* Inputs */
@@ -756,7 +756,7 @@ body {
 [data-theme="nexus"] .input-field:focus, 
 [data-theme="nexus"] .select-field:focus, 
 [data-theme="nexus"] .textarea-field:focus {
-  box-shadow: 0 0 10px rgba(6, 182, 212, 0.3);
+  box-shadow: 0 0 6px rgba(6, 182, 212, 0.2);
   border-color: var(--primary-color);
 }
 
@@ -767,5 +767,5 @@ body {
 [data-theme="nexus"] h3 {
   text-transform: uppercase;
   letter-spacing: 1px;
-  text-shadow: 0 0 5px rgba(6, 182, 212, 0.5);
+  text-shadow: 0 0 3px rgba(6, 182, 212, 0.25);
 }
