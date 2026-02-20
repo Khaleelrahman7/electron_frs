@@ -9,8 +9,9 @@ const AnimatedLoginPage = () => {
   const [role, setRole] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [isExiting, setIsExiting] = useState(false);
   
-  const { login, error, clearError, logout } = useAuthStore();
+  const { login, error, clearError, logout, setAuthenticated } = useAuthStore();
 
   useEffect(() => {
     // Initialize animations
@@ -29,10 +30,9 @@ const AnimatedLoginPage = () => {
       // Preserve the auth-coin class but reset other classes
       coin.className = 'auth-coin';
       
-      let roleText = 'SELECT\nROLE';
+      let roleText = '';
       if (role) {
         coin.classList.add(`coin-${role}`);
-        roleText = role === 'SuperAdmin' ? 'SUPER\nADMIN' : role === 'Admin' ? 'ADMIN' : 'SUPERVISOR';
       }
       
       // Update all text elements (front and back)
@@ -62,18 +62,22 @@ const AnimatedLoginPage = () => {
     // Start animation sequence
     startLoginAnimation();
     
+    // Add a minimum delay for the inserting animation
+    const minAnimationTime = new Promise(resolve => setTimeout(resolve, 1500));
+    
     try {
-      const result = await login(username, password, role);
+      const loginPromise = login(username, password, role, true);
+      const [result] = await Promise.all([loginPromise, minAnimationTime]);
       
       if (result.success) {
         // Success animation
-        setTimeout(() => {
-          completeLoginAnimation();
-        }, 1000);
+        completeLoginAnimation();
         
+        // Wait for success animation before navigating
         setTimeout(() => {
           setIsLoading(false);
-        }, 3000);
+          setAuthenticated(true);
+        }, 2000);
       } else {
         // Failed animation
         setTimeout(() => {
@@ -190,7 +194,7 @@ const AnimatedLoginPage = () => {
   };
 
   return (
-    <div className="animated-login-container">
+    <div className={`animated-login-container ${isExiting ? 'exiting' : ''}`}>
       <video className="login-background-video" autoPlay loop muted playsInline>
         <source src={process.env.PUBLIC_URL + '/assets/login-bg.mov'} type="video/quicktime" />
         <source src={process.env.PUBLIC_URL + '/assets/login-bg.mov'} type="video/mp4" />
@@ -307,11 +311,11 @@ const AnimatedLoginPage = () => {
                 <div className="auth-coin" id="animatedCoin">
                   <div className="coin-face front">
                     <img src={securityCoinIcon} className="auth-coin-icon-img" alt="Security" />
-                    <div className="coin-text">FACE</div>
+                    <div className="coin-text"></div>
                   </div>
                   <div className="coin-face back">
                     <img src={securityCoinIcon} className="auth-coin-icon-img" alt="Security" />
-                    <div className="coin-text">FACE</div>
+                    <div className="coin-text"></div>
                   </div>
                 </div>
 

@@ -15,7 +15,6 @@
     "axios": "^1.6.0",
     "chart.js": "^4.5.1",
     "date-fns": "^2.30.0",
-    "electron": "^27.0.0",
     "form-data": "^4.0.0",
     "lucide-react": "^0.263.1",
     "react": "^18.2.0",
@@ -28,10 +27,32 @@
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
+    "electron": "^27.0.0",
     "electron-builder": "^24.6.4",
     "wait-on": "^7.2.0"
   },
   "homepage": "./",
+  "author": {
+    "name": "Face Recognition Team",
+    "email": "support@example.com"
+  },
+  "build": {
+    "extends": null,
+    "appId": "com.facerecognition.app",
+    "productName": "Face Recognition System",
+    "win": {
+      "target": "nsis"
+    },
+    "files": [
+      "build/**/*",
+      "main.js",
+      "preload.js",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist"
+    }
+  },
   "browserslist": {
     "production": [
       ">0.2%",

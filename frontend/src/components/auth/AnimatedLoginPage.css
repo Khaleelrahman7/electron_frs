@@ -27,6 +27,13 @@
   background: transparent;
   font-family: 'DM Sans', 'Inter', sans-serif;
   color: var(--text-main);
+  transition: all 0.5s ease-in-out;
+}
+
+.animated-login-container.exiting {
+  opacity: 0;
+  transform: scale(1.1);
+  filter: blur(10px);
 }
 
 .login-background-video {
@@ -467,8 +474,8 @@
   top: -140px;
   left: 50%;
   transform: translateX(-50%);
-  width: 160px;
-  height: 160px;
+  width: 120px;
+  height: 120px;
   border-radius: 50%;
   background: transparent;
   display: flex;
@@ -476,7 +483,7 @@
   justify-content: center;
   align-items: center;
   z-index: 20;
-  box-shadow: 0 4px 25px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
   /* Border removed */
   font-family: 'DM Sans', monospace;
   font-weight: 700;
@@ -485,7 +492,7 @@
   letter-spacing: 1px;
   color: var(--cyber-primary);
   animation: authCoinFloat 3s ease-in-out infinite;
-  transition: all 0.5s ease;
+  transition: all 2.5s cubic-bezier(0.4, 0, 0.2, 1);
   will-change: transform, top;
   /* Ensure 3D rendering context */
   transform-style: preserve-3d;
@@ -527,16 +534,19 @@
 
 .auth-coin.inserting {
   top: 50%;
-  transform: translate(-50%, -50%) scale(0.8);
+  transform: translateX(-50%) scale(0.6) rotateY(360deg);
   animation: none;
+  transition: all 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 5; /* Go behind some elements if needed, or stay on top */
 }
 
 .auth-coin.success {
-  background: linear-gradient(135deg, var(--success-color), #00ff88);
-  border-color: var(--success-color);
-  box-shadow: 0 0 15px rgba(5, 205, 153, 0.8);
-  color: #000;
-  animation: successCoin 2s ease-in-out;
+  top: 50%;
+  transform: translateX(-50%) scale(0);
+  opacity: 0;
+  transition: all 0.5s ease-in;
+  /* Add a glow effect before disappearing */
+  box-shadow: 0 0 50px var(--success-color);
 }
 
 .auth-coin.failed {
@@ -548,15 +558,15 @@
 }
 
 @keyframes successCoin {
-  0% { transform: translate(-50%, -50%) scale(0.8); }
-  50% { transform: translate(-50%, -50%) scale(1.1); }
-  100% { transform: translate(-50%, -50%) scale(1); }
+  0% { transform: translateX(-50%) scale(1); opacity: 1; }
+  50% { transform: translateX(-50%) scale(1.5); opacity: 0.8; }
+  100% { transform: translateX(-50%) scale(3); opacity: 0; }
 }
 
 @keyframes failedCoin {
-  0%, 100% { transform: translate(-50%, -50%) scale(0.8); }
-  25%, 75% { transform: translate(-50%, -50%) scale(0.8) rotateZ(-5deg); }
-  50% { transform: translate(-50%, -50%) scale(0.8) rotateZ(5deg); }
+  0%, 100% { transform: translateX(-50%) scale(1); }
+  25%, 75% { transform: translateX(-50%) scale(1) rotateZ(-5deg); }
+  50% { transform: translateX(-50%) scale(1) rotateZ(5deg); }
 }
 
 @keyframes authCoinFloat {

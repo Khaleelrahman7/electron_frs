@@ -35,7 +35,7 @@ const useAuthStore = create(
       error: null,
 
       // Actions
-      login: async (username, password, role) => {
+      login: async (username, password, role, skipAuthUpdate = false) => {
         set({ isLoading: true, error: null });
         
         try {
@@ -54,7 +54,7 @@ const useAuthStore = create(
 
           const data = await response.json();
           
-          set({
+          const newState = {
             user: {
               username: data.username,
               role: data.role,
@@ -63,10 +63,12 @@ const useAuthStore = create(
               license_end_date: data.license_end_date,
             },
             token: data.access_token,
-            isAuthenticated: true,
+            isAuthenticated: !skipAuthUpdate,
             isLoading: false,
             error: null,
-          });
+          };
+
+          set(newState);
 
           // Store token in localStorage for global fetch shim
           localStorage.setItem('auth_token', data.access_token);
@@ -82,6 +84,10 @@ const useAuthStore = create(
           });
           return { success: false, error: error.message };
         }
+      },
+
+      setAuthenticated: (isAuthenticated) => {
+        set({ isAuthenticated });
       },
 
       logout: () => {
