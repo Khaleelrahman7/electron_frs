@@ -30,8 +30,8 @@ import re
 from typing import Tuple
 
 # Configure paths and constants
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-DATA_DIR = os.path.join(BASE_DIR, "backend_face", "data")
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_DIR = os.path.join(BASE_DIR, "data")
 GALLERY_DIR = os.path.join(DATA_DIR, "gallery")
 METADATA_FILE = os.path.join(DATA_DIR, "metadata.json")
 
@@ -855,55 +855,81 @@ async def get_registered_faces():
 async def get_gallery(name: Optional[str] = None, category: Optional[str] = None):
     """Get gallery data with image filenames, optionally filtered by name and category"""
     try:
+        persons = {}
+
         if os.path.exists(METADATA_FILE):
             with open(METADATA_FILE, 'r') as f:
                 metadata = json.load(f)
 
-            # Helper to extract persons from mixed/flat/nested metadata
-            persons = {}
             if isinstance(metadata, dict):
-                # Check for nested "persons" key first
                 if "persons" in metadata and isinstance(metadata["persons"], dict):
                     for k, v in metadata["persons"].items():
                         if isinstance(v, dict) and 'name' in v:
                             persons[k] = v
-                
-                # Also check top level for flat/mixed entries
+
                 for k, v in metadata.items():
-                    if k == "persons": continue
+                    if k == "persons":
+                        continue
                     if isinstance(v, dict) and 'name' in v:
                         persons[k] = v
+        else:
+            if os.path.exists(GALLERY_DIR):
+                for entry in os.scandir(GALLERY_DIR):
+                    if not entry.is_dir():
+                        continue
+                    persons[entry.name] = {
+                        "name": entry.name,
+                        "age": "N/A",
+                        "gender": "N/A",
+                        "category": "unknown",
+                        "registration_date": None,
+                        "gallery_path": entry.path,
+                        "photo_path": os.path.join(entry.path, "1.jpg")
+                    }
 
-            # Process metadata to include image filename for frontend
-            processed_data = {}
-            for person_id, person_data in persons.items():
-                # Filter by name if provided (case-insensitive partial match)
-                if name and name.lower() not in person_data.get('name', '').lower():
-                    continue
-                
-                # Filter by category if provided (case-insensitive exact match)
-                if category and category.lower() != 'all' and category.lower() != person_data.get('category', '').lower():
-                    continue
+        processed_data = {}
+        for person_id, person_data in persons.items():
+            person_name = (person_data.get('name') or person_id)
 
-                processed_data[person_id] = person_data.copy()
+            if name and name.lower() not in str(person_name).lower():
+                continue
 
-                # Extract image filename from photo_path
-                if 'photo_path' in person_data:
-                    photo_path = person_data['photo_path']
-                    # Handle both Windows and Unix style paths to ensure we get just the filename
-                    # This fixes issues when migrating data between different OSs
-                    if photo_path:
-                        image_filename = photo_path.replace('\\', '/').split('/')[-1]
-                    else:
-                        image_filename = 'original.jpg'
-                    
-                    processed_data[person_id]['image_filename'] = image_filename
+            person_category = (person_data.get('category') or 'unknown')
+            if category and category.lower() != 'all' and category.lower() != str(person_category).lower():
+                continue
+
+            processed_data[person_id] = person_data.copy()
+            processed_data[person_id]['name'] = person_name
+            processed_data[person_id]['category'] = person_category
+
+            photo_path = person_data.get('photo_path')
+            image_filename = None
+            if photo_path:
+                image_filename = str(photo_path).replace('\\', '/').split('/')[-1]
+
+            if not image_filename:
+                p1 = os.path.join(GALLERY_DIR, person_id, "1.jpg")
+                p2 = os.path.join(GALLERY_DIR, person_id, "original.jpg")
+                if os.path.exists(p1):
+                    image_filename = "1.jpg"
+                elif os.path.exists(p2):
+                    image_filename = "original.jpg"
                 else:
-                    # Default fallback
-                    processed_data[person_id]['image_filename'] = 'original.jpg'
+                    try:
+                        folder = os.path.join(GALLERY_DIR, person_id)
+                        candidates = [
+                            f.name for f in os.scandir(folder)
+                            if f.is_file() and f.name.lower().endswith((".jpg", ".jpeg", ".png"))
+                        ]
+                        candidates.sort()
+                        image_filename = candidates[0] if candidates else "original.jpg"
+                    except Exception:
+                        image_filename = "original.jpg"
 
-            return processed_data
-        return {}
+            processed_data[person_id]['image_filename'] = image_filename
+            processed_data[person_id]['image_url'] = f"/api/gallery/image/{person_id}/{image_filename}"
+
+        return processed_data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

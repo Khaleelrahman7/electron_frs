@@ -12,10 +12,6 @@ import numpy as np
 import json
 from .config import KNOWN_FACES_DIR, UNKNOWN_FACES_DIR
 
-# API base URL for constructing image URLs
-# Defaults to localhost, can be overridden via environment variable
-API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8005")
-
 def convert_file_path_to_url(file_path: str) -> str:
     try:
         normalized_path = os.path.normpath(file_path)
@@ -29,11 +25,11 @@ def convert_file_path_to_url(file_path: str) -> str:
             if len(parts) >= 3:
                 camera_name = parts[0]
                 person_name = parts[1]
-                return f"{API_BASE_URL}/api/captured/image/known/{camera_name}/{person_name}/{image_name}"
+                return f"/api/captured/image/known/{camera_name}/{person_name}/{image_name}"
             if len(parts) >= 2:
                 person_name = parts[-2]
-                return f"{API_BASE_URL}/api/captured/image/known/default/{person_name}/{image_name}"
-            return f"{API_BASE_URL}/api/captured/image/known/default/default/{image_name}"
+                return f"/api/captured/image/known/default/{person_name}/{image_name}"
+            return f"/api/captured/image/known/default/default/{image_name}"
 
         if normalized_path.startswith(unknown_root):
             relative_path = os.path.relpath(normalized_path, unknown_root)
@@ -43,7 +39,7 @@ def convert_file_path_to_url(file_path: str) -> str:
                 camera_name = parts[0]
             else:
                 camera_name = "default"
-            return f"{API_BASE_URL}/api/captured/image/unknown/{camera_name}/unknown/{image_name}"
+            return f"/api/captured/image/unknown/{camera_name}/unknown/{image_name}"
 
         # Robust fallback for cross-platform paths (e.g. Windows paths on Linux)
         path_str = file_path.replace('\\', '/')
@@ -62,13 +58,13 @@ def convert_file_path_to_url(file_path: str) -> str:
                     if len(path_segments) >= 3:
                          cam = path_segments[0]
                          person = path_segments[1]
-                         return f"{API_BASE_URL}/api/captured/image/known/{cam}/{person}/{img}"
+                         return f"/api/captured/image/known/{cam}/{person}/{img}"
                     
                     cam = path_segments[0]
                     person = path_segments[1]
-                    return f"{API_BASE_URL}/api/captured/image/known/{cam}/{person}/{img}"
+                    return f"/api/captured/image/known/{cam}/{person}/{img}"
                 elif len(path_segments) == 1:
-                     return f"{API_BASE_URL}/api/captured/image/known/default/default/{img}"
+                     return f"/api/captured/image/known/default/default/{img}"
 
         # Try to detect captured unknown faces
         if '/captured_faces/unknown/' in path_str:
@@ -79,7 +75,7 @@ def convert_file_path_to_url(file_path: str) -> str:
                 img = path_segments[-1]
                 if len(path_segments) >= 1:
                     cam = path_segments[0] if path_segments[0] else "default"
-                    return f"{API_BASE_URL}/api/captured/image/unknown/{cam}/unknown/{img}"
+                    return f"/api/captured/image/unknown/{cam}/unknown/{img}"
 
         return normalized_path
     except Exception as e:
