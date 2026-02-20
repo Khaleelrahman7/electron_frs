@@ -1,13 +1,13 @@
 /* Professional Cyber-Security Face Recognition System Styles - TITAN X Theme */
 
 :root {
-  --cyber-primary: #ff0055;
-  --cyber-secondary: #ff3366;
-  --cyber-accent: #cc0044;
+  --cyber-primary: #0066ff;
+  --cyber-secondary: #3388ff;
+  --cyber-accent: #0044cc;
   --cyber-dark: #050505;
   --cyber-dark-secondary: #111111;
-  --cyber-glow: rgba(255, 0, 85, 0.2);
-  --cyber-glow-strong: rgba(255, 0, 85, 0.4);
+  --cyber-glow: rgba(0, 102, 255, 0.2);
+  --cyber-glow-strong: rgba(0, 102, 255, 0.4);
   --success-color: #05CD99;
   --error-color: #EE5D50;
   --text-main: #ffffff;
@@ -24,9 +24,19 @@
   width: 100vw;
   height: 100vh;
   z-index: 9999;
-  background: #000000;
+  background: transparent;
   font-family: 'DM Sans', 'Inter', sans-serif;
   color: var(--text-main);
+}
+
+.login-background-video {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: -1;
 }
 
 .main-container {
@@ -49,9 +59,11 @@
   overflow: hidden;
   box-shadow: 
     0 10px 25px -5px rgba(0, 0, 0, 0.5),
-    0 0 20px rgba(255, 0, 85, 0.1);
+    0 0 20px rgba(0, 102, 255, 0.1);
   border: 1px solid var(--card-border);
-  background: var(--cyber-dark-secondary);
+  background: rgba(17, 17, 17, 0.3);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
   /* Optimization: Force GPU layer */
   transform: translateZ(0);
   will-change: transform; 
@@ -60,7 +72,7 @@
 /* Left Side - Login Form (Glass) */
 .login-section {
   flex: 1;
-  background: rgba(10, 10, 10, 0.95);
+  background: rgba(10, 10, 10, 0.4);
   backdrop-filter: blur(10px); 
   -webkit-backdrop-filter: blur(10px);
   padding: 40px 50px;
@@ -80,20 +92,15 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: 
-    linear-gradient(45deg, transparent 49%, rgba(255, 0, 85, 0.03) 50%, transparent 51%),
-    linear-gradient(-45deg, transparent 49%, rgba(255, 0, 85, 0.03) 50%, transparent 51%);
-  background-size: 20px 20px;
-  opacity: 0.3;
+  background: none;
+  opacity: 0;
   pointer-events: none;
 }
 
 /* Right Side - Visual (Dark Card) */
 .visual-section {
   flex: 1;
-  background: 
-    radial-gradient(circle at 70% 30%, rgba(255, 0, 85, 0.15) 0%, transparent 50%),
-    linear-gradient(135deg, #111111 0%, #050505 100%);
+  background: rgba(5, 5, 5, 0.2);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -116,7 +123,7 @@
   margin-bottom: 10px;
   letter-spacing: 2px;
   text-transform: uppercase;
-  text-shadow: 0 0 10px rgba(255, 0, 85, 0.3);
+  text-shadow: 0 0 10px rgba(0, 102, 255, 0.3);
 }
 
 /* Form Elements */
@@ -149,23 +156,56 @@
   align-items: center;
 }
 
-.form-input {
+/* Increased specificity to override other styles */
+.animated-login-container .form-input {
   width: 100%;
-  padding: 15px;
-  background: var(--input-bg);
-  border: 1px solid var(--card-border);
-  border-radius: 8px; /* Slightly rounded for Titan theme */
+  padding: 15px 15px 15px 45px; /* Added left padding for icon */
+  background: transparent !important;
+  border: 1px solid var(--card-border) !important;
+  border-radius: 4px; /* Slightly rounded for Titan theme */
   font-size: 16px;
-  color: var(--text-main);
+  color: var(--text-main) !important;
   transition: all 0.3s ease;
   font-family: 'DM Sans', monospace;
 }
 
-.form-input:focus {
+/* Ensure select element is strictly transparent and remove default OS styling */
+.animated-login-container select.form-input {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-color: transparent !important;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a0a0a0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 15px center;
+  background-size: 16px;
+  padding-right: 40px; /* Make space for the custom arrow */
+  color: var(--text-main) !important;
+  border-color: var(--card-border) !important;
+}
+
+/* Fix for Select Options Visibility */
+.form-input option {
+  background-color: #111;
+  color: #fff;
+}
+
+.animated-login-container .form-input:focus {
   outline: none;
-  border-color: var(--cyber-primary);
-  box-shadow: 0 0 10px rgba(255, 0, 85, 0.2);
-  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--cyber-primary) !important;
+  box-shadow: 0 0 10px rgba(0, 102, 255, 0.2) !important;
+  background: transparent !important;
+}
+
+/* Handle Autofill background */
+.form-input:-webkit-autofill,
+.form-input:-webkit-autofill:hover, 
+.form-input:-webkit-autofill:focus, 
+.form-input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 30px rgba(0, 0, 0, 0) inset !important;
+  -webkit-text-fill-color: var(--text-main) !important;
+  transition: background-color 5000s ease-in-out 0s;
+  background-color: transparent !important;
 }
 
 .form-input::placeholder {
@@ -173,7 +213,20 @@
 }
 
 /* Icons positioned absolute right */
-.input-icon, .toggle-password {
+.input-icon {
+  position: absolute;
+  left: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-secondary);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+}
+
+.toggle-password {
   position: absolute;
   right: 15px;
   top: 50%;
@@ -184,6 +237,7 @@
   cursor: pointer;
   padding: 5px;
   transition: color 0.3s ease;
+  z-index: 5;
 }
 
 .input-icon:hover, .toggle-password:hover {
@@ -195,7 +249,7 @@
 }
 
 .toggle-password {
-  right: 45px;
+  right: 15px;
 }
 
 .password-icon {
@@ -206,14 +260,14 @@
 .login-button {
   width: 100%;
   padding: 15px;
-  background: linear-gradient(135deg, #ff0055 0%, #cc0044 100%);
+  background: linear-gradient(135deg, var(--cyber-primary) 0%, var(--cyber-accent) 100%);
   border: none;
   border-radius: 8px; /* Matching input radius */
   color: #ffffff;
   font-size: 16px;
   font-weight: 700;
   cursor: pointer;
-  box-shadow: 0 4px 15px rgba(255, 0, 85, 0.4);
+  box-shadow: 0 4px 15px rgba(0, 102, 255, 0.4);
   transition: all 0.3s ease;
   margin-top: 10px;
   text-transform: uppercase;
@@ -239,7 +293,7 @@
 
 .login-button:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(255, 0, 85, 0.6);
+  box-shadow: 0 6px 20px rgba(0, 102, 255, 0.6);
 }
 
 .login-button:disabled {
@@ -307,12 +361,13 @@
   position: absolute;
   width: 200px;
   height: 200px;
-  background: rgba(20, 20, 20, 0.8);
-  border: 1px solid rgba(255, 0, 85, 0.3);
+  background: url('../../icon/faceicon.png') no-repeat center center;
+  background-size: cover;
+  border: 1px solid rgba(0, 98, 255, 0.3);
   display: flex;
   justify-content: center;
   align-items: center;
-  box-shadow: 0 0 15px rgba(255, 0, 85, 0.1);
+  box-shadow: 0 0 15px rgba(0, 102, 255, 0.1);
   transition: all 0.3s ease;
   backface-visibility: hidden; /* Hide back faces */
   will-change: transform;
@@ -332,14 +387,8 @@
 }
 
 .cube-face::after {
-  content: '👤';
-  position: absolute;
-  font-size: 60px;
-  color: var(--cyber-primary);
-  /* Optimization: No text-shadow */
-  animation: faceScan 2s ease-in-out infinite;
-  will-change: transform, opacity;
-  filter: drop-shadow(0 0 5px var(--cyber-primary));
+  content: '';
+  display: none;
 }
 
 @keyframes faceScan {
@@ -383,7 +432,8 @@
   width: 100%;
   height: 100%;
   z-index: 1;
-  pointer-events: none; /* Optimization */
+  pointer-events: none;
+  display: none;
 }
 
 .particle {
@@ -414,20 +464,20 @@
 /* Professional Authentication Coin */
 .auth-coin {
   position: absolute;
-  top: -120px;
+  top: -140px;
   left: 50%;
   transform: translateX(-50%);
-  width: 90px;
-  height: 90px;
+  width: 160px;
+  height: 160px;
   border-radius: 50%;
-  background: #111;
+  background: transparent;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
   z-index: 20;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
-  border: 4px solid var(--cyber-primary);
+  box-shadow: 0 4px 25px rgba(0, 0, 0, 0.5);
+  /* Border removed */
   font-family: 'DM Sans', monospace;
   font-weight: 700;
   font-size: 9px;
@@ -437,19 +487,37 @@
   animation: authCoinFloat 3s ease-in-out infinite;
   transition: all 0.5s ease;
   will-change: transform, top;
+  /* Ensure 3D rendering context */
+  transform-style: preserve-3d;
 }
 
-.auth-coin::before {
-  content: '';
+.coin-face {
   position: absolute;
-  width: 70px;
-  height: 70px;
-  border: 2px solid rgba(255, 255, 255, 0.1);
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  backface-visibility: hidden;
+  /* Ensure border-radius clips children if needed, though coin shape is on parent */
   border-radius: 50%;
-  animation: authCoinRotate 4s linear infinite;
-  will-change: transform;
-  /* Optimization: ensure no layout thrashing */
-  pointer-events: none;
+  background-color: var(--cyber-dark); /* Ensure back is not transparent/empty */
+}
+
+.coin-face.front {
+  transform: rotateY(0deg);
+}
+
+.coin-face.back {
+  transform: rotateY(180deg);
+}
+
+/* Removed .auth-coin::before to remove the line */
+.auth-coin::before {
+  display: none;
 }
 
 @keyframes authCoinRotate {
@@ -515,13 +583,38 @@
   background: linear-gradient(135deg, #111 0%, #222 100%);
   border: 3px solid var(--cyber-primary);
   color: var(--cyber-primary);
-  box-shadow: 0 0 10px rgba(255, 0, 85, 0.5);
+  box-shadow: 0 0 10px rgba(0, 85, 255, 0.5);
 }
 
 .auth-coin-icon {
   font-size: 20px;
   margin-bottom: 2px;
   text-shadow: 0 0 5px currentColor;
+  display: none; /* Hide old icon just in case */
+}
+
+.auth-coin-icon-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  position: absolute;
+  top: 0;
+  left: 0;
+  margin: 0;
+  padding: 0;
+  z-index: 0;
+}
+
+.coin-text {
+  position: relative;
+  z-index: 1;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+  line-height: 1.1;
+  white-space: pre-line;
+  text-shadow: 0 0 4px #000; /* Added shadow to make text readable over image */
 }
 
 .auth-coin-text {
@@ -601,13 +694,13 @@
   }
   
   .auth-coin {
-    width: 70px;
-    height: 70px;
+    width: 120px;
+    height: 120px;
   }
   
   .auth-coin::before {
-    width: 50px;
-    height: 50px;
+    width: 100px;
+    height: 100px;
   }
 }
 
@@ -634,12 +727,12 @@
   }
   
   .auth-coin {
-    width: 60px;
-    height: 60px;
+    width: 100px;
+    height: 100px;
   }
   
   .auth-coin::before {
-    width: 40px;
-    height: 40px;
+    width: 80px;
+    height: 80px;
   }
 }

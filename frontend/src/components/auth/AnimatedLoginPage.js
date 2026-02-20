@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import useAuthStore from '../../store/authStore';
 import './AnimatedLoginPage.css';
+import securityCoinIcon from '../../icon/securitycoin.png';
 
 const AnimatedLoginPage = () => {
   const [username, setUsername] = useState('');
@@ -22,16 +23,22 @@ const AnimatedLoginPage = () => {
 
   const updateCoinAppearance = () => {
     const coin = document.getElementById('animatedCoin');
-    const coinText = document.getElementById('coinText');
+    const coinTexts = document.querySelectorAll('.coin-text');
     
-    if (coin && coinText) {
+    if (coin) {
+      // Preserve the auth-coin class but reset other classes
       coin.className = 'auth-coin';
+      
+      let roleText = 'SELECT\nROLE';
       if (role) {
         coin.classList.add(`coin-${role}`);
-        coinText.textContent = role === 'SuperAdmin' ? 'SUPER\nADMIN' : role === 'Admin' ? 'ADMIN' : 'SUPERVISOR';
-      } else {
-        coinText.textContent = 'SELECT\nROLE';
+        roleText = role === 'SuperAdmin' ? 'SUPER\nADMIN' : role === 'Admin' ? 'ADMIN' : 'SUPERVISOR';
       }
+      
+      // Update all text elements (front and back)
+      coinTexts.forEach(el => {
+        el.textContent = roleText;
+      });
     }
   };
 
@@ -184,14 +191,14 @@ const AnimatedLoginPage = () => {
 
   return (
     <div className="animated-login-container">
+      <video className="login-background-video" autoPlay loop muted playsInline>
+        <source src={process.env.PUBLIC_URL + '/assets/login-bg.mov'} type="video/quicktime" />
+        <source src={process.env.PUBLIC_URL + '/assets/login-bg.mov'} type="video/mp4" />
+      </video>
       <div className="main-container">
         <div className="glass-wrapper">
           {/* Left Side - Login Form */}
           <div className="login-section">
-            <div className="login-header">
-              <h1 className="login-title">TITAN X</h1>
-            </div>
-
             <form onSubmit={handleSubmit} id="loginForm" className="login-form">
               <div className="form-group">
                 <label htmlFor="role" className="form-label">ACCESS LEVEL</label>
@@ -265,12 +272,6 @@ const AnimatedLoginPage = () => {
                       </svg>
                     )}
                   </button>
-                  <div className="input-icon password-icon">
-                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                      <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                    </svg>
-                  </div>
                 </div>
               </div>
 
@@ -304,8 +305,14 @@ const AnimatedLoginPage = () => {
                <div className="scene-container">
                 {/* Face Recognition Authentication Coin */}
                 <div className="auth-coin" id="animatedCoin">
-                  <div className="auth-coin-icon">🛡️</div>
-                  <div id="coinText">FACE</div>
+                  <div className="coin-face front">
+                    <img src={securityCoinIcon} className="auth-coin-icon-img" alt="Security" />
+                    <div className="coin-text">FACE</div>
+                  </div>
+                  <div className="coin-face back">
+                    <img src={securityCoinIcon} className="auth-coin-icon-img" alt="Security" />
+                    <div className="coin-text">FACE</div>
+                  </div>
                 </div>
 
                 {/* Professional Face Recognition Cube */}
