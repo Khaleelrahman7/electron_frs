@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import useAuthStore from '../../store/authStore';
 import { API_BASE_URL } from '../../utils/apiConfig';
-import { Users, UserPlus, Edit2, Trash2, X, Shield, Search } from 'lucide-react';
+import { Users, UserPlus, Edit2, Trash2, X, Shield, Search, Check } from 'lucide-react';
 import './UserManagement.css';
 
 const UserManagement = () => {
@@ -48,9 +48,9 @@ const UserManagement = () => {
           'Authorization': `Bearer ${token}`
         }
       });
-      
+
       if (!response.ok) throw new Error('Failed to fetch users');
-      
+
       const data = await response.json();
       setUsers(data.users);
     } catch (err) {
@@ -104,12 +104,12 @@ const UserManagement = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const endpoint = isEditing 
+      const endpoint = isEditing
         ? `${API_BASE_URL}/api/users/${formData.username}`
         : `${API_BASE_URL}/api/users/`;
-      
+
       const method = isEditing ? 'PUT' : 'POST';
-      
+
       const body = { ...formData };
       if (isEditing) {
         // Only send updates if editing
@@ -168,7 +168,7 @@ const UserManagement = () => {
 
   const handleDelete = async (username) => {
     if (!window.confirm(`Are you sure you want to delete ${username}?`)) return;
-    
+
     try {
       const response = await fetch(`${API_BASE_URL}/api/users/${username}`, {
         method: 'DELETE',
@@ -178,7 +178,7 @@ const UserManagement = () => {
       });
 
       if (!response.ok) throw new Error('Failed to delete user');
-      
+
       fetchUsers();
     } catch (err) {
       alert(err.message);
@@ -202,7 +202,7 @@ const UserManagement = () => {
     setShowModal(true);
   };
 
-  const filteredUsers = users.filter(user => 
+  const filteredUsers = users.filter(user =>
     user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
     user.role.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -217,9 +217,9 @@ const UserManagement = () => {
         <div className="header-actions">
           <div className="search-bar">
             <Search size={18} className="search-icon" />
-            <input 
-              type="text" 
-              placeholder="Search users..." 
+            <input
+              type="text"
+              placeholder="Search users..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -293,154 +293,176 @@ const UserManagement = () => {
         </table>
       </div>
 
+      {/* Wide Modal Form */}
       {showModal && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <div className="modal-header">
-              <h3>{isEditing ? 'Edit User' : 'Create New User'}</h3>
-              <button className="modal-close" onClick={() => setShowModal(false)}>
-                <X size={20} />
-              </button>
-            </div>
-            
-            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-              <div className="modal-content">
-                {!isEditing && (
-                  <>
-                    <div className="form-group">
-                      <label>Username</label>
-                      <input
-                        type="text"
-                        name="username"
-                        value={formData.username}
-                        onChange={handleInputChange}
-                        required
-                        placeholder="Enter username"
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label>Password</label>
-                      <input
-                        type="password"
-                        name="password"
-                        value={formData.password}
-                        onChange={handleInputChange}
-                        required
-                        placeholder="Enter password"
-                      />
-                    </div>
-                  </>
-                )}
-                
-                <div className="form-group">
-                  <label>Role</label>
-                  <select name="role" value={formData.role} onChange={handleInputChange} disabled={isEditing}>
-                    {currentUser.role === 'SuperAdmin' && <option value="Admin">Admin</option>}
-                    <option value="Supervisor">Supervisor</option>
-                  </select>
-                </div>
+        <>
+          <div className="modal-overlay" onClick={() => setShowModal(false)}>
+            <div className="wide-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3>{isEditing ? 'Edit User' : 'Create New User'}</h3>
+                <button className="modal-close" onClick={() => setShowModal(false)}>
+                  <X size={20} />
+                </button>
+              </div>
 
-                <div className="form-group">
-                  <label>Email (for notifications)</label>
-                  <input
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    placeholder="Enter email address"
-                  />
-                </div>
+              <form onSubmit={handleSubmit} className="modal-form">
+                <div className="form-body">
+                  <div className="form-section">
+                    <h4 className="section-title">ACCOUNT INFORMATION</h4>
 
-                {/* License Controls - Only visible if creating Admin or if SuperAdmin is editing */}
-                {(currentUser.role === 'SuperAdmin' && formData.role === 'Admin') && (
-                  <>
-                    <div className="form-group">
-                      <label>Max Users License</label>
-                      <input
-                        type="number"
-                        name="max_users_limit"
-                        value={formData.max_users_limit}
-                        onChange={handleInputChange}
-                        min="0"
-                      />
-                      <small>Set to 0 for unlimited users</small>
-                    </div>
-                    <div className="form-group">
-                      <label>Max Cameras License</label>
-                      <input
-                        type="number"
-                        name="max_cameras_limit"
-                        value={formData.max_cameras_limit}
-                        onChange={handleInputChange}
-                        min="0"
-                      />
-                      <small>Set to 0 for unlimited cameras</small>
-                    </div>
-                    <div className="form-group">
-                      <label>Licence Duration</label>
-                      <select name="license_duration" value={formData.license_duration} onChange={handleLicenseDurationChange}>
-                        <option value="1y">1 Year</option>
-                        <option value="2y">2 Years</option>
-                        <option value="custom">Custom Range</option>
-                      </select>
-                    </div>
-                    {formData.license_duration === 'custom' && (
-                      <div style={{ display: 'flex', gap: 12 }}>
-                        <div className="form-group" style={{ flex: 1 }}>
-                          <label>Start Date</label>
-                          <input
-                            type="date"
-                            name="license_start_date"
-                            value={formData.license_start_date ? formData.license_start_date.substring(0, 10) : ''}
-                            onChange={(e) => {
-                              const d = new Date(e.target.value);
-                              setFormData(prev => ({ ...prev, license_start_date: new Date(d).toISOString() }));
-                            }}
-                          />
-                        </div>
-                        <div className="form-group" style={{ flex: 1 }}>
-                          <label>End Date</label>
-                          <input
-                            type="date"
-                            name="license_end_date"
-                            value={formData.license_end_date ? formData.license_end_date.substring(0, 10) : ''}
-                            onChange={(e) => {
-                              const d = new Date(e.target.value);
-                              setFormData(prev => ({ ...prev, license_end_date: new Date(d).toISOString() }));
-                            }}
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {/* Menu Permissions */}
-                <div className="form-group">
-                  <label>Assigned Permissions (Sidebar)</label>
-                  <div className="menu-checkboxes">
-                    {availableMenus.map(menu => (
-                      <div key={menu.id} className="checkbox-item">
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label>USERNAME</label>
                         <input
-                          type="checkbox"
-                          id={`menu-${menu.id}`}
-                          checked={(formData.assigned_menus || []).includes(menu.id)}
-                          onChange={() => handleMenuChange(menu.id)}
+                          type="text"
+                          name="username"
+                          value={formData.username}
+                          onChange={handleInputChange}
+                          required
+                          placeholder="Enter username"
+                          disabled={isEditing}
+                          className={isEditing ? 'disabled-input' : ''}
                         />
-                        <label htmlFor={`menu-${menu.id}`}>{menu.label}</label>
                       </div>
-                    ))}
+                      {!isEditing && (
+                        <div className="form-group">
+                          <label>PASSWORD</label>
+                          <input
+                            type="password"
+                            name="password"
+                            value={formData.password}
+                            onChange={handleInputChange}
+                            required
+                            placeholder="Enter password"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label>ROLE</label>
+                        <select name="role" value={formData.role} onChange={handleInputChange} disabled={isEditing}>
+                          {currentUser.role === 'SuperAdmin' && <option value="Admin">Admin</option>}
+                          <option value="Supervisor">Supervisor</option>
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label>EMAIL (FOR NOTIFICATIONS)</label>
+                        <input
+                          type="email"
+                          name="email"
+                          value={formData.email}
+                          onChange={handleInputChange}
+                          placeholder="Enter email address"
+                        />
+                      </div>
+                    </div>
+
+                    {(currentUser.role === 'SuperAdmin' && formData.role === 'Admin') && (
+                      <>
+                        <div className="form-row">
+                          <div className="form-group">
+                            <label>MAX USERS LICENSE</label>
+                            <input
+                              type="number"
+                              name="max_users_limit"
+                              value={formData.max_users_limit}
+                              onChange={handleInputChange}
+                              min="0"
+                            />
+                            <small>Set to 0 for unlimited users</small>
+                          </div>
+                          <div className="form-group">
+                            <label>MAX CAMERAS LICENSE</label>
+                            <input
+                              type="number"
+                              name="max_cameras_limit"
+                              value={formData.max_cameras_limit}
+                              onChange={handleInputChange}
+                              min="0"
+                            />
+                            <small>Set to 0 for unlimited cameras</small>
+                          </div>
+                        </div>
+
+                        <div className="form-row" style={{ gridTemplateColumns: formData.license_duration === 'custom' ? '1fr 1fr 1fr' : 'repeat(2, 1fr)' }}>
+                          <div className="form-group">
+                            <label>LICENCE DURATION</label>
+                            <select name="license_duration" value={formData.license_duration} onChange={handleLicenseDurationChange}>
+                              <option value="1y">1 Year</option>
+                              <option value="2y">2 Years</option>
+                              <option value="custom">Custom Range</option>
+                            </select>
+                          </div>
+                          {formData.license_duration === 'custom' && (
+                            <>
+                              <div className="form-group">
+                                <label>START DATE</label>
+                                <input
+                                  type="date"
+                                  name="license_start_date"
+                                  value={formData.license_start_date ? formData.license_start_date.substring(0, 10) : ''}
+                                  onChange={(e) => {
+                                    const d = new Date(e.target.value);
+                                    setFormData(prev => ({ ...prev, license_start_date: new Date(d).toISOString() }));
+                                  }}
+                                />
+                              </div>
+                              <div className="form-group">
+                                <label>END DATE</label>
+                                <input
+                                  type="date"
+                                  name="license_end_date"
+                                  value={formData.license_end_date ? formData.license_end_date.substring(0, 10) : ''}
+                                  onChange={(e) => {
+                                    const d = new Date(e.target.value);
+                                    setFormData(prev => ({ ...prev, license_end_date: new Date(d).toISOString() }));
+                                  }}
+                                />
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="form-section">
+                    <h4 className="section-title">ASSIGNED PERMISSIONS</h4>
+                    <div className="permissions-grid">
+                      {availableMenus.map(menu => {
+                        const isSelected = (formData.assigned_menus || []).includes(menu.id);
+                        return (
+                          <label key={menu.id} className={`permission-card ${isSelected ? 'selected' : ''}`}>
+                            <div className="custom-checkbox">
+                              {isSelected && <Check size={14} color="white" strokeWidth={3} />}
+                            </div>
+                            <span>{menu.label.toUpperCase()}</span>
+                            <input
+                              type="checkbox"
+                              hidden
+                              checked={isSelected}
+                              onChange={() => handleMenuChange(menu.id)}
+                            />
+                          </label>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="modal-actions">
-                <button type="button" onClick={() => setShowModal(false)}>Cancel</button>
-                <button type="submit" className="primary">{isEditing ? 'Update User' : 'Create User'}</button>
-              </div>
-            </form>
+                <div className="modal-actions">
+                  <button type="button" onClick={() => setShowModal(false)}>Cancel</button>
+                  <button type="submit" className="primary">
+                    {!isEditing && <span style={{ marginRight: '6px' }}>✦</span>}
+                    {isEditing ? 'Update User' : 'Create User'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );
