@@ -2,13 +2,13 @@ import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import DatePicker from 'react-datepicker';
 import { format, subDays, differenceInDays } from 'date-fns';
-import { 
-  Search, 
-  X, 
-  Download, 
-  List, 
-  Grid, 
-  Calendar, 
+import {
+  Search,
+  X,
+  Download,
+  List,
+  Grid,
+  Calendar,
   Filter,
   User,
   Camera,
@@ -28,7 +28,7 @@ const FaceEvents = () => {
   const [nameFilter, setNameFilter] = useState('');
   const [fromDate, setFromDate] = useState(subDays(new Date(), 7));
   const [toDate, setToDate] = useState(new Date());
-  
+
   // Data States
   const [faces, setFaces] = useState([]);
   const [activeTab, setActiveTab] = useState('all');
@@ -36,9 +36,14 @@ const FaceEvents = () => {
   const [error, setError] = useState(null);
   const [viewMode, setViewMode] = useState('list'); // 'list' or 'grid'
 
+  // Helper to check if any filters are active
+  const hasActiveFilters = () => {
+    return selectedCamera !== 'All Cameras' || nameFilter.trim() !== '' || (fromDate !== null || toDate !== null);
+  };
+
   // Helper to calculate date range text
   const getDateRangeText = () => {
-    if (!fromDate || !toDate) return '';
+    if (!fromDate || !toDate) return 'No dates selected';
     const days = differenceInDays(toDate, fromDate);
     return `Date range: ${days} days selected`;
   };
@@ -87,11 +92,17 @@ const FaceEvents = () => {
 
   const buildParams = useCallback((overrides = {}) => {
     const params = {
-      from_date: format(fromDate, 'yyyy-MM-dd'),
-      to_date: format(toDate, 'yyyy-MM-dd'),
       camera: selectedCamera === 'All Cameras' ? 'all_cameras' : selectedCamera,
       ...overrides,
     };
+
+    // Only include dates if they exist (handling null)
+    const activeFrom = overrides.from_date !== undefined ? overrides.from_date : (fromDate ? format(fromDate, 'yyyy-MM-dd') : null);
+    const activeTo = overrides.to_date !== undefined ? overrides.to_date : (toDate ? format(toDate, 'yyyy-MM-dd') : null);
+
+    if (activeFrom) params.from_date = activeFrom;
+    if (activeTo) params.to_date = activeTo;
+
     if (nameFilter.trim()) {
       params.name = nameFilter.trim();
     }
@@ -106,15 +117,15 @@ const FaceEvents = () => {
 
   const handleFilter = useCallback(async (overrides = {}, targetTab = null) => {
     const tabToUse = targetTab !== null ? targetTab : activeTab;
-    
-    if (fromDate > toDate) {
+
+    if (fromDate && toDate && fromDate > toDate) {
       setError('From date cannot be later than To date');
       return;
     }
 
     const mergedOverrides = { ...getTabOverrides(tabToUse), ...overrides };
     const params = buildParams(mergedOverrides);
-    
+
     const data = await fetchFaces(params);
     setFaces(data);
   }, [fromDate, toDate, fetchFaces, buildParams, getTabOverrides, activeTab]);
@@ -131,21 +142,29 @@ const FaceEvents = () => {
   const onClear = () => {
     setSelectedCamera('All Cameras');
     setNameFilter('');
-    setFromDate(subDays(new Date(), 7));
-    setToDate(new Date());
-    // Optionally trigger search immediately after clear
-    // handleFilter({ camera: 'all_cameras', name: '', from_date: ..., to_date: ... }, activeTab);
+    setFromDate(null);
+    setToDate(null);
+    handleFilter({
+      camera: 'all_cameras',
+      name: '',
+      from_date: null,
+      to_date: null
+    }, activeTab);
   };
 
   const removeFilter = (type) => {
-    if (type === 'camera') setSelectedCamera('All Cameras');
-    if (type === 'date') {
-      setFromDate(subDays(new Date(), 7));
-      setToDate(new Date());
+    let overrides = {};
+    if (type === 'camera') {
+      setSelectedCamera('All Cameras');
+      overrides.camera = 'all_cameras';
     }
-    // Trigger re-fetch? Usually users expect re-fetch.
-    // implementing naive re-fetch for now
-    setTimeout(() => onSearch(), 0);
+    if (type === 'date') {
+      setFromDate(null);
+      setToDate(null);
+      overrides.from_date = null;
+      overrides.to_date = null;
+    }
+    handleFilter(overrides, activeTab);
   };
 
   useEffect(() => {
@@ -157,19 +176,19 @@ const FaceEvents = () => {
     <div className="face-events-page">
       {/* Tabs */}
       <div className="face-events-tabs">
-        <button 
+        <button
           className={`face-events-tab ${activeTab === 'all' ? 'active' : ''}`}
           onClick={() => handleTabChange('all')}
         >
           <span className="dot all"></span> All Faces
         </button>
-        <button 
+        <button
           className={`face-events-tab ${activeTab === 'known' ? 'active' : ''}`}
           onClick={() => handleTabChange('known')}
         >
           Known Faces
         </button>
-        <button 
+        <button
           className={`face-events-tab ${activeTab === 'unknown' ? 'active' : ''}`}
           onClick={() => handleTabChange('unknown')}
         >
@@ -183,8 +202,8 @@ const FaceEvents = () => {
           <div className="filter-group">
             <label><Camera size={14} /> CAMERA</label>
             <div className="select-wrapper">
-              <select 
-                value={selectedCamera} 
+              <select
+                value={selectedCamera}
                 onChange={(e) => setSelectedCamera(e.target.value)}
               >
                 {cameras.map(camera => (
@@ -199,9 +218,9 @@ const FaceEvents = () => {
             <label><User size={14} /> NAME</label>
             <div className="input-wrapper">
               <Search size={14} className="input-icon" />
-              <input 
-                type="text" 
-                placeholder="Filter by name..." 
+              <input
+                type="text"
+                placeholder="Filter by name..."
                 value={nameFilter}
                 onChange={(e) => setNameFilter(e.target.value)}
               />
@@ -215,8 +234,10 @@ const FaceEvents = () => {
                 selected={fromDate}
                 onChange={date => setFromDate(date)}
                 dateFormat="dd-MM-yyyy"
-                maxDate={toDate}
+                maxDate={toDate || new Date()}
                 className="custom-datepicker"
+                isClearable
+                placeholderText="Select date"
               />
               <Calendar size={14} className="date-icon" />
             </div>
@@ -232,6 +253,8 @@ const FaceEvents = () => {
                 minDate={fromDate}
                 maxDate={new Date()}
                 className="custom-datepicker"
+                isClearable
+                placeholderText="Select date"
               />
               <Calendar size={14} className="date-icon" />
             </div>
@@ -243,9 +266,11 @@ const FaceEvents = () => {
             <ClockIcon /> {getDateRangeText()}
           </span>
           <div className="action-buttons">
-            <button className="btn-clear" onClick={onClear}>
-              <X size={14} /> Clear
-            </button>
+            {hasActiveFilters() && (
+              <button className="btn-clear" onClick={onClear}>
+                <X size={14} /> Clear
+              </button>
+            )}
             <button className="btn-search" onClick={onSearch}>
               <Search size={14} /> Search Events
             </button>
@@ -254,22 +279,26 @@ const FaceEvents = () => {
       </div>
 
       {/* Active Filters */}
-      <div className="active-filters-bar">
-        {selectedCamera !== 'All Cameras' && (
-          <div className="filter-chip">
-            <span className="chip-label">Camera:</span> 
-            <span className="chip-value">{selectedCamera}</span>
-            <button onClick={() => removeFilter('camera')}><X size={12} /></button>
-          </div>
-        )}
-        <div className="filter-chip">
-          <span className="chip-label">Date:</span> 
-          <span className="chip-value">
-            {format(fromDate, 'yyyy-MM-dd')} &rarr; {format(toDate, 'yyyy-MM-dd')}
-          </span>
-          <button onClick={() => removeFilter('date')}><X size={12} /></button>
+      {(selectedCamera !== 'All Cameras' || (fromDate || toDate)) && (
+        <div className="active-filters-bar">
+          {selectedCamera !== 'All Cameras' && (
+            <div className="filter-chip">
+              <span className="chip-label">Camera:</span>
+              <span className="chip-value">{selectedCamera}</span>
+              <button onClick={() => removeFilter('camera')}><X size={12} /></button>
+            </div>
+          )}
+          {(fromDate || toDate) && (
+            <div className="filter-chip">
+              <span className="chip-label">Date:</span>
+              <span className="chip-value">
+                {fromDate ? format(fromDate, 'yyyy-MM-dd') : 'Any'} &rarr; {toDate ? format(toDate, 'yyyy-MM-dd') : 'Any'}
+              </span>
+              <button onClick={() => removeFilter('date')}><X size={12} /></button>
+            </div>
+          )}
         </div>
-      </div>
+      )}
 
       {/* Results Section */}
       <div className="results-card">
@@ -286,13 +315,13 @@ const FaceEvents = () => {
               <Download size={18} />
             </button>
             <div className="view-toggle">
-              <button 
+              <button
                 className={`toggle-btn ${viewMode === 'list' ? 'active' : ''}`}
                 onClick={() => setViewMode('list')}
               >
                 <List size={18} />
               </button>
-              <button 
+              <button
                 className={`toggle-btn ${viewMode === 'grid' ? 'active' : ''}`}
                 onClick={() => setViewMode('grid')}
               >
@@ -336,10 +365,10 @@ const FaceEvents = () => {
                       <td>
                         <div className="user-cell">
                           <div className="avatar-small">
-                            <img 
-                              src={fixImageUrl(face.image_path)} 
+                            <img
+                              src={fixImageUrl(face.image_path)}
                               alt={face.name}
-                              onError={(e) => {e.target.style.display='none'}} 
+                              onError={(e) => { e.target.style.display = 'none' }}
                             />
                           </div>
                           <span>{face.name}</span>
@@ -355,9 +384,9 @@ const FaceEvents = () => {
                       <td>
                         {face.confidence !== undefined && face.confidence !== null ? (
                           <div className="confidence-bar">
-                            <div 
-                              className="fill" 
-                              style={{width: `${face.confidence * 100}%`}}
+                            <div
+                              className="fill"
+                              style={{ width: `${face.confidence * 100}%` }}
                             ></div>
                             <span>{(face.confidence * 100).toFixed(1)}%</span>
                           </div>

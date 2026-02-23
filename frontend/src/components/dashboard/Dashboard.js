@@ -72,7 +72,7 @@ const Dashboard = () => {
     // Update chart colors based on current theme
     const updateThemeColors = () => {
       const styles = getComputedStyle(document.body);
-      
+
       const getStyle = (prop, fallback) => {
         const val = styles.getPropertyValue(prop).trim();
         return val || fallback;
@@ -124,7 +124,7 @@ const Dashboard = () => {
         const imgFilename = person.image_filename || 'original.jpg';
         // Construct clean URL for gallery image
         const imgUrl = getApiUrl(`/api/gallery/image/${person.name}/${imgFilename}`);
-        
+
         personMap.set(person.name, {
           name: person.name,
           count: 0,
@@ -143,10 +143,10 @@ const Dashboard = () => {
             last_seen: null
           });
         }
-        
+
         const p = personMap.get(event.name);
         p.count += 1;
-        
+
         // Update last_seen
         if (!p.last_seen || new Date(event.timestamp) > new Date(p.last_seen)) {
           p.last_seen = event.timestamp;
@@ -189,17 +189,17 @@ const Dashboard = () => {
       ]);
 
       setOverviewData(overviewRes.data);
-      
+
       // Persons list is already processed by fetchProfilesData
       const persons = personsRes.data;
-      
+
       setPersonsList(persons);
       setTrendData(trendRes.data);
       setHourlyData(hourlyRes.data);
       setCameraData(cameraRes.data);
       setConfidenceData(confidenceRes.data);
       setPersonFrequencyData(personFreqRes.data);
-     
+
       // Auto-select first person if available
       if (persons.length > 0 && !selectedPerson) {
         setSelectedPerson(persons[0].name);
@@ -252,7 +252,7 @@ const Dashboard = () => {
         padding: 12,
         displayColors: true,
         callbacks: {
-          label: function(context) {
+          label: function (context) {
             return `${context.dataset.label}: ${context.parsed.y || context.parsed.x}`;
           },
         },
@@ -346,7 +346,7 @@ const Dashboard = () => {
         borderWidth: 1,
         padding: 12,
         callbacks: {
-          label: function(context) {
+          label: function (context) {
             const label = context.label || '';
             const value = context.parsed || 0;
             const total = context.dataset.data.reduce((a, b) => a + b, 0);
@@ -428,7 +428,7 @@ const Dashboard = () => {
               <div className="no-profiles">No persons found</div>
             )}
           </div>
-         
+
           {/* Progress Circle */}
           {overviewData && (
             <div className="progress-circle-container">
@@ -804,9 +804,12 @@ const Dashboard = () => {
                         label: 'Detections',
                         data: personAnalytics.hourly_distribution,
                         backgroundColor: (context) => {
-                          const value = context.parsed.y;
-                          const max = Math.max(...personAnalytics.hourly_distribution);
-                          const intensity = value / max;
+                          const value = context.parsed ? context.parsed.y : 0;
+                          const max = personAnalytics.hourly_distribution && personAnalytics.hourly_distribution.length > 0
+                            ? Math.max(...personAnalytics.hourly_distribution)
+                            : 1;
+                          const safeMax = max > 0 ? max : 1;
+                          const intensity = value / safeMax;
                           return hexToRgba(themeColors.primaryColor, 0.3 + intensity * 0.7);
                         },
                         borderColor: themeColors.primaryColor,
@@ -823,7 +826,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-     
+
     </div>
   );
 };
