@@ -10,7 +10,7 @@ const AnimatedLoginPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
-  
+
   const { login, error, clearError, logout, setAuthenticated } = useAuthStore();
 
   useEffect(() => {
@@ -25,16 +25,16 @@ const AnimatedLoginPage = () => {
   const updateCoinAppearance = () => {
     const coin = document.getElementById('animatedCoin');
     const coinTexts = document.querySelectorAll('.coin-text');
-    
+
     if (coin) {
       // Preserve the auth-coin class but reset other classes
       coin.className = 'auth-coin';
-      
+
       let roleText = '';
       if (role) {
         coin.classList.add(`coin-${role}`);
       }
-      
+
       // Update all text elements (front and back)
       coinTexts.forEach(el => {
         el.textContent = roleText;
@@ -44,35 +44,35 @@ const AnimatedLoginPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     // Validation
     if (!role) {
       alert('Please select your access level');
       return;
     }
-    
+
     if (!username.trim() || !password.trim()) {
       alert('Please enter username and password');
       return;
     }
-    
+
     setIsLoading(true);
     clearError();
-    
+
     // Start animation sequence
     startLoginAnimation();
-    
+
     // Add a minimum delay for the inserting animation
     const minAnimationTime = new Promise(resolve => setTimeout(resolve, 1500));
-    
+
     try {
       const loginPromise = login(username, password, role, true);
       const [result] = await Promise.all([loginPromise, minAnimationTime]);
-      
+
       if (result.success) {
         // Success animation
         completeLoginAnimation();
-        
+
         // Wait for success animation before navigating
         setTimeout(() => {
           setIsLoading(false);
@@ -83,12 +83,12 @@ const AnimatedLoginPage = () => {
         setTimeout(() => {
           failedLoginAnimation();
         }, 1000);
-        
+
         setTimeout(() => {
           setIsLoading(false);
           resetAnimation();
         }, 3000);
-        
+
         // Show specific error message from backend
         if (result.error) {
           alert(`Authentication failed: ${result.error}`);
@@ -101,12 +101,12 @@ const AnimatedLoginPage = () => {
       setTimeout(() => {
         failedLoginAnimation();
       }, 1000);
-      
+
       setTimeout(() => {
         setIsLoading(false);
         resetAnimation();
       }, 3000);
-      
+
       alert('Unable to connect to authentication server. Please try again later.');
     }
   };
@@ -114,12 +114,12 @@ const AnimatedLoginPage = () => {
   const startLoginAnimation = () => {
     const coinBank = document.getElementById('coinBank');
     const animatedCoin = document.getElementById('animatedCoin');
-    
+
     if (coinBank) {
       coinBank.classList.add('login-active');
-      coinBank.style.transform = 'translate(-50%, -50%) rotateX(0deg) rotateY(0deg) scale(1.1)';
+      coinBank.style.transform = 'translate3d(-50%, -50%, 0) rotateX(0deg) rotateY(0deg) scale(1.1)';
     }
-    
+
     if (animatedCoin) {
       animatedCoin.classList.add('inserting');
     }
@@ -129,17 +129,17 @@ const AnimatedLoginPage = () => {
     const cubeFaces = document.querySelectorAll('.cube-face');
     const successMessage = document.getElementById('successMessage');
     const animatedCoin = document.getElementById('animatedCoin');
-    
+
     // Add success glow to cube
     cubeFaces.forEach(face => {
       face.classList.add('success-glow');
     });
-    
+
     // Add success state to coin
     if (animatedCoin) {
       animatedCoin.classList.add('success');
     }
-    
+
     // Show success message
     if (successMessage) {
       successMessage.textContent = '✓ AUTHENTICATION SUCCESSFUL';
@@ -150,12 +150,12 @@ const AnimatedLoginPage = () => {
   const failedLoginAnimation = () => {
     const animatedCoin = document.getElementById('animatedCoin');
     const successMessage = document.getElementById('successMessage');
-    
+
     // Add failed state to coin
     if (animatedCoin) {
       animatedCoin.classList.add('failed');
     }
-    
+
     // Show failed message
     if (successMessage) {
       successMessage.textContent = '✗ AUTHENTICATION FAILED';
@@ -169,20 +169,20 @@ const AnimatedLoginPage = () => {
     const animatedCoin = document.getElementById('animatedCoin');
     const cubeFaces = document.querySelectorAll('.cube-face');
     const successMessage = document.getElementById('successMessage');
-    
+
     if (coinBank) {
       coinBank.classList.remove('login-active');
       coinBank.style.transform = '';
     }
-    
+
     if (animatedCoin) {
       animatedCoin.classList.remove('inserting', 'success', 'failed');
     }
-    
+
     cubeFaces.forEach(face => {
       face.classList.remove('success-glow');
     });
-    
+
     if (successMessage) {
       successMessage.classList.remove('show');
       successMessage.style.background = '';
@@ -214,7 +214,7 @@ const AnimatedLoginPage = () => {
                   onChange={(e) => setRole(e.target.value)}
                   required
                 >
-                  <option value="">SELECT ROLE</option>
+                  <option value="" disabled hidden>SELECT ROLE</option>
                   <option value="SuperAdmin">SUPER ADMIN</option>
                   <option value="Admin">ADMIN</option>
                   <option value="Supervisor">SUPERVISOR</option>
@@ -305,8 +305,8 @@ const AnimatedLoginPage = () => {
           {/* Right Side - Visual/Animation */}
           <div className="visual-section">
             <div className="visual-content">
-               {/* Professional Authentication Coin */}
-               <div className="scene-container">
+              {/* Professional Authentication Coin */}
+              <div className="scene-container">
                 {/* Face Recognition Authentication Coin */}
                 <div className="auth-coin" id="animatedCoin">
                   <div className="coin-face front">
@@ -334,7 +334,7 @@ const AnimatedLoginPage = () => {
                   ✓ READY FOR AUTHENTICATION
                 </div>
               </div>
-              
+
               <div className="particles">
                 <div className="particle"></div>
                 <div className="particle"></div>

@@ -64,7 +64,7 @@
   max-height: 90vh;
   border-radius: 30px;
   overflow: hidden;
-  box-shadow: 
+  box-shadow:
     0 10px 25px -5px rgba(0, 0, 0, 0.5),
     0 0 20px rgba(0, 102, 255, 0.1);
   border: 1px solid var(--card-border);
@@ -73,14 +73,14 @@
   -webkit-backdrop-filter: blur(5px);
   /* Optimization: Force GPU layer */
   transform: translateZ(0);
-  will-change: transform; 
+  will-change: transform;
 }
 
 /* Left Side - Login Form (Glass) */
 .login-section {
   flex: 1;
   background: rgba(10, 10, 10, 0.4);
-  backdrop-filter: blur(10px); 
+  backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   padding: 40px 50px;
   display: flex;
@@ -166,10 +166,12 @@
 /* Increased specificity to override other styles */
 .animated-login-container .form-input {
   width: 100%;
-  padding: 15px 15px 15px 45px; /* Added left padding for icon */
+  padding: 15px 15px 15px 45px;
+  /* Added left padding for icon */
   background: transparent !important;
   border: 1px solid var(--card-border) !important;
-  border-radius: 4px; /* Slightly rounded for Titan theme */
+  border-radius: 4px;
+  /* Slightly rounded for Titan theme */
   font-size: 16px;
   color: var(--text-main) !important;
   transition: all 0.3s ease;
@@ -181,12 +183,17 @@
   -webkit-appearance: none;
   -moz-appearance: none;
   appearance: none;
+  height: auto;
+  /* Override browser default 34px so text is visible */
   background-color: transparent !important;
   background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a0a0a0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
   background-repeat: no-repeat;
   background-position: right 15px center;
   background-size: 16px;
-  padding-right: 40px; /* Make space for the custom arrow */
+  padding-left: 15px;
+  /* No icon, so reduce left padding */
+  padding-right: 40px;
+  /* Make space for the custom arrow */
   color: var(--text-main) !important;
   border-color: var(--card-border) !important;
 }
@@ -206,8 +213,8 @@
 
 /* Handle Autofill background */
 .form-input:-webkit-autofill,
-.form-input:-webkit-autofill:hover, 
-.form-input:-webkit-autofill:focus, 
+.form-input:-webkit-autofill:hover,
+.form-input:-webkit-autofill:focus,
 .form-input:-webkit-autofill:active {
   -webkit-box-shadow: 0 0 0 30px rgba(0, 0, 0, 0) inset !important;
   -webkit-text-fill-color: var(--text-main) !important;
@@ -247,7 +254,8 @@
   z-index: 5;
 }
 
-.input-icon:hover, .toggle-password:hover {
+.input-icon:hover,
+.toggle-password:hover {
   color: var(--cyber-primary);
 }
 
@@ -269,7 +277,8 @@
   padding: 15px;
   background: linear-gradient(135deg, var(--cyber-primary) 0%, var(--cyber-accent) 100%);
   border: none;
-  border-radius: 8px; /* Matching input radius */
+  border-radius: 8px;
+  /* Matching input radius */
   color: #ffffff;
   font-size: 16px;
   font-weight: 700;
@@ -342,10 +351,13 @@
   top: 50%;
   left: 50%;
   transform-style: preserve-3d;
-  transform: translate(-50%, -50%) rotateX(-15deg) rotateY(25deg);
+  transform: translate3d(-50%, -50%, 0) rotateX(-15deg) rotateY(25deg);
   animation: cyberRotate 20s linear infinite;
-  /* Optimization */
+  /* GPU optimization for Electron */
   will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  perspective: 1000px;
 }
 
 .face-recognition-cube.login-active {
@@ -353,14 +365,27 @@
 }
 
 @keyframes cyberRotate {
-  0% { transform: translate(-50%, -50%) rotateX(-15deg) rotateY(0deg); }
-  100% { transform: translate(-50%, -50%) rotateX(-15deg) rotateY(360deg); }
+  0% {
+    transform: translate(-50%, -50%) rotateX(-15deg) rotateY(0deg);
+  }
+
+  100% {
+    transform: translate(-50%, -50%) rotateX(-15deg) rotateY(360deg);
+  }
 }
 
 @keyframes cyberLogin {
-  0% { transform: translate(-50%, -50%) rotateX(-15deg) rotateY(0deg) scale(1); }
-  50% { transform: translate(-50%, -50%) rotateX(-15deg) rotateY(180deg) scale(1.1); }
-  100% { transform: translate(-50%, -50%) rotateX(-15deg) rotateY(360deg) scale(1); }
+  0% {
+    transform: translate(-50%, -50%) rotateX(-15deg) rotateY(0deg) scale(1);
+  }
+
+  50% {
+    transform: translate(-50%, -50%) rotateX(-15deg) rotateY(180deg) scale(1.1);
+  }
+
+  100% {
+    transform: translate(-50%, -50%) rotateX(-15deg) rotateY(360deg) scale(1);
+  }
 }
 
 /* Cyber Security Face */
@@ -375,9 +400,11 @@
   justify-content: center;
   align-items: center;
   box-shadow: 0 0 15px rgba(0, 102, 255, 0.1);
-  transition: all 0.3s ease;
-  backface-visibility: hidden; /* Hide back faces */
+  transition: box-shadow 0.3s ease, border-color 0.3s ease;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
   will-change: transform;
+  transform: translateZ(0);
 }
 
 /* Add a static internal glow via pseudo-element to avoid repainting the main face */
@@ -399,34 +426,65 @@
 }
 
 @keyframes faceScan {
-  0%, 100% { opacity: 0.7; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.05); }
+
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
 }
 
-.cube-face.front  { transform: translateZ(100px); }
-.cube-face.back   { transform: translateZ(-100px) rotateY(180deg); }
-.cube-face.right  { transform: rotateY(90deg) translateZ(100px); }
-.cube-face.left   { transform: rotateY(-90deg) translateZ(100px); }
-.cube-face.top    { transform: rotateX(90deg) translateZ(100px); }
-.cube-face.bottom { transform: rotateX(-90deg) translateZ(100px); }
+.cube-face.front {
+  transform: translate3d(0, 0, 100px);
+}
+
+.cube-face.back {
+  transform: translate3d(0, 0, -100px) rotateY(180deg);
+}
+
+.cube-face.right {
+  transform: rotateY(90deg) translate3d(0, 0, 100px);
+}
+
+.cube-face.left {
+  transform: rotateY(-90deg) translate3d(0, 0, 100px);
+}
+
+.cube-face.top {
+  transform: rotateX(90deg) translate3d(0, 0, 100px);
+}
+
+.cube-face.bottom {
+  transform: rotateX(-90deg) translate3d(0, 0, 100px);
+}
 
 /* Success State */
 .cube-face.success-glow {
   animation: successCyberGlow 2s ease-in-out infinite;
-  will-change: box-shadow, border-color; /* Optimization */
+  will-change: box-shadow, border-color;
+  /* Optimization */
 }
 
 @keyframes successCyberGlow {
-  0%, 100% { 
-    box-shadow: 
+
+  0%,
+  100% {
+    box-shadow:
       inset 0 0 10px var(--cyber-glow),
       0 0 5px var(--cyber-glow);
     border-color: var(--cyber-primary);
   }
-  50% { 
-    box-shadow: 
+
+  50% {
+    box-shadow:
       inset 0 0 15px rgba(5, 205, 153, 0.3),
-      0 0 15px rgba(5, 205, 153, 0.5); /* Reduced spread */
+      0 0 15px rgba(5, 205, 153, 0.5);
+    /* Reduced spread */
     border-color: var(--success-color);
   }
 }
@@ -455,17 +513,51 @@
   box-shadow: 0 0 5px var(--cyber-primary);
 }
 
-.particle:nth-child(1) { left: 10%; animation-delay: 0s; }
-.particle:nth-child(2) { left: 30%; animation-delay: 3s; }
-.particle:nth-child(3) { left: 50%; animation-delay: 6s; }
-.particle:nth-child(4) { left: 70%; animation-delay: 2s; }
-.particle:nth-child(5) { left: 90%; animation-delay: 4s; }
+.particle:nth-child(1) {
+  left: 10%;
+  animation-delay: 0s;
+}
+
+.particle:nth-child(2) {
+  left: 30%;
+  animation-delay: 3s;
+}
+
+.particle:nth-child(3) {
+  left: 50%;
+  animation-delay: 6s;
+}
+
+.particle:nth-child(4) {
+  left: 70%;
+  animation-delay: 2s;
+}
+
+.particle:nth-child(5) {
+  left: 90%;
+  animation-delay: 4s;
+}
 
 @keyframes cyberParticleFloat {
-  0% { transform: translateY(100vh) scale(0); opacity: 0; }
-  10% { opacity: 0.8; transform: scale(1); }
-  90% { opacity: 0.8; transform: scale(1); }
-  100% { transform: translateY(-100px) scale(0); opacity: 0; }
+  0% {
+    transform: translateY(100vh) scale(0);
+    opacity: 0;
+  }
+
+  10% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+
+  90% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+
+  100% {
+    transform: translateY(-100px) scale(0);
+    opacity: 0;
+  }
 }
 
 /* Professional Authentication Coin */
@@ -473,7 +565,7 @@
   position: absolute;
   top: -140px;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translate3d(-50%, 0, 0);
   width: 120px;
   height: 120px;
   border-radius: 50%;
@@ -484,7 +576,6 @@
   align-items: center;
   z-index: 20;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
-  /* Border removed */
   font-family: 'DM Sans', monospace;
   font-weight: 700;
   font-size: 9px;
@@ -492,10 +583,15 @@
   letter-spacing: 1px;
   color: var(--cyber-primary);
   animation: authCoinFloat 3s ease-in-out infinite;
-  transition: all 2.5s cubic-bezier(0.4, 0, 0.2, 1);
-  will-change: transform, top;
-  /* Ensure 3D rendering context */
+  transition: transform 2.5s cubic-bezier(0.4, 0, 0.2, 1),
+    top 2.5s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.5s ease,
+    box-shadow 0.5s ease;
+  will-change: transform, top, opacity;
+  /* GPU + 3D rendering context */
   transform-style: preserve-3d;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 .coin-face {
@@ -509,9 +605,11 @@
   justify-content: center;
   align-items: center;
   backface-visibility: hidden;
-  /* Ensure border-radius clips children if needed, though coin shape is on parent */
+  -webkit-backface-visibility: hidden;
   border-radius: 50%;
-  background-color: var(--cyber-dark); /* Ensure back is not transparent/empty */
+  background-color: var(--cyber-dark);
+  transform: translateZ(0);
+  /* GPU layer */
 }
 
 .coin-face.front {
@@ -528,24 +626,32 @@
 }
 
 @keyframes authCoinRotate {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .auth-coin.inserting {
   top: 50%;
-  transform: translateX(-50%) scale(0.6) rotateY(360deg);
+  transform: translate3d(-50%, 0, 0) scale(0.6) rotateY(360deg);
   animation: none;
-  transition: all 1.5s cubic-bezier(0.4, 0, 0.2, 1);
-  z-index: 5; /* Go behind some elements if needed, or stay on top */
+  transition: transform 1.5s cubic-bezier(0.4, 0, 0.2, 1),
+    top 1.5s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.5s ease;
+  z-index: 5;
 }
 
 .auth-coin.success {
   top: 50%;
-  transform: translateX(-50%) scale(0);
+  transform: translate3d(-50%, 0, 0) scale(0);
   opacity: 0;
-  transition: all 0.5s ease-in;
-  /* Add a glow effect before disappearing */
+  transition: transform 0.5s ease-in,
+    opacity 0.5s ease-in,
+    box-shadow 0.3s ease;
   box-shadow: 0 0 50px var(--success-color);
 }
 
@@ -558,20 +664,49 @@
 }
 
 @keyframes successCoin {
-  0% { transform: translateX(-50%) scale(1); opacity: 1; }
-  50% { transform: translateX(-50%) scale(1.5); opacity: 0.8; }
-  100% { transform: translateX(-50%) scale(3); opacity: 0; }
+  0% {
+    transform: translate3d(-50%, 0, 0) scale(1);
+    opacity: 1;
+  }
+
+  50% {
+    transform: translate3d(-50%, 0, 0) scale(1.5);
+    opacity: 0.8;
+  }
+
+  100% {
+    transform: translate3d(-50%, 0, 0) scale(3);
+    opacity: 0;
+  }
 }
 
 @keyframes failedCoin {
-  0%, 100% { transform: translateX(-50%) scale(1); }
-  25%, 75% { transform: translateX(-50%) scale(1) rotateZ(-5deg); }
-  50% { transform: translateX(-50%) scale(1) rotateZ(5deg); }
+
+  0%,
+  100% {
+    transform: translate3d(-50%, 0, 0) scale(1);
+  }
+
+  25%,
+  75% {
+    transform: translate3d(-50%, 0, 0) scale(1) rotateZ(-5deg);
+  }
+
+  50% {
+    transform: translate3d(-50%, 0, 0) scale(1) rotateZ(5deg);
+  }
 }
 
 @keyframes authCoinFloat {
-  0%, 100% { transform: translateX(-50%) translateY(0) rotateY(0deg); }
-  50% { transform: translateX(-50%) translateY(-15px) rotateY(180deg); }
+
+  0%,
+  100% {
+    transform: translate3d(-50%, 0, 0) rotateY(0deg);
+  }
+
+  50% {
+    transform: translate3d(-50%, -15px, 0) rotateY(180deg);
+  }
 }
 
 /* Role-based enhanced coin styles */
@@ -600,7 +735,8 @@
   font-size: 20px;
   margin-bottom: 2px;
   text-shadow: 0 0 5px currentColor;
-  display: none; /* Hide old icon just in case */
+  display: none;
+  /* Hide old icon just in case */
 }
 
 .auth-coin-icon-img {
@@ -624,7 +760,8 @@
   text-align: center;
   line-height: 1.1;
   white-space: pre-line;
-  text-shadow: 0 0 4px #000; /* Added shadow to make text readable over image */
+  text-shadow: 0 0 4px #000;
+  /* Added shadow to make text readable over image */
 }
 
 .auth-coin-text {
@@ -685,29 +822,29 @@
     width: 100%;
     max-width: 450px;
   }
-  
+
   .visual-section {
     height: 250px;
     order: -1;
   }
-  
+
   .login-section {
     padding: 30px;
   }
-  
+
   .login-title {
     font-size: 24px;
   }
-  
+
   .scene-container {
     transform: scale(0.6);
   }
-  
+
   .auth-coin {
     width: 120px;
     height: 120px;
   }
-  
+
   .auth-coin::before {
     width: 100px;
     height: 100px;
@@ -718,29 +855,29 @@
   .login-section {
     padding: 20px;
   }
-  
+
   .login-title {
     font-size: 20px;
   }
-  
+
   .form-input {
     font-size: 14px;
   }
-  
+
   .login-button {
     font-size: 14px;
     padding: 12px;
   }
-  
+
   .scene-container {
     transform: scale(0.5);
   }
-  
+
   .auth-coin {
     width: 100px;
     height: 100px;
   }
-  
+
   .auth-coin::before {
     width: 80px;
     height: 80px;
