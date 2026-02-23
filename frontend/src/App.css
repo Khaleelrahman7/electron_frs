@@ -16,7 +16,8 @@
   --bg-panel: rgba(17, 25, 40, 0.75);
   --bg-sidebar: #0f172a;
   --bg-header: rgba(15, 23, 42, 0.8);
-  --bg-input: rgba(30, 41, 59, 0.5);
+  --bg-input: rgba(30, 41, 59, 0.6);
+  --bg-subtle: rgba(15, 23, 42, 0.5);
   --bg-hover: rgba(56, 189, 248, 0.1);
 
   --text-primary: #f1f5f9;
@@ -65,7 +66,8 @@
   --bg-sidebar: #1e293b;
   /* Dark Slate Sidebar for contrast */
   --bg-header: #ffffff;
-  --bg-input: #f8fafc;
+  --bg-input: #f0f4f8;
+  --bg-subtle: #e8edf2;
   --bg-hover: #f1f5f9;
 
   --text-primary: #0f172a;
@@ -109,7 +111,8 @@
   --bg-sidebar: #1a365d;
   /* Navy Blue */
   --bg-header: #ffffff;
-  --bg-input: #f8fafc;
+  --bg-input: #e8edf3;
+  --bg-subtle: #dde3ea;
   --bg-hover: #edf2f7;
 
   --text-primary: #1a202c;
@@ -156,6 +159,7 @@
   /* Slightly darker sidebar */
   --bg-header: #0a0a0a;
   --bg-input: #1f1f1f;
+  --bg-subtle: #181818;
   --bg-hover: rgba(249, 115, 22, 0.1);
   /* Orange hover */
 
@@ -202,6 +206,7 @@
   --bg-sidebar: #020617;
   --bg-header: rgba(2, 6, 23, 0.9);
   --bg-input: rgba(6, 182, 212, 0.1);
+  --bg-subtle: rgba(6, 182, 212, 0.05);
   --bg-hover: rgba(6, 182, 212, 0.15);
   /* Cyan hover */
 
@@ -499,12 +504,22 @@ body {
 .textarea-field {
   width: 100%;
   padding: 8px 12px;
-  background-color: var(--bg-app);
+  background-color: var(--bg-input);
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius-sm);
   color: var(--text-primary);
   font-size: 0.85rem;
   transition: var(--transition-fast);
+}
+
+/* Global input baseline – ensures all native inputs theme-adapt */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+select,
+textarea {
+  background-color: var(--bg-input);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+  font-family: var(--font-family);
 }
 
 .input-field:focus,

@@ -48,7 +48,7 @@
   text-align: center;
   cursor: pointer;
   transition: var(--transition-smooth);
-  background-color: var(--bg-app);
+  background-color: var(--bg-input);
   min-height: 120px;
   display: flex;
   align-items: center;
@@ -185,7 +185,7 @@
 }
 
 .processing-section {
-  background-color: var(--bg-app);
+  background-color: var(--bg-input);
   padding: 14px;
   border-radius: var(--border-radius);
   margin-bottom: 14px;
@@ -263,7 +263,7 @@
 }
 
 .results-section {
-  background-color: var(--bg-app);
+  background-color: var(--bg-input);
   padding: 14px;
   border-radius: var(--border-radius);
   border-left: 4px solid var(--success-color);

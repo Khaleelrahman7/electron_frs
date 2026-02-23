@@ -9,7 +9,7 @@ const RegistrationWidget = () => {
   const [formData, setFormData] = useState({
     name: '',
     age: '18',
-    gender: 'Male',
+    gender: '',
     category: ''
   });
   const [autoDetectAge, setAutoDetectAge] = useState(true);
@@ -54,7 +54,7 @@ const RegistrationWidget = () => {
         setAgeError('');
       }
     }
-    
+
     // Validate category - only letters and spaces, no numbers
     if (field === 'category') {
       const categoryValue = value.trim();
@@ -73,7 +73,7 @@ const RegistrationWidget = () => {
         setCategoryError('');
       }
     }
-    
+
     setFormData(prev => ({
       ...prev,
       [field]: value
@@ -89,7 +89,7 @@ const RegistrationWidget = () => {
       }
 
       setImageFile(file);
-      
+
       const reader = new FileReader();
       reader.onload = (e) => {
         setImagePreview(e.target.result);
@@ -111,7 +111,7 @@ const RegistrationWidget = () => {
     setFormData({
       name: '',
       age: '18',
-      gender: 'Male',
+      gender: '',
       category: ''
     });
     setImageFile(null);
@@ -206,7 +206,7 @@ const RegistrationWidget = () => {
       if (result.success && result.folderPath) {
         setSelectedFolder(result.folderPath);
         showMessage('Scanning folder for images...', 'success');
-        
+
         const scanResult = await window.electronAPI.scanFolderForImages(result.folderPath);
         if (scanResult.success && scanResult.count > 0) {
           setImageFilesForBulk(scanResult.files);
@@ -354,12 +354,12 @@ const RegistrationWidget = () => {
               <div className="form-row-split">
                 <div className="form-group age-group">
                   <label>
-                    Age 
+                    Age
                     <span className="ai-badge-clean">AI</span>
                   </label>
-                  
+
                   {autoDetectAge ? (
-                    <div 
+                    <div
                       className="auto-detect-box selected"
                       onClick={() => setAutoDetectAge(false)}
                       title="Click to switch to manual age entry"
@@ -373,7 +373,7 @@ const RegistrationWidget = () => {
                       </div>
                     </div>
                   ) : (
-                     <div className="manual-age-container-clean">
+                    <div className="manual-age-container-clean">
                       <div className="age-stepper-clean">
                         <button
                           type="button"
@@ -422,7 +422,7 @@ const RegistrationWidget = () => {
                           +
                         </button>
                       </div>
-                      <button 
+                      <button
                         type="button"
                         className="btn-link"
                         onClick={() => setAutoDetectAge(true)}
@@ -443,6 +443,7 @@ const RegistrationWidget = () => {
                     disabled={isLoading}
                     className="select-clean"
                   >
+                    <option value="" disabled>Select Gender</option>
                     <option value="Male">Male</option>
                     <option value="Female">Female</option>
                     <option value="Other">Other</option>
@@ -469,7 +470,7 @@ const RegistrationWidget = () => {
                 <span>Ensure the person's details match official identification documents for accuracy.</span>
               </div>
             </div>
-            
+
             <div className="card-footer">
               <button
                 type="button"
@@ -618,12 +619,12 @@ const RegistrationWidget = () => {
               </div>
 
               <div className="bulk-instructions">
-                 <h4>Instructions</h4>
-                 <ul>
-                    <li>Excel file must have a 'name' column (required)</li>
-                    <li>Optional columns: 'age', 'gender', 'category'</li>
-                    <li>Data folder should contain images named of each person</li>
-                 </ul>
+                <h4>Instructions</h4>
+                <ul>
+                  <li>Excel file must have a 'name' column (required)</li>
+                  <li>Optional columns: 'age', 'gender', 'category'</li>
+                  <li>Data folder should contain images named of each person</li>
+                </ul>
               </div>
             </div>
 

@@ -26,8 +26,8 @@ const FaceEvents = () => {
   const [cameras, setCameras] = useState(['All Cameras']);
   const [selectedCamera, setSelectedCamera] = useState('All Cameras');
   const [nameFilter, setNameFilter] = useState('');
-  const [fromDate, setFromDate] = useState(subDays(new Date(), 7));
-  const [toDate, setToDate] = useState(new Date());
+  const [fromDate, setFromDate] = useState(null);
+  const [toDate, setToDate] = useState(null);
 
   // Data States
   const [faces, setFaces] = useState([]);
@@ -35,6 +35,7 @@ const FaceEvents = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [viewMode, setViewMode] = useState('list'); // 'list' or 'grid'
+  const [selectedEvent, setSelectedEvent] = useState(null);
 
   // Helper to check if any filters are active
   const hasActiveFilters = () => {
@@ -311,9 +312,6 @@ const FaceEvents = () => {
             </div>
           </div>
           <div className="view-actions">
-            <button className="action-icon-btn" title="Download">
-              <Download size={18} />
-            </button>
             <div className="view-toggle">
               <button
                 className={`toggle-btn ${viewMode === 'list' ? 'active' : ''}`}
@@ -354,7 +352,6 @@ const FaceEvents = () => {
                     <th>CAMERA</th>
                     <th>DATE & TIME</th>
                     <th>TYPE</th>
-                    <th>CONFIDENCE</th>
                     <th>ACTION</th>
                   </tr>
                 </thead>
@@ -382,20 +379,7 @@ const FaceEvents = () => {
                         </span>
                       </td>
                       <td>
-                        {face.confidence !== undefined && face.confidence !== null ? (
-                          <div className="confidence-bar">
-                            <div
-                              className="fill"
-                              style={{ width: `${face.confidence * 100}%` }}
-                            ></div>
-                            <span>{(face.confidence * 100).toFixed(1)}%</span>
-                          </div>
-                        ) : (
-                          <span className="text-muted">-</span>
-                        )}
-                      </td>
-                      <td>
-                        <button className="btn-action">View</button>
+                        <button className="btn-action" onClick={() => setSelectedEvent(face)}>View</button>
                       </td>
                     </tr>
                   ))}
@@ -417,6 +401,32 @@ const FaceEvents = () => {
           )}
         </div>
       </div>
+
+      {/* View Face Modal */}
+      {selectedEvent && (
+        <div className="face-event-modal-overlay" onClick={() => setSelectedEvent(null)}>
+          <div className="face-event-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Event Details</h3>
+              <button className="close-btn" onClick={() => setSelectedEvent(null)}><X size={20} /></button>
+            </div>
+            <div className="modal-body">
+              <FaceCard
+                imagePath={selectedEvent.image_path}
+                name={selectedEvent.name}
+                camera={selectedEvent.camera}
+                timestamp={selectedEvent.timestamp}
+              />
+              <div className="modal-details">
+                <p><strong>Name:</strong> <span>{selectedEvent.name}</span></p>
+                <p><strong>Camera:</strong> <span>{selectedEvent.camera}</span></p>
+                <p><strong>Time:</strong> <span>{format(new Date(selectedEvent.timestamp), 'yyyy-MM-dd HH:mm:ss')}</span></p>
+                <p><strong>Type:</strong> <span className={`badge ${selectedEvent.name === 'Unknown' ? 'badge-unknown' : 'badge-known'}`}>{selectedEvent.name === 'Unknown' ? 'Unknown' : 'Known'}</span></p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

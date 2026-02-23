@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Grid } from 'lucide-react';
 import { fixImageUrl } from '../utils/apiConfig';
 import './FaceCard.css';
 
@@ -36,6 +37,12 @@ const FaceCard = ({ imagePath, name, camera, timestamp }) => {
     }
   };
 
+  const handleFaceCapture = (e) => {
+    e.stopPropagation();
+    // Face capture logic placeholder
+    console.log("Face capture triggered for", fixedImagePath);
+  };
+
   return (
     <div className="face-card">
       <div className="image-container">
@@ -55,7 +62,7 @@ const FaceCard = ({ imagePath, name, camera, timestamp }) => {
           </div>
         )}
       </div>
-      
+
       <div className="face-info">
         <h4 className="face-name">{name}</h4>
         {camera && <p className="face-camera">Camera: {camera}</p>}

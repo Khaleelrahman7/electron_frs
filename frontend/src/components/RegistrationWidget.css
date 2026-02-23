@@ -222,8 +222,7 @@
   margin-left: 2px;
 }
 
-.input-clean,
-.select-clean {
+.input-clean {
   padding: 10px 14px;
   border: 1px solid var(--border-color);
   border-radius: 8px;
@@ -232,6 +231,23 @@
   transition: var(--transition-fast);
   width: 100%;
   color: var(--text-primary);
+}
+
+.select-clean {
+  padding: 10px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 0.95rem;
+  background-color: var(--bg-input) !important;
+  transition: var(--transition-fast);
+  width: 100%;
+  color: var(--text-primary) !important;
+  appearance: auto;
+}
+
+.select-clean option {
+  background-color: var(--bg-panel) !important;
+  color: var(--text-primary) !important;
 }
 
 .input-clean:focus,
