@@ -1,7 +1,7 @@
 .video-widget {
   background-color: var(--bg-panel);
   border-radius: var(--border-radius);
-  padding: 24px;
+  padding: 16px;
   box-shadow: var(--shadow-sm);
   border: 1px solid var(--border-color);
   color: var(--text-primary);
@@ -14,26 +14,26 @@
 
 .video-header {
   text-align: center;
-  margin-bottom: 24px;
-  padding-bottom: 16px;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
   border-bottom: 1px solid var(--border-color);
 }
 
 .video-header h2 {
-  margin: 0 0 8px 0;
+  margin: 0 0 4px 0;
   color: var(--text-primary);
-  font-size: 1.5rem;
+  font-size: 1.2rem;
   font-weight: 700;
 }
 
 .video-header p {
   margin: 0;
   color: var(--text-secondary);
-  font-size: 1rem;
+  font-size: 0.85rem;
 }
 
 .video-upload-section {
-  margin-bottom: 24px;
+  margin-bottom: 14px;
 }
 
 .file-selection {
@@ -44,12 +44,12 @@
   position: relative;
   border: 2px dashed var(--border-color);
   border-radius: var(--border-radius);
-  padding: 40px 20px;
+  padding: 24px 16px;
   text-align: center;
   cursor: pointer;
   transition: var(--transition-smooth);
   background-color: var(--bg-app);
-  min-height: 150px;
+  min-height: 120px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -97,8 +97,8 @@
 .file-info {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 20px;
+  gap: 12px;
+  padding: 12px;
   background-color: var(--bg-panel);
   border-radius: var(--border-radius-sm);
   border: 1px solid var(--border-color);
@@ -132,9 +132,9 @@
 
 .btn-primary,
 .btn-secondary {
-  padding: 12px 24px;
+  padding: 8px 16px;
   border-radius: var(--border-radius-sm);
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
   transition: var(--transition-normal);
@@ -142,8 +142,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  min-width: 140px;
+  gap: 6px;
+  min-width: 120px;
   box-shadow: var(--shadow-sm);
 }
 
@@ -186,9 +186,9 @@
 
 .processing-section {
   background-color: var(--bg-app);
-  padding: 20px;
+  padding: 14px;
   border-radius: var(--border-radius);
-  margin-bottom: 24px;
+  margin-bottom: 14px;
   border: 1px solid var(--border-color);
   box-shadow: var(--shadow-sm);
 }
@@ -264,7 +264,7 @@
 
 .results-section {
   background-color: var(--bg-app);
-  padding: 20px;
+  padding: 14px;
   border-radius: var(--border-radius);
   border-left: 4px solid var(--success-color);
   box-shadow: var(--shadow-sm);
@@ -494,6 +494,7 @@
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -501,8 +502,15 @@
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.7;
+  }
 }
 
 .results-section {
@@ -518,44 +526,44 @@
   .video-widget {
     padding: 16px;
   }
-  
+
   .video-controls {
     flex-direction: column;
     align-items: stretch;
   }
-  
+
   .btn-primary,
   .btn-secondary {
     width: 100%;
   }
-  
+
   .results-summary {
     grid-template-columns: 1fr;
     gap: 12px;
   }
-  
+
   .result-item {
     flex-direction: column;
     text-align: center;
     gap: 4px;
   }
-  
+
   .file-info {
     flex-direction: column;
     text-align: center;
     gap: 12px;
   }
-  
+
   .person-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
   }
-  
+
   .detection-list {
     flex-direction: column;
   }
-  
+
   .detection-item {
     width: 100%;
   }
@@ -565,23 +573,23 @@
   .video-header h2 {
     font-size: 1.3rem;
   }
-  
+
   .video-header p {
     font-size: 0.9rem;
   }
-  
+
   .upload-area {
     padding: 24px 16px;
   }
-  
+
   .upload-icon {
     font-size: 2rem;
   }
-  
+
   .file-icon {
     font-size: 2.5rem;
   }
-  
+
   .results-actions .btn-primary {
     width: 100%;
   }

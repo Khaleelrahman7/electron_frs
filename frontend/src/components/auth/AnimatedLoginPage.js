@@ -305,21 +305,20 @@ const AnimatedLoginPage = () => {
           {/* Right Side - Visual/Animation */}
           <div className="visual-section">
             <div className="visual-content">
-              {/* Professional Authentication Coin */}
-              <div className="scene-container">
-                {/* Face Recognition Authentication Coin */}
-                <div className="auth-coin" id="animatedCoin">
-                  <div className="coin-face front">
-                    <img src={securityCoinIcon} className="auth-coin-icon-img" alt="Security" />
-                    <div className="coin-text"></div>
-                  </div>
-                  <div className="coin-face back">
-                    <img src={securityCoinIcon} className="auth-coin-icon-img" alt="Security" />
-                    <div className="coin-text"></div>
-                  </div>
+              {/* Face Recognition Authentication Coin */}
+              <div className="auth-coin" id="animatedCoin">
+                <div className="coin-face front">
+                  <img src={securityCoinIcon} className="auth-coin-icon-img" alt="Security" />
+                  <div className="coin-text"></div>
                 </div>
+                <div className="coin-face back">
+                  <img src={securityCoinIcon} className="auth-coin-icon-img" alt="Security" />
+                  <div className="coin-text"></div>
+                </div>
+              </div>
 
-                {/* Professional Face Recognition Cube */}
+              {/* Professional Authentication Cube */}
+              <div className="scene-container">
                 <div className="face-recognition-cube" id="coinBank">
                   <div className="cube-face front"></div>
                   <div className="cube-face back"></div>

@@ -5,7 +5,7 @@
 .registration-widget {
   background-color: var(--bg-panel);
   border-radius: var(--reg-radius);
-  padding: 32px;
+  padding: 16px;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -21,11 +21,11 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 32px;
+  margin-bottom: 16px;
 }
 
 .header-title h2 {
-  font-size: 1.5rem;
+  font-size: 1.2rem;
   font-weight: 700;
   margin: 0;
   color: var(--text-primary);
@@ -77,8 +77,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 40px;
-  padding: 0 40px;
+  margin-bottom: 20px;
+  padding: 0 20px;
 }
 
 .step {
@@ -123,7 +123,7 @@
 .single-registration-layout {
   display: grid;
   grid-template-columns: 1.2fr 0.8fr;
-  gap: 24px;
+  gap: 14px;
   align-items: stretch;
 }
 
@@ -145,11 +145,11 @@
 }
 
 .card-header {
-  padding: 24px;
+  padding: 14px;
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
 .icon-box {
@@ -180,11 +180,11 @@
 }
 
 .card-content {
-  padding: 24px;
+  padding: 14px;
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 14px;
 }
 
 .card-content.fill-height {
@@ -192,7 +192,7 @@
 }
 
 .card-footer {
-  padding: 16px 24px;
+  padding: 12px 14px;
   background-color: var(--bg-subtle);
   border-top: 1px solid var(--border-color);
   display: flex;
@@ -249,7 +249,7 @@
 .form-row-split {
   display: grid;
   grid-template-columns: 2fr 1fr;
-  gap: 20px;
+  gap: 12px;
 }
 
 /* Auto Detect Box */
@@ -647,7 +647,7 @@
   .single-registration-layout {
     grid-template-columns: 1fr;
   }
-  
+
   .stepper-header {
     display: none;
   }
@@ -659,12 +659,12 @@
     align-items: flex-start;
     gap: 16px;
   }
-  
+
   .mode-selector-pill {
     width: 100%;
     justify-content: center;
   }
-  
+
   .mode-pill {
     flex: 1;
     text-align: center;
@@ -673,7 +673,7 @@
   .form-row-split {
     grid-template-columns: 1fr;
   }
-  
+
   .bulk-grid {
     grid-template-columns: 1fr;
   }

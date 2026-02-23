@@ -1,7 +1,7 @@
 /* Variables are inherited from App.css */
 
 .user-management {
-  padding: 24px;
+  padding: 16px;
   background: var(--bg-app);
   color: var(--text-primary);
   height: 100%;
@@ -17,19 +17,19 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
-  padding-bottom: 16px;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
   border-bottom: 1px solid var(--border-color);
 }
 
 .header h2 {
-  font-size: 1.5rem;
+  font-size: 1.2rem;
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .header-actions {
@@ -74,15 +74,16 @@
   background: var(--primary-color);
   color: white;
   border: none;
-  padding: 10px 16px;
+  padding: 7px 14px;
   border-radius: var(--border-radius);
   cursor: pointer;
   font-weight: 500;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   transition: all 0.2s ease;
   box-shadow: var(--shadow-sm);
+  font-size: 0.85rem;
 }
 
 .add-btn:hover {
@@ -115,19 +116,20 @@
   color: var(--text-secondary);
   font-weight: 600;
   text-transform: uppercase;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   letter-spacing: 0.05em;
-  padding: 16px 24px;
+  padding: 10px 14px;
   text-align: left;
   border-bottom: 1px solid var(--border-color);
 }
 
 .users-table td {
-  padding: 16px 24px;
+  padding: 10px 14px;
   color: var(--text-primary);
   border-bottom: 1px solid var(--border-color);
   vertical-align: middle;
   transition: background-color 0.2s ease;
+  font-size: 0.85rem;
 }
 
 .users-table tr:hover td {
@@ -419,9 +421,9 @@
 .permissions-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 6px;
+  gap: 10px;
   align-content: start;
-  margin-top: 4px;
+  margin-top: 35px;
 }
 
 .permission-card {
