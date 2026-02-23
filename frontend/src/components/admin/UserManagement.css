@@ -170,8 +170,6 @@
 
 /* Action Buttons */
 .actions-cell {
-  /* display: flex; Removed to fix table layout issues */
-  /* gap: 8px; */
   vertical-align: middle;
 }
 
@@ -212,7 +210,7 @@
   border-color: rgba(239, 68, 68, 0.2);
 }
 
-/* Wide Modal Form */
+/* ===== COMPACT WIDE MODAL ===== */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -230,11 +228,11 @@
 }
 
 .wide-modal {
-  width: 90vw;
-  max-width: 1200px;
+  width: 88vw;
+  max-width: 960px;
   background: #111424;
-  border-radius: 12px;
-  box-shadow: 0 24px 50px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
   z-index: 1001;
   display: flex;
   flex-direction: column;
@@ -243,25 +241,68 @@
 }
 
 .modal-header {
-  padding: 24px 32px 16px;
+  padding: 12px 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   background: #111424;
   flex-shrink: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .modal-header h3 {
   margin: 0;
   color: #fff;
-  font-size: 1.25rem;
+  font-size: 1rem;
   font-weight: 600;
+}
+
+.modal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-cancel-btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid #2a2f42;
+  background: transparent;
+  color: #c5c9d6;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.78rem;
+  transition: all 0.2s ease;
+}
+
+.header-cancel-btn:hover {
+  background: #1f2937;
+  color: #fff;
+}
+
+.header-submit-btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid #3b82f6;
+  background: #3b82f6;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.78rem;
+  display: flex;
+  align-items: center;
+  transition: all 0.2s ease;
+}
+
+.header-submit-btn:hover {
+  background: #2563eb;
+  border-color: #2563eb;
 }
 
 .modal-close {
   background: transparent;
   border: none;
-  color: #9ca3af;
+  color: #6b7280;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -285,32 +326,34 @@
 .form-body {
   display: flex;
   flex-direction: row;
-  gap: 40px;
-  padding: 0 32px 16px;
+  gap: 24px;
+  padding: 14px 20px 14px;
   flex: 1;
+  align-items: flex-start;
 }
 
 .form-section {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 12px;
 }
 
 .form-section:first-child {
-  flex: 0 0 48%;
-  min-width: 350px;
+  flex: 1;
+  min-width: 0;
 }
 
 .form-section:last-child {
   flex: 1;
+  min-width: 0;
 }
 
 .user-management .section-title {
-  font-size: 0.85rem;
+  font-size: 0.7rem;
   font-weight: 700;
-  color: #9ca3af;
-  letter-spacing: 0.05em;
-  margin: 0 0 4px 0;
+  color: #8b92a5;
+  letter-spacing: 0.08em;
+  margin: 0;
   display: flex;
   align-items: center;
   text-transform: uppercase;
@@ -327,32 +370,33 @@
 .form-row {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 20px;
+  gap: 12px;
 }
 
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 
 .form-group label {
-  color: #9ca3af;
-  font-size: 0.75rem;
+  color: #8b92a5;
+  font-size: 0.65rem;
   font-weight: 600;
   text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .form-group input,
 .form-group select,
 .disabled-input {
   background: #1a1d2d;
-  border: 1px solid #2d3748;
-  border-radius: 8px;
+  border: 1px solid #2a2f42;
+  border-radius: 6px;
   color: #fff;
-  padding: 10px 14px;
-  height: 44px;
-  font-size: 0.95rem;
+  padding: 7px 10px;
+  height: 34px;
+  font-size: 0.82rem;
   transition: all 0.2s;
   box-sizing: border-box;
 }
@@ -362,50 +406,54 @@
   outline: none;
   background: #1a1d2d;
   border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
 }
 
 .form-group small {
-  color: #6b7280;
-  font-size: 0.7rem;
-  margin-top: -4px;
+  color: #5b6278;
+  font-size: 0.62rem;
+  margin-top: -2px;
 }
 
-/* Permissions Grid */
+/* Compact Permissions Grid */
 .permissions-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
+  gap: 6px;
   align-content: start;
+  margin-top: 4px;
 }
 
 .permission-card {
-  background: #1a1d2d;
-  border: 1px solid #2d3748;
-  border-radius: 8px;
-  padding: 14px 16px;
+  background: #161929;
+  border: 1px solid #232840;
+  border-radius: 5px;
+  padding: 7px 10px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
+  border-left: 2px solid transparent;
 }
 
 .permission-card:hover {
-  background: #252d44;
-  border-color: #4b5563;
+  background: #1e2238;
+  border-color: #3a4060;
+  border-left-color: #4b5580;
 }
 
 .permission-card.selected {
-  background: rgba(59, 130, 246, 0.1);
-  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.08);
+  border-color: rgba(59, 130, 246, 0.3);
+  border-left-color: #3b82f6;
 }
 
 .custom-checkbox {
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
-  background: #2d3748;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  background: #2a2f42;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -420,50 +468,14 @@
 }
 
 .permission-card span {
-  font-size: 0.9rem;
+  font-size: 0.72rem;
   font-weight: 600;
-  color: #e5e7eb;
+  color: #c5c9d6;
+  letter-spacing: 0.02em;
 }
 
 .permission-card.selected span {
   color: #fff;
 }
 
-.modal-actions {
-  padding: 16px 32px 24px;
-  background: transparent;
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  flex-shrink: 0;
-}
-
-.modal-actions button {
-  padding: 10px 20px;
-  border-radius: 8px;
-  border: 1px solid #2d3748;
-  background: transparent;
-  color: #e5e7eb;
-  cursor: pointer;
-  font-weight: 500;
-  font-size: 0.9rem;
-  transition: all 0.2s ease;
-}
-
-.modal-actions button[type="button"]:hover {
-  background: #1f2937;
-  color: #fff;
-}
-
-.modal-actions button.primary {
-  background: #3b82f6;
-  border-color: #3b82f6;
-  color: white;
-  display: flex;
-  align-items: center;
-}
-
-.modal-actions button.primary:hover {
-  background: #2563eb;
-  border-color: #2563eb;
-}
+/* Modal actions are now in the header */

@@ -300,12 +300,19 @@ const UserManagement = () => {
             <div className="wide-modal" onClick={(e) => e.stopPropagation()}>
               <div className="modal-header">
                 <h3>{isEditing ? 'Edit User' : 'Create New User'}</h3>
-                <button className="modal-close" onClick={() => setShowModal(false)}>
-                  <X size={20} />
-                </button>
+                <div className="modal-header-actions">
+                  <button type="button" className="header-cancel-btn" onClick={() => setShowModal(false)}>Cancel</button>
+                  <button type="submit" form="user-form" className="header-submit-btn">
+                    {!isEditing && <span style={{ marginRight: '4px' }}>✦</span>}
+                    {isEditing ? 'Update User' : 'Create User'}
+                  </button>
+                  <button type="button" className="modal-close" onClick={() => setShowModal(false)}>
+                    <X size={18} />
+                  </button>
+                </div>
               </div>
 
-              <form onSubmit={handleSubmit} className="modal-form">
+              <form id="user-form" onSubmit={handleSubmit} className="modal-form">
                 <div className="form-body">
                   <div className="form-section">
                     <h4 className="section-title">ACCOUNT INFORMATION</h4>
@@ -436,7 +443,7 @@ const UserManagement = () => {
                         return (
                           <label key={menu.id} className={`permission-card ${isSelected ? 'selected' : ''}`}>
                             <div className="custom-checkbox">
-                              {isSelected && <Check size={14} color="white" strokeWidth={3} />}
+                              {isSelected && <Check size={11} color="white" strokeWidth={3} />}
                             </div>
                             <span>{menu.label.toUpperCase()}</span>
                             <input
@@ -452,13 +459,6 @@ const UserManagement = () => {
                   </div>
                 </div>
 
-                <div className="modal-actions">
-                  <button type="button" onClick={() => setShowModal(false)}>Cancel</button>
-                  <button type="submit" className="primary">
-                    {!isEditing && <span style={{ marginRight: '6px' }}>✦</span>}
-                    {isEditing ? 'Update User' : 'Create User'}
-                  </button>
-                </div>
               </form>
             </div>
           </div>
