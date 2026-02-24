@@ -5,6 +5,9 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   transition: all 0.2s ease;
   border: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .face-card:hover {
@@ -14,7 +17,7 @@
 
 .image-container {
   width: 100%;
-  height: 120px;
+  aspect-ratio: 3 / 4;
   margin-bottom: 8px;
   border-radius: 4px;
   background-color: #f7fafc;
@@ -96,6 +99,10 @@
 
 .face-info {
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  justify-content: center;
 }
 
 .face-name {
@@ -127,7 +134,7 @@
   }
 
   .image-container {
-    height: 100px;
+    aspect-ratio: 3 / 4;
     margin-bottom: 6px;
   }
 
