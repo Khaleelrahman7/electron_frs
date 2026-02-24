@@ -9,26 +9,26 @@ const API_BASE_URL = `${BASE_URL}/api/matching/api/match`;
 // Utility function to convert local file paths to API URLs
 const convertImagePathToUrl = (imagePath) => {
   if (!imagePath) return '';
-  
+
   try {
     // Handle Windows path separators
     const normalizedPath = imagePath.replace(/\\/g, '/');
-    
+
     // Extract person name and image name from the path
     // Expected path format: .../data/person_name/image_name.jpg
     const pathParts = normalizedPath.split('/');
     const dataIndex = pathParts.findIndex(part => part === 'data');
-    
+
     if (dataIndex !== -1 && pathParts.length > dataIndex + 2) {
       const personName = pathParts[dataIndex + 1];
       const imageName = pathParts[dataIndex + 2];
-      
+
       // Return the proper API URL for serving gallery images
       const fullUrl = `${BASE_URL}/api/gallery/image/${personName}/${imageName}`;
       // console.log('Converted image path to URL:', fullUrl);
       return fullUrl;
     }
-    
+
     // Fallback: return empty string if path format is not recognized
     console.warn('Could not parse image path:', imagePath);
     return '';
@@ -174,7 +174,7 @@ const FaceMatching = () => {
       const response = await axios.post(`${BASE_URL}/api/matching/api/gallery/reload`);
       console.log('Gallery reload response:', response.data);
       setError('Gallery reloaded successfully!');
-      
+
       // Reload stats after successful reload
       setTimeout(() => {
         loadGalleryStats();
@@ -211,8 +211,8 @@ const FaceMatching = () => {
     <div className="matching-content">
       <div className="image-section">
         <h3>Upload Image to Find Matches</h3>
-        <div className="image-container">
-          <div className="image-upload">
+        <div className="image-container one-to-many-upload" style={{ display: 'flex', justifyContent: 'center' }}>
+          <div className="image-upload" style={{ width: '220px', maxWidth: '220px', flexShrink: 0, flexGrow: 0 }}>
             {selectedImagePath1 ? (
               <img src={selectedImagePath1} alt="Selected" className="preview-image" />
             ) : (
@@ -233,8 +233,8 @@ const FaceMatching = () => {
             </label>
           </div>
         </div>
-        <button 
-          onClick={performOneToMany} 
+        <button
+          onClick={performOneToMany}
           disabled={!selectedImage1 || loading}
           className="action-btn primary"
         >
@@ -325,8 +325,8 @@ const FaceMatching = () => {
           </div>
         </div>
 
-        <button 
-          onClick={performOneToOne} 
+        <button
+          onClick={performOneToOne}
           disabled={!selectedImage1 || !selectedImage2 || loading}
           className="action-btn primary"
         >
