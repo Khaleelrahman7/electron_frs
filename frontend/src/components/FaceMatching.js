@@ -211,7 +211,7 @@ const FaceMatching = () => {
     <div className="matching-content">
       <div className="image-section">
         <h3>Upload Image to Find Matches</h3>
-        <div className="image-container one-to-many-upload" style={{ display: 'flex', justifyContent: 'center' }}>
+        <div className="upload-container one-to-many-upload" style={{ display: 'flex', justifyContent: 'center' }}>
           <div className="image-upload" style={{ width: '220px', maxWidth: '220px', flexShrink: 0, flexGrow: 0 }}>
             {selectedImagePath1 ? (
               <img src={selectedImagePath1} alt="Selected" className="preview-image" />

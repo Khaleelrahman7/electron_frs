@@ -126,10 +126,11 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  align-items: center;
 }
 
-/* image-container for one-to-many: hugs the card and centres it */
-.image-container {
+/* upload-container for one-to-many: hugs the card and centres it */
+.upload-container {
   display: flex;
   justify-content: center;
   align-items: flex-start;
@@ -274,7 +275,7 @@
   justify-content: center;
   min-width: 140px;
   box-shadow: var(--shadow-sm);
-  align-self: flex-start;
+  align-self: center;
 }
 
 .action-btn.primary {
@@ -312,13 +313,14 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  align-items: center;
 }
 
 .images-container {
   display: flex;
   gap: 16px;
-  align-items: flex-start;
-  flex-wrap: wrap;
+  align-items: center;
+  flex-wrap: nowrap;
   justify-content: center;
 }
 

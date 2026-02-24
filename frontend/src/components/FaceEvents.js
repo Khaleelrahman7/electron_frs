@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import axios from 'axios';
 import DatePicker from 'react-datepicker';
 import { format, subDays, differenceInDays } from 'date-fns';
@@ -58,7 +59,11 @@ const FaceEvents = () => {
       });
       if (response.data.cameras) {
         const cameraNames = response.data.cameras.map(camera => camera.name);
-        setCameras(['All Cameras', ...cameraNames]);
+        // Filter out duplicate All Cameras that might come from the API
+        const uniqueNames = Array.from(new Set(cameraNames)).filter(
+          name => name.toLowerCase() !== 'all cameras' && name.toLowerCase() !== 'all_cameras'
+        );
+        setCameras(['All Cameras', ...uniqueNames]);
       }
     } catch (err) {
       console.error("Failed to load cameras", err);
@@ -104,8 +109,11 @@ const FaceEvents = () => {
     if (activeFrom) params.from_date = activeFrom;
     if (activeTo) params.to_date = activeTo;
 
-    if (nameFilter.trim()) {
-      params.name = nameFilter.trim();
+    const activeName = overrides.name !== undefined ? overrides.name : nameFilter.trim();
+    if (activeName) {
+      params.name = activeName;
+    } else if (params.name !== undefined) {
+      delete params.name;
     }
     return params;
   }, [fromDate, toDate, selectedCamera, nameFilter]);
@@ -205,7 +213,11 @@ const FaceEvents = () => {
             <div className="select-wrapper">
               <select
                 value={selectedCamera}
-                onChange={(e) => setSelectedCamera(e.target.value)}
+                onChange={(e) => {
+                  const newCamera = e.target.value;
+                  setSelectedCamera(newCamera);
+                  handleFilter({ camera: newCamera === 'All Cameras' ? 'all_cameras' : newCamera }, activeTab);
+                }}
               >
                 {cameras.map(camera => (
                   <option key={camera} value={camera}>{camera}</option>
@@ -233,7 +245,11 @@ const FaceEvents = () => {
             <div className="date-wrapper">
               <DatePicker
                 selected={fromDate}
-                onChange={date => setFromDate(date)}
+                onChange={date => {
+                  setFromDate(date);
+                  // Auto-trigger filter
+                  handleFilter({ from_date: date ? format(date, 'yyyy-MM-dd') : null }, activeTab);
+                }}
                 dateFormat="dd-MM-yyyy"
                 maxDate={toDate || new Date()}
                 className="custom-datepicker"
@@ -249,7 +265,11 @@ const FaceEvents = () => {
             <div className="date-wrapper">
               <DatePicker
                 selected={toDate}
-                onChange={date => setToDate(date)}
+                onChange={date => {
+                  setToDate(date);
+                  // Auto-trigger filter
+                  handleFilter({ to_date: date ? format(date, 'yyyy-MM-dd') : null }, activeTab);
+                }}
                 dateFormat="dd-MM-yyyy"
                 minDate={fromDate}
                 maxDate={new Date()}
@@ -408,7 +428,7 @@ const FaceEvents = () => {
       </div>
 
       {/* View Face Modal */}
-      {selectedEvent && (
+      {selectedEvent && createPortal(
         <div className="face-event-modal-overlay" onClick={() => setSelectedEvent(null)}>
           <div className="face-event-modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
@@ -432,7 +452,8 @@ const FaceEvents = () => {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
