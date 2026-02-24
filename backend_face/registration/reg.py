@@ -660,8 +660,8 @@ async def register_single(
             "gender": gender if gender else "N/A",
             "category": category.lower() if category else "unknown",
             "registration_date": registration_time,
-            "gallery_path": gallery_dir,
-            "photo_path": original_path,
+            "gallery_path": os.path.relpath(gallery_dir, BASE_DIR).replace('\\', '/'),
+            "photo_path": os.path.relpath(original_path, BASE_DIR).replace('\\', '/'),
             "age_range": age_range,
             "age_source": age_source,
             "predicted_age": predicted_age if isinstance(predicted_age, int) else None
@@ -793,8 +793,8 @@ async def register_bulk(
                     'gender': result['details']['gender'],
                     'category': result['details']['category'],
                     'registration_date': datetime.now().isoformat(),
-                    'gallery_path': os.path.join(GALLERY_DIR, safe_name),
-                    'photo_path': os.path.join(GALLERY_DIR, safe_name, "1.jpg"),
+                    'gallery_path': os.path.relpath(os.path.join(GALLERY_DIR, safe_name), BASE_DIR).replace('\\', '/'),
+                    'photo_path': os.path.relpath(os.path.join(GALLERY_DIR, safe_name, "1.jpg"), BASE_DIR).replace('\\', '/'),
                     'age_range': age_range,
                     'age_source': age_source,
                     'predicted_age': predicted_age if isinstance(predicted_age, int) else None
@@ -883,8 +883,8 @@ async def get_gallery(name: Optional[str] = None, category: Optional[str] = None
                         "gender": "N/A",
                         "category": "unknown",
                         "registration_date": None,
-                        "gallery_path": entry.path,
-                        "photo_path": os.path.join(entry.path, "1.jpg")
+                        "gallery_path": os.path.relpath(entry.path, BASE_DIR).replace('\\', '/'),
+                        "photo_path": os.path.relpath(os.path.join(entry.path, "1.jpg"), BASE_DIR).replace('\\', '/')
                     }
 
         processed_data = {}

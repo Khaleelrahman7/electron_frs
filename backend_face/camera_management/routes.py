@@ -186,7 +186,7 @@ async def start_camera_stream(
             }
 
         # Start new stream
-        stream_id = stream_service.start_stream(camera_id, camera.rtsp_url)
+        stream_id = stream_service.start_stream(camera_id, camera.rtsp_url, camera.name)
 
         return {
             "success": True,
@@ -239,7 +239,7 @@ async def get_camera_stream(
         # Get or create stream
         stream_id = stream_service.get_camera_stream(camera_id)
         if not stream_id:
-            stream_id = stream_service.start_stream(camera_id, camera.rtsp_url)
+            stream_id = stream_service.start_stream(camera_id, camera.rtsp_url, camera.name)
 
         # Return MJPEG stream
         return StreamingResponse(

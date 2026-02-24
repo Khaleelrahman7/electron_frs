@@ -389,13 +389,18 @@ const FaceEvents = () => {
           ) : (
             <div className="faces-grid">
               {faces.map((face, index) => (
-                <FaceCard
+                <div
                   key={`${face.image_path}-${index}`}
-                  imagePath={face.image_path}
-                  name={face.name}
-                  camera={face.camera}
-                  timestamp={face.timestamp}
-                />
+                  onClick={() => setSelectedEvent(face)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <FaceCard
+                    imagePath={face.image_path}
+                    name={face.name}
+                    camera={face.camera}
+                    timestamp={face.timestamp}
+                  />
+                </div>
               ))}
             </div>
           )}
@@ -411,12 +416,14 @@ const FaceEvents = () => {
               <button className="close-btn" onClick={() => setSelectedEvent(null)}><X size={20} /></button>
             </div>
             <div className="modal-body">
-              <FaceCard
-                imagePath={selectedEvent.image_path}
-                name={selectedEvent.name}
-                camera={selectedEvent.camera}
-                timestamp={selectedEvent.timestamp}
-              />
+              <div className="modal-image-container">
+                <img
+                  src={fixImageUrl(selectedEvent.image_path)}
+                  alt={selectedEvent.name}
+                  onError={(e) => { e.target.src = '/placeholder-face.jpg'; e.target.style.opacity = 0.5; }}
+                  className="modal-face-image"
+                />
+              </div>
               <div className="modal-details">
                 <p><strong>Name:</strong> <span>{selectedEvent.name}</span></p>
                 <p><strong>Camera:</strong> <span>{selectedEvent.camera}</span></p>

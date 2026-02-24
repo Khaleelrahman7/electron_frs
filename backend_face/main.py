@@ -711,8 +711,8 @@ def convert_file_path_to_url(file_path: str) -> str:
         path_str = file_path.replace('\\', '/')
         
         # Try to detect gallery images
-        if '/gallery/' in path_str:
-            parts = path_str.split('/gallery/')
+        if 'gallery/' in path_str:
+            parts = path_str.split('gallery/')
             if len(parts) > 1:
                 relative_part = parts[-1]
                 path_segments = relative_part.split('/')
@@ -722,8 +722,8 @@ def convert_file_path_to_url(file_path: str) -> str:
                     return f"{API_BASE_URL}/api/gallery/image/{person}/{img}"
 
         # Try to detect captured known faces
-        if '/captured_faces/known/' in path_str:
-            parts = path_str.split('/captured_faces/known/')
+        if 'captured_faces/known/' in path_str:
+            parts = path_str.split('captured_faces/known/')
             if len(parts) > 1:
                 relative_part = parts[-1]
                 path_segments = relative_part.split('/')
@@ -737,8 +737,8 @@ def convert_file_path_to_url(file_path: str) -> str:
                     return f"{API_BASE_URL}/api/captured/image/known/default/default/{img}"
 
         # Try to detect captured unknown faces
-        if '/captured_faces/unknown/' in path_str:
-            parts = path_str.split('/captured_faces/unknown/')
+        if 'captured_faces/unknown/' in path_str:
+            parts = path_str.split('captured_faces/unknown/')
             if len(parts) > 1:
                 relative_part = parts[-1]
                 path_segments = relative_part.split('/')

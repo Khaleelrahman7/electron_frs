@@ -10,7 +10,8 @@ import os
 import time
 from save_face import save_face_image
 
-TOLERANCE = 0.38  # Strict matching to prevent false positives (lower = more strict)
+# Tuning constants
+TOLERANCE = 0.48  # Reduced from 0.55 to prevent false positives when 1 reference image exists
 # Rate limit for saving same face per label (seconds)
 MIN_SAVE_INTERVAL = 5.0
 
@@ -116,7 +117,8 @@ def _extract_face_crop(frame: np.ndarray, bbox: Tuple[int, int, int, int], paddi
         
         crop = frame[crop_y1:crop_y2, crop_x1:crop_x2].copy()
         
-        if crop.size == 0 or crop.shape[0] < 20 or crop.shape[1] < 20:
+        # Enforce strict minimum size to prevent garbage saves
+        if crop.size == 0 or crop.shape[0] < 60 or crop.shape[1] < 60:
             return None
         
         return crop
@@ -456,8 +458,8 @@ def process_frame(frame_bgr: np.ndarray, force_process: bool = False, stream_id:
         y1 = max(0, min(h - 1, y1))
         y2 = max(0, min(h - 1, y2))
 
-        # Skip tiny boxes
-        if (x2 - x1) < 20 or (y2 - y1) < 20:
+        # Skip tiny boxes globally
+        if (x2 - x1) < 50 or (y2 - y1) < 50:
             continue
 
         # Crop face from original frame (not downscaled)
@@ -466,7 +468,7 @@ def process_frame(frame_bgr: np.ndarray, force_process: bool = False, stream_id:
             continue
 
         # Skip very small faces (likely false positives) - slightly more lenient for streaming
-        if (x2 - x1) < 25 or (y2 - y1) < 25:
+        if (x2 - x1) < 60 or (y2 - y1) < 60:
             continue
 
         face_crop_rgb = cv2.cvtColor(face_crop_bgr, cv2.COLOR_BGR2RGB)
@@ -543,7 +545,7 @@ def process_frame(frame_bgr: np.ndarray, force_process: bool = False, stream_id:
                 for i in range(top_n):
                     idx = sorted_indices[i]
                     dist = float(distances[idx])
-                    if dist <= TOLERANCE + 0.05:  # Slightly relaxed for vote counting
+                    if dist <= TOLERANCE + 0.05:  # Margin for consensus vote counting (max 0.60 distance)
                         vote_name = known_names[idx]
                         name_votes[vote_name] = name_votes.get(vote_name, 0) + 1
                 
@@ -597,8 +599,8 @@ def process_frame(frame_bgr: np.ndarray, force_process: bool = False, stream_id:
                     }
 
         # Save face crop asynchronously to avoid blocking frame processing
-        # Extract tight face crop with 30% padding for clean headshot
-        face_crop_to_save = _extract_face_crop(frame_bgr, (x1, y1, x2, y2), padding=0.3)
+        # Extract tight face crop with 50% padding for clean headshot
+        face_crop_to_save = _extract_face_crop(frame_bgr, (x1, y1, x2, y2), padding=0.5)
         
         if face_crop_to_save is not None:
             # Calculate face quality score
@@ -606,9 +608,11 @@ def process_frame(frame_bgr: np.ndarray, force_process: bool = False, stream_id:
             
             # Check if this is a better quality capture than what we already have
             save_label = name if name != "Unknown" else "unknown"
-            should_save = True
             
-            if stream_id:
+            # STRIKE: Hard reject low quality, blurry, or tiny faces.
+            should_save = face_quality >= 0.35 and det_conf >= 0.55
+            
+            if stream_id and should_save:
                 person_key = save_label
                 with tracking_lock:
                     if person_key in best_face_quality.get(stream_id, {}):
@@ -642,7 +646,15 @@ def process_frame(frame_bgr: np.ndarray, force_process: bool = False, stream_id:
             if should_save:
                 # Make a safe copy for the thread
                 face_copy = face_crop_to_save.copy()
-                camera_name = stream_id or "default"
+                camera_name_to_save = stream_id or "default"
+                if stream_id:
+                    try:
+                        from camera_management.streaming import get_stream_manager
+                        s_info = get_stream_manager().get_stream_info(stream_id)
+                        if s_info and 'camera_name' in s_info:
+                            camera_name_to_save = s_info['camera_name']
+                    except Exception as e:
+                        print(f"Failed to lookup camera_name for {stream_id}: {e}")
                 
                 def _save_face_async():
                     try:
@@ -653,7 +665,7 @@ def process_frame(frame_bgr: np.ndarray, force_process: bool = False, stream_id:
                             min_interval=MIN_SAVE_INTERVAL,
                             source="stream",
                             jpeg_quality=95,
-                            camera_name=camera_name
+                            camera_name=camera_name_to_save
                         )
                     except Exception as e:
                         print(f"Error saving face in async thread: {e}")

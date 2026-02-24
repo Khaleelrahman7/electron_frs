@@ -38,7 +38,7 @@ class CameraStreamManager:
         # Suppress FFmpeg stderr output for H.264 errors (they're handled gracefully)
         os.environ['OPENCV_LOG_LEVEL'] = 'ERROR'
     
-    def start_stream(self, camera_id: int, rtsp_url: str) -> str:
+    def start_stream(self, camera_id: int, rtsp_url: str, camera_name: str = "Unknown") -> str:
         """Start a new camera stream"""
         stream_id = str(uuid.uuid4())
         
@@ -64,6 +64,7 @@ class CameraStreamManager:
             with self.stream_lock:
                 self.active_streams[stream_id] = {
                     'camera_id': camera_id,
+                    'camera_name': camera_name,
                     'rtsp_url': rtsp_url,
                     'created_at': time.time(),
                     'is_active': True,

@@ -293,12 +293,17 @@ def save_face_image(
             print("cv2.imwrite failed for", save_path)
             return None
         
-        # Log
+        # Log using a universal relative POSIX path (e.g. 'captured_faces/known/...')
+        try:
+            univ_path = save_path.relative_to(BACKEND_FACE_DIR).as_posix()
+        except ValueError:
+            univ_path = save_path.as_posix()
+
         log_row = {
             "filename": fname,
             "label": label_s,
             "timestamp_iso": datetime.now().isoformat(),
-            "saved_path": str(save_path),
+            "saved_path": univ_path,
             "confidence": confidence if confidence is not None else "",
             "source": source,
         }
