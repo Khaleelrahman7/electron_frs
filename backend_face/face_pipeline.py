@@ -10,9 +10,13 @@ import os
 import time
 from save_face import save_face_image
 
-TOLERANCE = 0.44 # Stricter matching (lower = more strict). Was 0.5, now more selective
+TOLERANCE = 0.38  # Strict matching to prevent false positives (lower = more strict)
 # Rate limit for saving same face per label (seconds)
 MIN_SAVE_INTERVAL = 5.0
+
+# Best face quality tracking: stream_id -> person_name -> {quality, timestamp}
+best_face_quality: Dict[str, Dict[str, Dict[str, float]]] = defaultdict(dict)
+BEST_QUALITY_RESET_SECONDS = 30.0  # Reset best quality tracking after 30s of not seeing the person
 
 # Frame skipping removed - process every frame for maximum face capture quality
 # Tesla T4 GPU can handle full frame processing efficiently
@@ -41,6 +45,83 @@ tracking_lock = threading.Lock()  # Thread-safe access to tracking data
 IOU_THRESHOLD = 0.3  # Minimum IoU to match detections to tracked persons
 MAX_TRACK_AGE_FRAMES = 30  # Remove tracks not seen for this many frames
 MAX_TRACK_AGE_SECONDS = 2.0  # Remove tracks not seen for this many seconds
+
+
+def _calculate_face_quality(face_crop: np.ndarray, det_conf: float = 0.0) -> float:
+    """Calculate face quality score (0-1) based on sharpness, size, and detection confidence.
+    
+    Higher score = better quality face for saving.
+    """
+    try:
+        if face_crop is None or face_crop.size == 0:
+            return 0.0
+        
+        h, w = face_crop.shape[:2]
+        
+        # 1. Sharpness via Laplacian variance (most important factor)
+        gray = cv2.cvtColor(face_crop, cv2.COLOR_BGR2GRAY)
+        laplacian_var = cv2.Laplacian(gray, cv2.CV_64F).var()
+        # Normalize: typical range 0-2000, cap at 500 for scoring
+        sharpness_score = min(laplacian_var / 500.0, 1.0)
+        
+        # 2. Face size score (bigger = better, up to a point)
+        face_area = h * w
+        # Score based on area: 50x50=2500 min, 200x200=40000 ideal
+        size_score = min(face_area / 40000.0, 1.0)
+        
+        # 3. Detection confidence
+        conf_score = max(0.0, min(1.0, det_conf))
+        
+        # Weighted combination: sharpness matters most
+        quality = (sharpness_score * 0.5) + (size_score * 0.25) + (conf_score * 0.25)
+        
+        return min(1.0, max(0.0, quality))
+    except Exception:
+        return 0.0
+
+
+def _extract_face_crop(frame: np.ndarray, bbox: Tuple[int, int, int, int], padding: float = 0.3) -> Optional[np.ndarray]:
+    """Extract face crop from frame with controlled padding.
+    
+    Args:
+        frame: Full BGR frame
+        bbox: (x1, y1, x2, y2) bounding box
+        padding: Fraction of bbox size to add as padding (0.3 = 30%)
+    
+    Returns:
+        Cropped face image or None if invalid
+    """
+    try:
+        if frame is None or frame.size == 0:
+            return None
+        
+        H, W = frame.shape[:2]
+        x1, y1, x2, y2 = bbox
+        
+        # Calculate padding in pixels
+        w_box = x2 - x1
+        h_box = y2 - y1
+        
+        if w_box <= 0 or h_box <= 0:
+            return None
+        
+        pad_w = int(w_box * padding)
+        pad_h = int(h_box * padding)
+        
+        # Expand with padding, clamped to image bounds
+        crop_x1 = max(0, x1 - pad_w)
+        crop_y1 = max(0, y1 - pad_h)
+        crop_x2 = min(W, x2 + pad_w)
+        crop_y2 = min(H, y2 + pad_h)
+        
+        crop = frame[crop_y1:crop_y2, crop_x1:crop_x2].copy()
+        
+        if crop.size == 0 or crop.shape[0] < 20 or crop.shape[1] < 20:
+            return None
+        
+        return crop
+    except Exception:
+        return None
 
 
 def check_gpu_availability() -> List[int]:
@@ -320,10 +401,10 @@ def process_frame(frame_bgr: np.ndarray, force_process: bool = False, stream_id:
 
     # Process every frame - no skipping for maximum face capture quality
 
-    # Optimized for Tesla T4 GPU: Process at full HD resolution for maximum quality
-    # Tesla T4 can handle full resolution processing efficiently
+    # Optimized for Tesla T4 GPU: Process at HD resolution (720p) for maximum speed
+    # Tesla T4 can handle full resolution processing efficiently, but 720p reduces latency
     original_h, original_w = frame_bgr.shape[:2]
-    max_width = 1920  # Process full HD resolution (Tesla T4 optimized)
+    max_width = 1280  # Process HD resolution (Tesla T4 optimized for speed)
     
     if original_w > max_width:
         scale = max_width / original_w
@@ -394,12 +475,13 @@ def process_frame(frame_bgr: np.ndarray, force_process: bool = False, stream_id:
         crop_h, crop_w = face_crop_rgb.shape[:2]
         crop_location = [(0, crop_w - 1, crop_h - 1, 0)]
         try:
-            # Use num_jitters=0 and small model for faster encoding (optimized for real-time)
+            # Use large model to match known face encodings (loaded with large model in fr1.py)
+            # CRITICAL: model must match what was used in load_known_faces()
             encs = face_recognition.face_encodings(
                 face_crop_rgb, 
                 known_face_locations=crop_location, 
-                num_jitters=0,  # No jittering for speed
-                model='small'    # Small model for faster processing
+                num_jitters=1,   # 1 jitter for better accuracy
+                model='large'    # Must match fr1.py's load_known_faces encoding model
             )
         except Exception as e:
             # Silently skip encoding errors to avoid log spam
@@ -446,18 +528,40 @@ def process_frame(frame_bgr: np.ndarray, force_process: bool = False, stream_id:
             enc = encs[0]
             face_encoding = enc  # Store for tracking
             distances = face_recognition.face_distance(known_encodings, enc)
-            best_idx = int(np.argmin(distances))
-            best_dist = float(distances[best_idx])
-            recog_conf = max(0.0, 1.0 - best_dist)
+            
+            # Multi-match consensus: require multiple encodings to agree on the same person
+            # Sort indices by distance (best matches first)
+            sorted_indices = np.argsort(distances)
+            best_dist = float(distances[sorted_indices[0]])
+            
             if best_dist <= TOLERANCE:
-                recognized_name = known_names[best_idx]
-                # If we recognized a known person, use that name (this overrides "Unknown" but not existing known names)
-                if recognized_name and recognized_name != "Unknown":
-                    name = recognized_name
-                    # For known faces, use recognition confidence (how well it matches)
-                    conf = recog_conf
+                best_name = known_names[sorted_indices[0]]
+                
+                # Count how many of the top-N closest matches agree on the same person
+                top_n = min(5, len(sorted_indices))
+                name_votes = {}
+                for i in range(top_n):
+                    idx = sorted_indices[i]
+                    dist = float(distances[idx])
+                    if dist <= TOLERANCE + 0.05:  # Slightly relaxed for vote counting
+                        vote_name = known_names[idx]
+                        name_votes[vote_name] = name_votes.get(vote_name, 0) + 1
+                
+                # Determine required votes based on how many reference images exist for this person
+                total_references = known_names.count(best_name)
+                required_votes = min(2, total_references)
+
+                # Require consensus based on available reference images
+                if name_votes.get(best_name, 0) >= required_votes:
+                    recognized_name = best_name
+                    if recognized_name and recognized_name != "Unknown":
+                        name = recognized_name
+                        recog_conf = max(0.0, 1.0 - best_dist)
+                        conf = recog_conf
+                    else:
+                        conf = det_conf
                 else:
-                    # Shouldn't happen, but handle it
+                    # Not enough consensus — treat as unknown to prevent false positives
                     conf = det_conf
             else:
                 # Recognition failed - keep current name (persisted known name or "Unknown")
@@ -493,33 +597,70 @@ def process_frame(frame_bgr: np.ndarray, force_process: bool = False, stream_id:
                     }
 
         # Save face crop asynchronously to avoid blocking frame processing
-        # Try to get best frame from buffer for sharp capture
-        def _save_face_async():
-            try:
-                save_label = name if name != "Unknown" else "unknown"
-                
-                # save_face_image will automatically get sharpest frame from buffer if stream_id provided
-                # Save with more context (like original frame) - no aggressive cropping/upscaling
-                save_face_image(
-                    frame_bgr=frame_bgr.copy(),
-                    bbox=(x1, y1, x2, y2),
-                    label=save_label,
-                    confidence=conf,
-                    min_interval=MIN_SAVE_INTERVAL,
-                    source="stream",
-                    expand_factor=1.0,   # 100% expansion - capture full context like original frame
-                    target_width=None,  # No forced upscaling - preserve natural resolution
-                    max_upscale=1.2,   # Minimal upscaling only for very small faces (max 20%)
-                    jpeg_quality=95,   # High quality JPEG without over-compression
-                    stream_id=stream_id,  # Pass stream_id to access frame buffer
-                    prefer_png=False
-                )
-            except Exception as e:
-                print(f"Error saving face in async thread: {e}")
+        # Extract tight face crop with 30% padding for clean headshot
+        face_crop_to_save = _extract_face_crop(frame_bgr, (x1, y1, x2, y2), padding=0.3)
         
-        # Spawn thread to save face without blocking frame processing
-        save_thread = threading.Thread(target=_save_face_async, daemon=True)
-        save_thread.start()
+        if face_crop_to_save is not None:
+            # Calculate face quality score
+            face_quality = _calculate_face_quality(face_crop_to_save, det_conf)
+            
+            # Check if this is a better quality capture than what we already have
+            save_label = name if name != "Unknown" else "unknown"
+            should_save = True
+            
+            if stream_id:
+                person_key = save_label
+                with tracking_lock:
+                    if person_key in best_face_quality.get(stream_id, {}):
+                        prev = best_face_quality[stream_id][person_key]
+                        time_since = current_time - prev.get('timestamp', 0)
+                        
+                        # Reset tracking if person hasn't been seen for a while
+                        if time_since > BEST_QUALITY_RESET_SECONDS:
+                            best_face_quality[stream_id][person_key] = {
+                                'quality': face_quality,
+                                'timestamp': current_time
+                            }
+                        elif face_quality > prev.get('quality', 0):
+                            # Better quality found - save this one
+                            best_face_quality[stream_id][person_key] = {
+                                'quality': face_quality,
+                                'timestamp': current_time
+                            }
+                        else:
+                            # Not better quality, skip
+                            should_save = False
+                    else:
+                        # First detection of this person
+                        if stream_id not in best_face_quality:
+                            best_face_quality[stream_id] = {}
+                        best_face_quality[stream_id][person_key] = {
+                            'quality': face_quality,
+                            'timestamp': current_time
+                        }
+            
+            if should_save:
+                # Make a safe copy for the thread
+                face_copy = face_crop_to_save.copy()
+                camera_name = stream_id or "default"
+                
+                def _save_face_async():
+                    try:
+                        save_face_image(
+                            face_crop_bgr=face_copy,
+                            label=save_label,
+                            confidence=conf,
+                            min_interval=MIN_SAVE_INTERVAL,
+                            source="stream",
+                            jpeg_quality=95,
+                            camera_name=camera_name
+                        )
+                    except Exception as e:
+                        print(f"Error saving face in async thread: {e}")
+                
+                # Spawn thread to save face without blocking frame processing
+                save_thread = threading.Thread(target=_save_face_async, daemon=True)
+                save_thread.start()
 
         # Draw and store
         cv2.rectangle(frame_bgr, (x1, y1), (x2, y2), (0, 255, 0), 2)

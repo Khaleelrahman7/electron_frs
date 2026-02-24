@@ -20,12 +20,12 @@ class CameraStreamManager:
     def __init__(self):
         self.active_streams: Dict[str, Dict] = {}
         self.stream_lock = threading.Lock()
-        # Per-stream frame processing queues and threads
-        self.processing_queues: Dict[str, Queue] = {}
-        self.processed_frames: Dict[str, deque] = {}  # Buffer of processed frames
+        # Per-stream frame shared state (replaces queues to prevent buffering/looping)
+        self.current_frames: Dict[str, Tuple[np.ndarray, int]] = {}  # The absolute latest raw frame to process
+        self.processed_frames_latest: Dict[str, np.ndarray] = {}  # The absolute latest processed frame
         self.processing_threads: Dict[str, threading.Thread] = {}
         self.frame_counters: Dict[str, int] = {}  # Per-stream frame counters
-        self.max_buffer_size = 3  # Keep max 3 processed frames in buffer
+        self.max_buffer_size = 1  # Keep max 1 processed frame in buffer (ensures no old frame looping)
         # Frame quality tracking
         self.last_good_frames: Dict[str, np.ndarray] = {}  # Store last valid frame per stream
         self.frame_validation_enabled = True
@@ -82,12 +82,9 @@ class CameraStreamManager:
         try:
             # Stop processing thread
             if stream_id in self.processing_threads:
-                if stream_id in self.processing_queues:
-                    # Signal stop by putting None
-                    try:
-                        self.processing_queues[stream_id].put(None, timeout=0.1)
-                    except:
-                        pass
+                if stream_id in self.current_frames:
+                    # Thread will die naturally when is_active goes false
+                    pass
                 # Wait for thread to finish (with timeout)
                 thread = self.processing_threads[stream_id]
                 if thread.is_alive():
@@ -95,10 +92,10 @@ class CameraStreamManager:
                 del self.processing_threads[stream_id]
             
             # Clean up queues and buffers
-            if stream_id in self.processing_queues:
-                del self.processing_queues[stream_id]
-            if stream_id in self.processed_frames:
-                del self.processed_frames[stream_id]
+            if stream_id in self.current_frames:
+                del self.current_frames[stream_id]
+            if stream_id in self.processed_frames_latest:
+                del self.processed_frames_latest[stream_id]
             if stream_id in self.frame_counters:
                 del self.frame_counters[stream_id]
             if stream_id in self.last_good_frames:
@@ -290,55 +287,47 @@ class CameraStreamManager:
         return best_frame
     
     def _face_processing_worker(self, stream_id: str):
-        """Background worker thread for async face processing"""
-        queue = self.processing_queues.get(stream_id)
-        if not queue:
-            return
-        
+        """Background worker thread for async face processing using shared state (no queues)"""
         frame_counter = 0
-        # Optimized for Tesla T4: Process every frame for maximum quality and low latency
-        PROCESS_EVERY_N_FRAMES = 1  # Process every frame (Tesla T4 can handle it)
+        PROCESS_EVERY_N_FRAMES = 3  # Reduces latency by processing slightly fewer frames
+        
+        last_processed_frame_num = -1
         
         try:
             while self._is_stream_active(stream_id):
                 try:
-                    # Get frame from queue (with timeout to allow checking stream status)
-                    frame_data = queue.get(timeout=0.5)
+                    # Get the absolute latest frame from shared state
+                    if stream_id not in self.current_frames:
+                        time.sleep(0.01)
+                        continue
+                        
+                    frame, frame_num = self.current_frames[stream_id]
                     
-                    # None signals stop
-                    if frame_data is None:
-                        break
-                    
-                    frame, frame_num = frame_data
+                    # Don't re-process the exact same frame
+                    if frame_num <= last_processed_frame_num:
+                        time.sleep(0.01)
+                        continue
+                        
+                    last_processed_frame_num = frame_num
                     frame_counter += 1
                     
                     # Skip processing for some frames to maintain frame rate
                     if frame_counter % PROCESS_EVERY_N_FRAMES != 0:
                         # Use raw frame without processing
-                        processed_frame = frame.copy()
+                        self.processed_frames_latest[stream_id] = frame.copy()
                     else:
                         # Process frame for face detection
                         try:
                             from face_pipeline import process_frame as face_process_frame
-                            # Get frame with detections drawn (face_pipeline draws them)
                             processed_frame, _ = face_process_frame(frame, force_process=True, stream_id=stream_id)
+                            self.processed_frames_latest[stream_id] = processed_frame
                         except Exception as face_error:
                             logger.debug(f"Face processing error for stream {stream_id}: {face_error}")
-                            processed_frame = frame.copy()
-                    
-                    # Add to processed frames buffer (thread-safe)
-                    if stream_id not in self.processed_frames:
-                        self.processed_frames[stream_id] = deque(maxlen=self.max_buffer_size)
-                    
-                    buffer = self.processed_frames[stream_id]
-                    buffer.append((processed_frame, frame_num, time.time()))
-                    
-                    queue.task_done()
-                    
-                except Empty:
-                    continue
+                            self.processed_frames_latest[stream_id] = frame.copy()
+                            
                 except Exception as e:
                     logger.error(f"Error in face processing worker for {stream_id}: {e}")
+                    time.sleep(0.1)
                     continue
         except Exception as e:
             logger.error(f"Face processing worker exited for {stream_id}: {e}")
@@ -356,11 +345,11 @@ class CameraStreamManager:
         # JPEG encoding parameters - Optimized for Tesla T4: High quality for clear streams
         encode_params = [cv2.IMWRITE_JPEG_QUALITY, 95]
         
-        # Initialize processing queue and thread for this stream
-        if stream_id not in self.processing_queues:
-            self.processing_queues[stream_id] = Queue(maxsize=2)  # Small queue to prevent lag
-            self.processed_frames[stream_id] = deque(maxlen=self.max_buffer_size)
+        # Initialize processing thread for this stream
+        if stream_id not in self.processing_threads:
             self.frame_counters[stream_id] = 0
+            # Initialize the shared state
+            self.current_frames[stream_id] = (np.zeros((10,10,3), dtype=np.uint8), 0)
             
             # Start processing thread
             processing_thread = threading.Thread(
@@ -465,28 +454,14 @@ class CameraStreamManager:
                         # Store full resolution frame for better quality captures
                         self.frame_buffers[stream_id].append((frame.copy(), frame_count))
 
-                        # Send frame to processing queue (non-blocking)
-                        queue = self.processing_queues.get(stream_id)
-                        if queue:
-                            try:
-                                # Don't block if queue is full - drop frame to maintain real-time
-                                queue.put_nowait((frame.copy(), frame_count))
-                            except:
-                                # Queue full, skip this frame for processing
-                                pass
+                        # Send frame to processing via shared state (drops any backlog instantly)
+                        self.current_frames[stream_id] = (frame.copy(), frame_count)
 
-                        # Try to get processed frame from buffer (non-blocking)
-                        processed_frame = None
-                        buffer = self.processed_frames.get(stream_id)
-                        if buffer and len(buffer) > 0:
-                            try:
-                                # Get most recent processed frame
-                                processed_frame, _, _ = buffer[-1]
-                            except:
-                                pass
+                        # Get absolute freshest processed frame
+                        processed_frame = self.processed_frames_latest.get(stream_id, frame)
                         
-                        # Fallback to raw frame if no processed frame available
-                        if processed_frame is None:
+                        # Fallback to raw frame if processing hasn't started yet
+                        if processed_frame is None or processed_frame.shape[0] < 10:
                             processed_frame = frame
 
                         # Encode and send frame immediately (don't wait for processing)
@@ -515,24 +490,12 @@ class CameraStreamManager:
                         if stream_id in self.last_good_frames:
                             frame = self.last_good_frames[stream_id].copy()
                             # Continue with the good frame (don't increment failure counter)
-                            # Send frame to processing queue
-                            queue = self.processing_queues.get(stream_id)
-                            if queue:
-                                try:
-                                    queue.put_nowait((frame.copy(), frame_count))
-                                except:
-                                    pass
+                            # Put the good raw frame into shared state so processor can see it
+                            self.current_frames[stream_id] = (frame.copy(), frame_count)
                             
                             # Get processed frame or use raw
-                            processed_frame = None
-                            buffer = self.processed_frames.get(stream_id)
-                            if buffer and len(buffer) > 0:
-                                try:
-                                    processed_frame, _, _ = buffer[-1]
-                                except:
-                                    pass
-                            
-                            if processed_frame is None:
+                            processed_frame = self.processed_frames_latest.get(stream_id, frame)
+                            if processed_frame is None or processed_frame.shape[0] < 10:
                                 processed_frame = frame
                             
                             # Send the good frame
@@ -564,10 +527,9 @@ class CameraStreamManager:
 
                     # Use last processed frame if available, otherwise last good raw frame
                     frame_to_send = None
+                    # Reduced fallback looping to prevent 'going back and coming' ghosting effects
                     if last_processed_frame is not None:
                         frame_to_send = last_processed_frame
-                    elif stream_id in self.last_good_frames:
-                        frame_to_send = self.last_good_frames[stream_id]
                     elif last_frame is not None:
                         frame_to_send = last_frame
                     
@@ -582,8 +544,8 @@ class CameraStreamManager:
                         except:
                             pass
 
-                # Control frame rate - adaptive based on processing time
-                time.sleep(0.033)  # ~30 FPS target (slightly faster to compensate for processing delays)
+                # Removed manual time.sleep(0.033) which was causing buffer backlog and stream latency
+                # cv2.VideoCapture/retrieve() natively blocks at the stream FPS already.
 
             except Exception as e:
                 logger.error(f"Error in camera stream {stream_id}: {e}")

@@ -91,12 +91,12 @@ const MJPEGPlayer = ({ camera, onPlay, onError }) => {
         if (existingStreamResponse.data.success && existingStreamResponse.data.exists && existingStreamResponse.data.is_running) {
           // Use existing stream
           let feedUrl = `${API_BASE_URL}${existingStreamResponse.data.feed_url}`;
-          
+
           // Append auth token as query parameter
           if (token) {
             feedUrl += (feedUrl.includes('?') ? '&' : '?') + `token=${token}`;
           }
-          
+
           setStreamUrl(feedUrl);
           setStreamId(existingStreamResponse.data.stream_id);
           console.log(`Using existing MJPEG stream: ${feedUrl}`);
@@ -162,7 +162,7 @@ const MJPEGPlayer = ({ camera, onPlay, onError }) => {
       // Retry logic with exponential backoff
       if (retryCount < maxRetries) {
         const backoffTime = Math.min(3000 * Math.pow(2, retryCount), 15000); // Max 15 seconds
-        console.log(`Retrying stream start (${retryCount + 1}/${maxRetries}) in ${backoffTime/1000} seconds...`);
+        console.log(`Retrying stream start (${retryCount + 1}/${maxRetries}) in ${backoffTime / 1000} seconds...`);
         retryTimeoutRef.current = setTimeout(() => {
           setRetryCount(prev => prev + 1);
           startStream();
@@ -314,7 +314,6 @@ const MJPEGPlayer = ({ camera, onPlay, onError }) => {
           style={{
             maxWidth: '100%',
             maxHeight: '100%',
-            objectFit: 'contain',
             display: isLoading ? 'none' : 'block'
           }}
         />

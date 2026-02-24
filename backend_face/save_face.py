@@ -37,12 +37,13 @@ def sanitize_label(label: str) -> str:
         return "unknown"
     return label
 
-def ensure_dirs_for_label(label: str) -> Path:
+def ensure_dirs_for_label(label: str, camera_name: Optional[str] = None) -> Path:
     label_s = sanitize_label(label)
+    cam = sanitize_label(camera_name) if camera_name else "default"
     if label_s == "unknown":
-        dir_path = BASE_DIR / UNKNOWN_DIRNAME
+        dir_path = BASE_DIR / UNKNOWN_DIRNAME / cam
     else:
-        dir_path = BASE_DIR / KNOWN_DIRNAME / label_s
+        dir_path = BASE_DIR / KNOWN_DIRNAME / cam / label_s
     dir_path.mkdir(parents=True, exist_ok=True)
     return dir_path
 
@@ -142,12 +143,13 @@ def save_face_image(
     confidence: Optional[float] = None,
     min_interval: float = DEFAULT_MIN_SAVE_INTERVAL_SECONDS,
     source: str = "stream",
-    expand_factor: float = 1.0,  # Default to 100% expansion for more context
+    expand_factor: float = 0.3,  # 30% padding around face for clean headshot
     target_width: Optional[int] = None,  # None = no forced resizing, preserve natural resolution
     max_upscale: float = 1.2,  # Minimal upscaling to preserve quality
     jpeg_quality: int = 95,
     stream_id: Optional[str] = None,  # Optional stream_id to access frame buffer for sharp capture
-    prefer_png: bool = False  # Save PNG instead of JPEG when True
+    prefer_png: bool = False,  # Save PNG instead of JPEG when True
+    camera_name: Optional[str] = None  # Camera/stream name for directory organization
 ) -> Optional[Path]:
     """
     Robust face saving with auto-detected bbox format, smart padding, and limited upscaling.
@@ -226,31 +228,20 @@ def save_face_image(
             
             face_crop_bgr = face
 
-        # Validate that the final crop actually contains a face
-        # This prevents saving "empty" images (e.g. from false positive person detections)
-        if face_crop_bgr is not None and face_crop_bgr.size > 0:
-            try:
-                # Convert to RGB for face_recognition
-                # Use a smaller version for validation speed if the image is huge
-                val_img = face_crop_bgr
-                if val_img.shape[0] > 600 or val_img.shape[1] > 600:
-                    # Downscale for faster validation
-                    scale = 600 / max(val_img.shape[0], val_img.shape[1])
-                    val_img = cv2.resize(val_img, (0, 0), fx=scale, fy=scale)
-                
-                val_img_rgb = cv2.cvtColor(val_img, cv2.COLOR_BGR2RGB)
-                
-                # Use HOG model (faster)
-                # If the crop is the result of a face detection, it should definitely have a face.
-                face_locs = face_recognition.face_locations(val_img_rgb, model="hog")
-                
-                if not face_locs:
-                    print(f"Skipping save: No face detected in crop for {label_s}")
-                    return None
-            except Exception as e:
-                print(f"Warning: Face validation check failed: {e}")
-                # Fail safe to avoid saving potential garbage
-                return None
+        # Basic validation: check image dimensions and content
+        # NOTE: We do NOT re-run face_recognition.face_locations() here because:
+        # 1. The face was already detected by InsightFace in face_pipeline.py
+        # 2. Re-running face_recognition on small crops can cause segmentation faults
+        # 3. The two detectors can disagree, causing valid faces to be discarded
+        if face_crop_bgr is None or face_crop_bgr.size == 0:
+            print(f"Skipping save: Empty face crop for {label_s}")
+            return None
+        if face_crop_bgr.shape[0] < 20 or face_crop_bgr.shape[1] < 20:
+            print(f"Skipping save: Face crop too small ({face_crop_bgr.shape[1]}x{face_crop_bgr.shape[0]}) for {label_s}")
+            return None
+        # Verify the array is valid and contiguous
+        if not face_crop_bgr.flags['C_CONTIGUOUS']:
+            face_crop_bgr = np.ascontiguousarray(face_crop_bgr)
         
         # Ensure dtype is uint8
         if face_crop_bgr.dtype != "uint8":
@@ -283,7 +274,7 @@ def save_face_image(
         # Save images as captured to maintain original quality
         
         # Save
-        dir_path = ensure_dirs_for_label(label_s)
+        dir_path = ensure_dirs_for_label(label_s, camera_name=camera_name)
         fname = f"{label_s}_{_current_timestamp_str()}.jpg"
         save_path = dir_path / fname
         
