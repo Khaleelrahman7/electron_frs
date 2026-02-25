@@ -276,7 +276,7 @@ class AgeEstimator:
             results = DeepFace.analyze(
                 img_path=rgb_face, 
                 actions=['age'],
-                detector_backend='retinaface',
+                detector_backend='skip',
                 enforce_detection=False,
                 silent=True
             )
