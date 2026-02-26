@@ -10,5 +10,18 @@
         "age_range": "N/A",
         "age_source": "unknown",
         "predicted_age": null
+    },
+    "logesh": {
+        "name": "logesh",
+        "age": "29",
+        "gender": "Male",
+        "category": "visitor",
+        "registration_date": "2026-02-26T11:02:18.491013",
+        "gallery_path": "data/gallery/logesh",
+        "photo_path": "data/gallery/logesh/1.jpg",
+        "age_range": "28-33",
+        "age_source": "ai",
+        "predicted_age": 29,
+        "predicted_gender": "Male"
     }
 }

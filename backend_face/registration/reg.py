@@ -283,30 +283,49 @@ class DemographicsEstimator:
                 silent=True
             )
             
-            if results and len(results) > 0:
-                # DeepFace returns a list of results for each detected face
-                age = results[0].get('age')
+            if results:
+                # DeepFace analyze with enforce_detection=False could return list or dict depending on version
+                if isinstance(results, list) and len(results) > 0:
+                    res_dict = results[0]
+                elif isinstance(results, dict):
+                    res_dict = results
+                else:
+                    res_dict = {}
+
+                age = res_dict.get('age')
                 # dominant_gender is typically 'Man' or 'Woman' in DeepFace
-                gender = results[0].get('dominant_gender') 
+                gender = res_dict.get('dominant_gender') 
                 
                 # Normalize gender string to match our frontend/db conventions
                 normalized_gender = None
                 if gender:
-                    if 'Man' in gender or 'man' in gender or 'Male' in gender:
-                        normalized_gender = 'Male'
-                    elif 'Woman' in gender or 'woman' in gender or 'Female' in gender:
-                        normalized_gender = 'Female'
-                    else:
-                        normalized_gender = gender
+                    if isinstance(gender, dict):
+                        # Some versions return dict of probabilities, we need the max
+                        gender = max(gender, key=gender.get)
+                    if isinstance(gender, str):
+                        if 'Man' in gender or 'man' in gender or 'Male' in gender:
+                            normalized_gender = 'Male'
+                        elif 'Woman' in gender or 'woman' in gender or 'Female' in gender:
+                            normalized_gender = 'Female'
+                        else:
+                            normalized_gender = gender
+
+                # Ensure age is a raw integer, some versions might return numpy float/int
+                try:
+                    final_age = int(round(float(age))) if age is not None else None
+                except Exception:
+                    final_age = None
 
                 return {
-                    "age": int(round(age)) if age is not None else None,
+                    "age": final_age,
                     "gender": normalized_gender
                 }
             
             return {}
         except Exception as e:
+            import traceback
             print(f"Error in DemographicsEstimator.estimate_demographics: {e}")
+            traceback.print_exc()
             return {}
 
 def bucket_age_range(age: int, width: int = 5, min_age: int = 18) -> str:

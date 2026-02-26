@@ -15,7 +15,7 @@ const FaceGallery = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [columns, setColumns] = useState(4);
-  
+
   // Filter States
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All Categories');
@@ -40,7 +40,7 @@ const FaceGallery = () => {
 
       // Add timestamp to prevent caching
       const timestamp = new Date().getTime();
-      
+
       const [galleryRes, statsRes] = await Promise.all([
         axios.get(`${GALLERY_ENDPOINT}?t=${timestamp}`, { params, timeout: 10000 }),
         axios.get(`${STATS_ENDPOINT}?t=${timestamp}`, { timeout: 5000 })
@@ -65,7 +65,7 @@ const FaceGallery = () => {
   // Initial load and focus handler
   useEffect(() => {
     loadData();
-    
+
     // Refresh when window gains focus (useful when returning from other tabs)
     const handleFocus = () => loadData();
     window.addEventListener('focus', handleFocus);
@@ -83,7 +83,7 @@ const FaceGallery = () => {
   // Compute stats from galleryData directly for robustness
   const computedStats = React.useMemo(() => {
     if (!galleryData) return null;
-    
+
     const cats = {};
     let todayCount = 0;
     const todayStr = new Date().toISOString().split('T')[0];
@@ -115,19 +115,19 @@ const FaceGallery = () => {
   useEffect(() => {
     // If we have stats from backend, use those (preferred)
     if (stats && stats.categories && Object.keys(stats.categories).length > 0) {
-       const cats = ['All Categories'];
-       Object.keys(stats.categories).forEach(cat => {
-         if (!cats.includes(cat)) cats.push(cat);
-       });
-       setAvailableCategories(cats);
-    } 
+      const cats = ['All Categories'];
+      Object.keys(stats.categories).forEach(cat => {
+        if (!cats.includes(cat)) cats.push(cat);
+      });
+      setAvailableCategories(cats);
+    }
     // Fallback: If backend stats are empty (e.g. server issue), derive from full gallery data
     else if (computedStats && searchQuery === '' && selectedCategory === 'All Categories') {
-       const cats = ['All Categories'];
-       Object.keys(computedStats.categories).forEach(cat => {
-         if (!cats.includes(cat)) cats.push(cat);
-       });
-       setAvailableCategories(cats);
+      const cats = ['All Categories'];
+      Object.keys(computedStats.categories).forEach(cat => {
+        if (!cats.includes(cat)) cats.push(cat);
+      });
+      setAvailableCategories(cats);
     }
   }, [stats, computedStats, searchQuery, selectedCategory]);
 
@@ -154,7 +154,7 @@ const FaceGallery = () => {
           <h2>Face Gallery</h2>
           <p>Registered identities with biometric and profile data</p>
         </div>
-        
+
         <div className="gallery-controls-area">
           <div className="status-badge">
             <div className="status-dot"></div>
@@ -163,17 +163,17 @@ const FaceGallery = () => {
 
           <div className="search-box">
             <Search size={18} className="search-icon" />
-            <input 
-              type="text" 
-              className="search-input" 
-              placeholder="Search by name..." 
+            <input
+              type="text"
+              className="search-input"
+              placeholder="Search by name..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && loadData()}
             />
           </div>
 
-          <select 
+          <select
             className="filter-select"
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
@@ -184,13 +184,13 @@ const FaceGallery = () => {
           </select>
 
           <div className="view-toggles">
-            <button 
+            <button
               className={`view-btn ${viewMode === 'grid' ? 'active' : ''}`}
               onClick={() => setViewMode('grid')}
             >
               <Grid size={18} />
             </button>
-            <button 
+            <button
               className={`view-btn ${viewMode === 'list' ? 'active' : ''}`}
               onClick={() => setViewMode('list')}
             >
@@ -217,7 +217,7 @@ const FaceGallery = () => {
               <p>Total Registered</p>
             </div>
           </div>
-          
+
           <div className="stat-card">
             <div className="stat-icon green">
               <UserCheck size={24} />
@@ -234,7 +234,7 @@ const FaceGallery = () => {
             </div>
             <div className="stat-info">
               <h3>
-                {selectedCategory === 'All Categories' 
+                {selectedCategory === 'All Categories'
                   ? Object.values(displayStats.categories || {}).reduce((a, b) => a + b, 0)
                   : (displayStats.categories && displayStats.categories[selectedCategory.toLowerCase()]) || 0
                 }
@@ -277,7 +277,7 @@ const FaceGallery = () => {
           <div className="section-title">
             Registered Persons <span className="count-badge">{Object.keys(galleryData).length} records</span>
           </div>
-          
+
           <div
             className="gallery-grid"
             style={{
@@ -293,7 +293,7 @@ const FaceGallery = () => {
                   name={personData.name}
                   photoPath={`${API_BASE_URL}/api/gallery/image/${personId}/${imageFilename}`}
                   details={{
-                    age: personData.age,
+                    age: (personData.age_range && personData.age_range !== 'N/A') ? personData.age_range : personData.age,
                     gender: personData.gender,
                     category: personData.category
                   }}
