@@ -219,7 +219,7 @@ def is_face_already_registered(image_input) -> bool:
                 matches = face_recognition.compare_faces(
                     [known_face_encoding[0]], 
                     new_face_encoding, 
-                    tolerance=0.55
+                    tolerance=0.48
                 )
 
                 if True in matches:
@@ -268,20 +268,61 @@ class DemographicsEstimator:
         Estimate age and gender from a face image using DeepFace.
         """
         try:
-            # Convert BGR to RGB for DeepFace
-            rgb_face = cv2.cvtColor(face_bgr, cv2.COLOR_BGR2RGB)
-            
             if DeepFace is None:
                 return {}
             
-            # Use DeepFace analyze with skip backend since face is already cropped
-            results = DeepFace.analyze(
-                img_path=rgb_face, 
+            # DeepFace's default age model is notoriously sensitive to facial hair (texture bias).
+            # To solve this without washing out real age features (like for older clean-shaven people),
+            # we run a dual-pass estimation and compare the results.
+            
+            # Pass 1: Raw face (Best for clean-shaven people)
+            raw_results = DeepFace.analyze(
+                img_path=face_bgr, 
                 actions=['age', 'gender'],
-                detector_backend='skip',
+                detector_backend='opencv',
                 enforce_detection=False,
                 silent=True
             )
+            
+            # Pass 2: Moderately filtered face (Smooths stubble but preserves major structures)
+            # Settings optimized to drop beard-biased age significantly while preserving natural aging
+            filtered_face = cv2.bilateralFilter(face_bgr, 15, 100, 100)
+            clean_results = DeepFace.analyze(
+                img_path=filtered_face, 
+                actions=['age'],
+                detector_backend='opencv',
+                enforce_detection=False,
+                silent=True
+            )
+            
+            def extract_age(res):
+                if isinstance(res, list) and len(res) > 0:
+                    return res[0].get('age')
+                elif isinstance(res, dict):
+                    return res.get('age')
+                return None
+
+            raw_age = extract_age(raw_results)
+            clean_age = extract_age(clean_results)
+            
+            # Logic to handle beard bias vs natural aging:
+            # - A beard often causes a massive (+15-20 year) overestimation.
+            # - Natural wrinkles caused by age typically only fluctuate by <10 years under this filter.
+            if raw_age is not None and clean_age is not None:
+                diff = raw_age - clean_age
+                if raw_age > 30 and diff > 12:
+                    # High discrepancy (>12 years) strongly indicates a texture bias (beard).
+                    # We use the clean/filtered value (+1 year buffer).
+                    age = int(clean_age + 1)
+                else:
+                    # Small discrepancy or already young person. 
+                    # Trust the raw image more to avoid underestimating truly older people.
+                    age = raw_age
+            else:
+                age = raw_age or clean_age
+            
+            # Use Pass 1 for gender (gender is much more stable)
+            results = raw_results
             
             if results:
                 # DeepFace analyze with enforce_detection=False could return list or dict depending on version

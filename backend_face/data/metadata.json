@@ -12,16 +12,55 @@
         "predicted_age": null
     },
     "logesh": {
-        "name": "logesh",
-        "age": "29",
+        "name": "Logesh",
+        "age": "24",
         "gender": "Male",
         "category": "visitor",
-        "registration_date": "2026-02-26T11:02:18.491013",
+        "registration_date": "2026-02-26T11:33:14.236156",
         "gallery_path": "data/gallery/logesh",
         "photo_path": "data/gallery/logesh/1.jpg",
-        "age_range": "28-33",
+        "age_range": "23-28",
         "age_source": "ai",
-        "predicted_age": 29,
+        "predicted_age": 24,
+        "predicted_gender": "Male"
+    },
+    "ram": {
+        "name": "Ram",
+        "age": "24",
+        "gender": "Male",
+        "category": "employee",
+        "registration_date": "2026-02-26T12:30:38.517574",
+        "gallery_path": "data/gallery/ram",
+        "photo_path": "data/gallery/ram/1.jpg",
+        "age_range": "23-28",
+        "age_source": "ai",
+        "predicted_age": 24,
+        "predicted_gender": "Male"
+    },
+    "anand": {
+        "name": "anand",
+        "age": "23",
+        "gender": "Male",
+        "category": "visitor",
+        "registration_date": "2026-02-26T12:35:01.871877",
+        "gallery_path": "data/gallery/anand",
+        "photo_path": "data/gallery/anand/1.jpg",
+        "age_range": "23-28",
+        "age_source": "ai",
+        "predicted_age": 23,
+        "predicted_gender": "Male"
+    },
+    "alvin": {
+        "name": "alvin",
+        "age": "37",
+        "gender": "Male",
+        "category": "visitor",
+        "registration_date": "2026-02-26T13:15:52.310435",
+        "gallery_path": "data/gallery/alvin",
+        "photo_path": "data/gallery/alvin/1.jpg",
+        "age_range": "33-38",
+        "age_source": "ai",
+        "predicted_age": 37,
         "predicted_gender": "Male"
     }
 }
