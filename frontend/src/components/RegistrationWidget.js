@@ -55,23 +55,11 @@ const RegistrationWidget = () => {
       }
     }
 
-    // Validate category - only letters and spaces, no numbers
+    // Validate category - simplified to allow more standard input types
     if (field === 'category') {
       const categoryValue = value.trim();
-      if (categoryValue === '') {
-        setCategoryError('');
-        setFormData(prev => ({ ...prev, [field]: '' }));
-        return;
-      }
-      // Allow only letters, spaces, and common punctuation for category names (no numbers)
-      const categoryPattern = /^[a-zA-Z\s\-']+$/;
-      if (!categoryPattern.test(categoryValue)) {
-        setCategoryError('Category should only contain letters and spaces (no numbers allowed)');
-        // Don't update the field if it contains numbers
-        return;
-      } else {
-        setCategoryError('');
-      }
+      setCategoryError('');
+      // Always update the form field to allow user typing freely
     }
 
     setFormData(prev => ({
@@ -145,14 +133,11 @@ const RegistrationWidget = () => {
       }
     }
 
-    // Validate category if provided
-    if (formData.category.trim()) {
-      const categoryPattern = /^[a-zA-Z\s\-']+$/;
-      if (!categoryPattern.test(formData.category.trim())) {
-        showMessage('Category should only contain letters and spaces (no numbers)', 'error');
-        setCategoryError('Category should only contain letters and spaces (no numbers)');
-        return;
-      }
+    // Basic category check without strict pattern
+    if (formData.category.trim() && formData.category.trim().length > 50) {
+      showMessage('Category is too long (max 50 characters)', 'error');
+      setCategoryError('Category is too long');
+      return;
     }
 
     setIsLoading(true);
@@ -457,9 +442,8 @@ const RegistrationWidget = () => {
                   type="text"
                   value={formData.category}
                   onChange={(e) => handleInputChange('category', e.target.value)}
-                  placeholder="e.g., Employee, Visitor, Student (letters only)"
+                  placeholder="e.g., Employee, Visitor, Student"
                   disabled={isLoading}
-                  pattern="[a-zA-Z\s\-']+"
                   className="input-clean"
                 />
                 {categoryError && <span className="field-error">{categoryError}</span>}

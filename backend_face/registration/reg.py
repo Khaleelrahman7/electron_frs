@@ -11,17 +11,20 @@ import shutil
 from datetime import datetime
 try:
     import face_recognition
-except Exception:
+except Exception as e:
+    print(f"Failed to import face_recognition: {e}")
     face_recognition = None
 
 try:
     from retinaface import RetinaFace
-except Exception:
+except Exception as e:
+    print(f"Failed to import retinaface: {e}")
     RetinaFace = None
 
 try:
     from deepface import DeepFace
-except Exception:
+except Exception as e:
+    print(f"Failed to import deepface: {e}")
     DeepFace = None
 from .aug import detect_face, augment_face
 import numpy as np
@@ -258,24 +261,23 @@ def save_gallery_data(person_id: str, data: dict):
     except Exception as e:
         print(f"Error saving gallery data: {e}")
 
-class AgeEstimator:
+class DemographicsEstimator:
     @classmethod
-    def estimate_age(cls, face_bgr: np.ndarray) -> Optional[int]:
+    def estimate_demographics(cls, face_bgr: np.ndarray) -> dict:
         """
-        Estimate age from a face image using RetinaFace for detection 
-        and DeepFace (DEX-like) for age estimation.
+        Estimate age and gender from a face image using DeepFace.
         """
         try:
             # Convert BGR to RGB for DeepFace
             rgb_face = cv2.cvtColor(face_bgr, cv2.COLOR_BGR2RGB)
             
-            # Use DeepFace analyze with retinaface backend
-            # Note: detector_backend='retinaface' uses the RetinaFace model for detection
-            # We set enforce_detection=False because we usually pass a cropped face,
-            # but DeepFace will still try to find a face to be sure.
+            if DeepFace is None:
+                return {}
+            
+            # Use DeepFace analyze with skip backend since face is already cropped
             results = DeepFace.analyze(
                 img_path=rgb_face, 
-                actions=['age'],
+                actions=['age', 'gender'],
                 detector_backend='skip',
                 enforce_detection=False,
                 silent=True
@@ -284,13 +286,28 @@ class AgeEstimator:
             if results and len(results) > 0:
                 # DeepFace returns a list of results for each detected face
                 age = results[0].get('age')
-                if age is not None:
-                    return int(round(age))
+                # dominant_gender is typically 'Man' or 'Woman' in DeepFace
+                gender = results[0].get('dominant_gender') 
+                
+                # Normalize gender string to match our frontend/db conventions
+                normalized_gender = None
+                if gender:
+                    if 'Man' in gender or 'man' in gender or 'Male' in gender:
+                        normalized_gender = 'Male'
+                    elif 'Woman' in gender or 'woman' in gender or 'Female' in gender:
+                        normalized_gender = 'Female'
+                    else:
+                        normalized_gender = gender
+
+                return {
+                    "age": int(round(age)) if age is not None else None,
+                    "gender": normalized_gender
+                }
             
-            return None
+            return {}
         except Exception as e:
-            print(f"Error in AgeEstimator.estimate_age: {e}")
-            return None
+            print(f"Error in DemographicsEstimator.estimate_demographics: {e}")
+            return {}
 
 def bucket_age_range(age: int, width: int = 5, min_age: int = 18) -> str:
     if age < min_age:
@@ -313,10 +330,15 @@ class FaceProcessor:
                 rgb_image = image
 
             # Detect faces using RetinaFace for high accuracy
-            faces = RetinaFace.detect_faces(rgb_image)
+            if RetinaFace is not None:
+                faces = RetinaFace.detect_faces(rgb_image)
+            else:
+                faces = None
             
             if not faces or not isinstance(faces, dict):
                 # Fallback to face_recognition if RetinaFace fails
+                if face_recognition is None:
+                    return None
                 face_locations = face_recognition.face_locations(rgb_image)
                 if not face_locations:
                     return None
@@ -582,6 +604,11 @@ async def register_single(
     category: str | None = Form(None)
 ):
     """Register a single person with face image"""
+    print(f"--- Registration Request ---")
+    print(f"Name: {name!r}")
+    print(f"Age: {age!r}")
+    print(f"Gender: {gender!r}")
+    print(f"Category: {category!r}")
     try:
         # Validate image file type
         if not image.filename.lower().endswith(('.png', '.jpg', '.jpeg')):
@@ -636,15 +663,25 @@ async def register_single(
         cv2.imwrite(original_path, face)
 
         # Determine age and range (manual overrides AI)
-        predicted_age = AgeEstimator.estimate_age(face)
+        demographics = DemographicsEstimator.estimate_demographics(face)
+        predicted_age = demographics.get("age")
+        predicted_gender = demographics.get("gender")
+        
         manual_age_val = None
-        try:
-            manual_age_val = int(age) if age and str(age).strip() != "" else None
-        except Exception:
-            manual_age_val = None
+        if age:
+            age_str = str(age).strip().lower()
+            if age_str not in ("", "null", "undefined", "none"):
+                try:
+                    manual_age_val = int(age_str)
+                except Exception:
+                    manual_age_val = None
+                    
         final_age_val = manual_age_val if manual_age_val is not None else predicted_age
         age_source = "manual" if manual_age_val is not None else ("ai" if predicted_age is not None else "unknown")
         age_range = bucket_age_range(final_age_val) if isinstance(final_age_val, int) else "N/A"
+        
+        # Determine gender (manual overrides AI)
+        final_gender = gender if gender and gender.strip() != "" else (predicted_gender if predicted_gender else "N/A")
 
         # Update JSON data
         try:
@@ -657,14 +694,15 @@ async def register_single(
         person_data[unique_name] = {
             "name": name,
             "age": str(final_age_val) if isinstance(final_age_val, int) else "N/A",
-            "gender": gender if gender else "N/A",
+            "gender": final_gender,
             "category": category.lower() if category else "unknown",
             "registration_date": registration_time,
             "gallery_path": os.path.relpath(gallery_dir, BASE_DIR).replace('\\', '/'),
             "photo_path": os.path.relpath(original_path, BASE_DIR).replace('\\', '/'),
             "age_range": age_range,
             "age_source": age_source,
-            "predicted_age": predicted_age if isinstance(predicted_age, int) else None
+            "predicted_age": predicted_age if isinstance(predicted_age, int) else None,
+            "predicted_gender": predicted_gender
         }
 
         with open(METADATA_FILE, 'w') as f:
@@ -772,32 +810,46 @@ async def register_bulk(
                 # Update metadata
                 safe_name = re.sub(r'[^\w\-_\. ]', '', person_name)
                 age_str = result['details'].get('age', '')
-                try:
-                    age_int = int(age_str) if str(age_str).strip() != "" else None
-                except Exception:
-                    age_int = None
-                predicted_age = None
+                age_int = None
+                if age_str:
+                    age_str = str(age_str).strip().lower()
+                    if age_str not in ("", "null", "undefined", "none"):
+                        try:
+                            age_int = int(age_str)
+                        except Exception:
+                            age_int = None
                 gallery_face_path = os.path.join(GALLERY_DIR, safe_name, "1.jpg")
-                if age_int is None and os.path.exists(gallery_face_path):
-                    try:
-                        face_img = cv2.imread(gallery_face_path)
-                        predicted_age = AgeEstimator.estimate_age(face_img) or None
-                    except Exception:
-                        predicted_age = None
+                predicted_age = None
+                predicted_gender = None
+                if age_int is None or not result['details'].get('gender', '').strip():
+                    if os.path.exists(gallery_face_path):
+                        try:
+                            face_img = cv2.imread(gallery_face_path)
+                            demographics = DemographicsEstimator.estimate_demographics(face_img)
+                            predicted_age = demographics.get("age")
+                            predicted_gender = demographics.get("gender")
+                        except Exception:
+                            pass
+                            
                 final_age = age_int if age_int is not None else predicted_age
                 age_source = "manual" if age_int is not None else ("ai" if predicted_age is not None else "unknown")
                 age_range = bucket_age_range(final_age) if isinstance(final_age, int) else "N/A"
+                
+                manual_gender = result['details'].get('gender', '').strip()
+                final_gender = manual_gender if manual_gender != "" else (predicted_gender if predicted_gender else "N/A")
+                
                 metadata[safe_name] = {
                     'name': person_name,
                     'age': str(final_age) if isinstance(final_age, int) else str(result['details'].get('age', '')) or "N/A",
-                    'gender': result['details']['gender'],
+                    'gender': final_gender,
                     'category': result['details']['category'],
                     'registration_date': datetime.now().isoformat(),
                     'gallery_path': os.path.relpath(os.path.join(GALLERY_DIR, safe_name), BASE_DIR).replace('\\', '/'),
                     'photo_path': os.path.relpath(os.path.join(GALLERY_DIR, safe_name, "1.jpg"), BASE_DIR).replace('\\', '/'),
                     'age_range': age_range,
                     'age_source': age_source,
-                    'predicted_age': predicted_age if isinstance(predicted_age, int) else None
+                    'predicted_age': predicted_age if isinstance(predicted_age, int) else None,
+                    'predicted_gender': predicted_gender
                 }
 
                 # Create gallery directory and copy original image

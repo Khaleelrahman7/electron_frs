@@ -1,16 +1,4 @@
 {
-    "logesh": {
-        "name": "logesh",
-        "age": "22",
-        "gender": "Male",
-        "category": "eagle employee",
-        "registration_date": "2025-03-11T17:20:23.481686",
-        "gallery_path": "data/gallery/logesh",
-        "photo_path": "data/gallery/logesh/1.jpg",
-        "age_range": "N/A",
-        "age_source": "unknown",
-        "predicted_age": null
-    },
     "rahman": {
         "name": "rahman",
         "age": "22",
