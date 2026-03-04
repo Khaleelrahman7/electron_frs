@@ -36,18 +36,5 @@
         "age_source": "ai",
         "predicted_age": 24,
         "predicted_gender": "Male"
-    },
-    "alvin": {
-        "name": "alvin",
-        "age": "44",
-        "gender": "Male",
-        "category": "visitor",
-        "registration_date": "2026-02-27T13:12:50.035139",
-        "gallery_path": "data/gallery/alvin",
-        "photo_path": "data/gallery/alvin/1.jpg",
-        "age_range": "43-48",
-        "age_source": "ai",
-        "predicted_age": 44,
-        "predicted_gender": "Male"
     }
 }
