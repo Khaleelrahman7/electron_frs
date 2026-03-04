@@ -29,6 +29,8 @@ class CameraStreamManager:
         # Frame quality tracking
         self.last_good_frames: Dict[str, np.ndarray] = {}  # Store last valid frame per stream
         self.frame_validation_enabled = True
+        # Per-stream overlay toggle (default: False = clean stream)
+        self.overlay_settings: Dict[str, bool] = {}
         # Frame buffer for sharp face capture (stores raw frames with timestamps)
         self.frame_buffers: Dict[str, deque] = {}  # Buffer of raw frames for best capture
         self.max_frame_buffer_size = 20  # Optimized for Tesla T4: More frames = better sharpness selection
@@ -169,14 +171,17 @@ class CameraStreamManager:
         
         return True
     
-    def generate_mjpeg_stream(self, stream_id: str):
+    def generate_mjpeg_stream(self, stream_id: str, draw_overlay: bool = False):
         """Generate MJPEG stream for a camera with improved stability"""
         stream_info = self.get_stream_info(stream_id)
         if not stream_info:
             return
 
+        # Store overlay preference for this stream
+        self.overlay_settings[stream_id] = draw_overlay
+
         rtsp_url = stream_info['rtsp_url']
-        logger.info(f"Starting MJPEG stream generation for {stream_id}")
+        logger.info(f"Starting MJPEG stream generation for {stream_id} (overlay={draw_overlay})")
 
         # Try to connect to real camera first
         cap = None
@@ -320,7 +325,9 @@ class CameraStreamManager:
                         # Process frame for face detection
                         try:
                             from face_pipeline import process_frame as face_process_frame
-                            processed_frame, _ = face_process_frame(frame, force_process=True, stream_id=stream_id)
+                            # Get overlay preference for this stream
+                            draw_overlay = self.overlay_settings.get(stream_id, False)
+                            processed_frame, _ = face_process_frame(frame, force_process=True, stream_id=stream_id, draw_overlay=draw_overlay)
                             self.processed_frames_latest[stream_id] = processed_frame
                         except Exception as face_error:
                             logger.debug(f"Face processing error for stream {stream_id}: {face_error}")

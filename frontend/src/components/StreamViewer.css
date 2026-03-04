@@ -285,7 +285,6 @@
   font-size: 0.9rem;
 }
 
-/* Video Header */
 .video-cell .video-header {
   display: flex;
   justify-content: space-between;
@@ -293,6 +292,39 @@
   padding: 8px 12px;
   background: var(--bg-input);
   border-bottom: 1px solid var(--border-color);
+}
+
+.video-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.overlay-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.overlay-toggle-btn:hover {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.overlay-toggle-btn.active {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: var(--primary-color);
+  color: var(--primary-color);
 }
 
 .camera-name {

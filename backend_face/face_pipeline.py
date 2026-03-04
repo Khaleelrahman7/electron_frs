@@ -360,13 +360,14 @@ def _cleanup_old_tracks(stream_id: str, current_frame_count: int, current_time: 
         del tracks[track_id]
 
 
-def process_frame(frame_bgr: np.ndarray, force_process: bool = False, stream_id: Optional[str] = None) -> Tuple[np.ndarray, List[Dict[str, Any]]]:
+def process_frame(frame_bgr: np.ndarray, force_process: bool = False, stream_id: Optional[str] = None, draw_overlay: bool = True) -> Tuple[np.ndarray, List[Dict[str, Any]]]:
     """Detect + recognize faces in one frame. Returns annotated frame + detections.
     
     Args:
         frame_bgr: Input BGR frame
         force_process: Deprecated - all frames are now processed (kept for backward compatibility)
         stream_id: Optional stream ID for frame buffer access and GPU assignment
+        draw_overlay: If True, draw bounding boxes and labels on the frame. If False, return clean frame.
     """
     global known_encodings, known_names, person_tracking, track_id_counter
     
@@ -674,19 +675,20 @@ def process_frame(frame_bgr: np.ndarray, force_process: bool = False, stream_id:
                 save_thread = threading.Thread(target=_save_face_async, daemon=True)
                 save_thread.start()
 
-        # Draw and store
-        cv2.rectangle(frame_bgr, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        label = f"{name} ({conf:.2f})"
-        label_y = y1 - 10 if y1 - 10 > 10 else y1 + 10
-        cv2.putText(
-            frame_bgr,
-            label,
-            (x1, label_y),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.8,
-            (255, 255, 255),
-            2,
-        )
+        # Draw bounding box and label only if overlay is enabled
+        if draw_overlay:
+            cv2.rectangle(frame_bgr, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            label = f"{name} ({conf:.2f})"
+            label_y = y1 - 10 if y1 - 10 > 10 else y1 + 10
+            cv2.putText(
+                frame_bgr,
+                label,
+                (x1, label_y),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                (255, 255, 255),
+                2,
+            )
         detections.append({"name": name, "conf": conf, "bbox": (x1, y1, x2, y2)})
 
     return frame_bgr, detections

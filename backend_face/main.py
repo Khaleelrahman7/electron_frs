@@ -951,14 +951,14 @@ class SimpleRTSPStream:
                     return None
             return None
 
-def generate_mjpeg_stream(stream_id: str):
+def generate_mjpeg_stream(stream_id: str, draw_overlay: bool = False):
     """Generate MJPEG stream for a given stream ID"""
     if stream_id not in active_streams:
         logger.error(f"Stream {stream_id} not found")
         return
 
     stream = active_streams[stream_id]['stream']
-    logger.info(f"Starting MJPEG stream generation for {stream_id}")
+    logger.info(f"Starting MJPEG stream generation for {stream_id} (overlay={draw_overlay})")
 
     try:
         while True:
@@ -973,7 +973,7 @@ def generate_mjpeg_stream(stream_id: str):
 
             if frame is not None:
                 try:
-                    processed_frame, _ = process_frame(frame)
+                    processed_frame, _ = process_frame(frame, draw_overlay=draw_overlay)
                 except Exception as e:
                     logger.debug(f"Face pipeline processing error for {stream_id}: {e}")
                     processed_frame = frame
@@ -999,7 +999,7 @@ def generate_mjpeg_stream(stream_id: str):
         return
 
 @app.get("/api/video_feed/{stream_id}")
-async def video_feed(stream_id: str):
+async def video_feed(stream_id: str, overlay: str = "false"):
     """Serve MJPEG video feed for a specific stream"""
     logger.info(f"Video feed requested for stream: {stream_id}")
 
@@ -1012,9 +1012,10 @@ async def video_feed(stream_id: str):
         logger.error(f"Stream {stream_id} is not running")
         return JSONResponse({"error": "Stream not running"}, status_code=404)
 
-    logger.info(f"Serving MJPEG video feed for stream: {stream_id}")
+    draw_overlay = overlay.lower() == "true"
+    logger.info(f"Serving MJPEG video feed for stream: {stream_id} (overlay={draw_overlay})")
     return StreamingResponse(
-        generate_mjpeg_stream(stream_id),
+        generate_mjpeg_stream(stream_id, draw_overlay=draw_overlay),
         media_type='multipart/x-mixed-replace; boundary=frame',
         headers={
             'Cache-Control': 'no-cache, no-store, must-revalidate',

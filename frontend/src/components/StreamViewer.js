@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import MJPEGPlayer from './camera/MJPEGPlayer';
 import useAuthStore from '../store/authStore';
-import { Grid, Play, Square, RefreshCw, Settings, Monitor } from 'lucide-react';
+import { Grid, Play, Square, RefreshCw, Settings, Monitor, Eye, EyeOff } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
 import './StreamViewer.css';
 
@@ -12,6 +12,7 @@ const StreamViewer = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [gridLayout, setGridLayout] = useState('2x2');
+  const [overlayStates, setOverlayStates] = useState({}); // camera.id -> boolean
   const { token } = useAuthStore();
   // Auto-refresh functionality removed
 
@@ -31,21 +32,21 @@ const StreamViewer = () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       const response = await axios.get(`${API_BASE_URL}/api/collections/cameras`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
-      
+
       if (response.data.cameras) {
         const allCameras = response.data.cameras;
         setCameras(allCameras);
-        
+
         // Filter only active cameras for streaming
         const activeOnes = allCameras.filter(camera => camera.is_active);
         setActiveCameras(activeOnes);
-        
+
         console.log('Fetched cameras:', allCameras);
         console.log('Active cameras for streaming:', activeOnes);
       } else {
@@ -77,7 +78,7 @@ const StreamViewer = () => {
   // Extract IP address from RTSP URL
   const extractIPFromRTSP = (rtspUrl) => {
     if (!rtspUrl) return 'Unknown';
-    
+
     try {
       const url = new URL(rtspUrl);
       return url.hostname;
@@ -146,9 +147,9 @@ const StreamViewer = () => {
         <div className="header-controls">
           <div className="control-group">
             <label htmlFor="grid-layout">Layout:</label>
-            <select 
+            <select
               id="grid-layout"
-              value={gridLayout} 
+              value={gridLayout}
               onChange={(e) => setGridLayout(e.target.value)}
               className="layout-selector"
             >
@@ -163,7 +164,7 @@ const StreamViewer = () => {
           </div>
 
           <div className="control-group">
-            <button 
+            <button
               onClick={fetchCameras}
               className="refresh-btn"
               disabled={loading}
@@ -200,7 +201,7 @@ const StreamViewer = () => {
             </div>
           </div>
         ) : (
-          <div 
+          <div
             className="video-grid"
             style={{
               gridTemplateColumns: `repeat(${currentLayout.cols}, 1fr)`,
@@ -211,17 +212,30 @@ const StreamViewer = () => {
               <div key={camera.id} className="video-cell">
                 <div className="video-header">
                   <span className="camera-name">{camera.name}</span>
-                  <span className="stream-status live">● LIVE</span>
+                  <div className="video-header-controls">
+                    <button
+                      className={`overlay-toggle-btn ${overlayStates[camera.id] ? 'active' : ''}`}
+                      onClick={() => setOverlayStates(prev => ({
+                        ...prev,
+                        [camera.id]: !prev[camera.id]
+                      }))}
+                      title={overlayStates[camera.id] ? 'Hide bounding boxes' : 'Show bounding boxes'}
+                    >
+                      {overlayStates[camera.id] ? <Eye size={14} /> : <EyeOff size={14} />}
+                    </button>
+                    <span className="stream-status live">● LIVE</span>
+                  </div>
                 </div>
-                
+
                 <div className="video-container">
                   <MJPEGPlayer
                     camera={camera}
+                    showOverlay={!!overlayStates[camera.id]}
                     onPlay={() => handlePlayerPlay(camera)}
                     onError={(error) => handlePlayerError(camera, error)}
                   />
                 </div>
-                
+
                 <div className="video-footer">
                   <span className="camera-ip">{camera.ip}</span>
                   <span className="camera-collection">{camera.collectionId}</span>
@@ -230,8 +244,8 @@ const StreamViewer = () => {
             ))}
 
             {/* Fill empty cells */}
-            {Array.from({ 
-              length: Math.max(0, currentLayout.maxStreams - convertedCameras.length) 
+            {Array.from({
+              length: Math.max(0, currentLayout.maxStreams - convertedCameras.length)
             }).map((_, index) => (
               <div key={`empty-${index}`} className="video-cell empty">
                 <div className="empty-placeholder">
@@ -248,7 +262,7 @@ const StreamViewer = () => {
           <div className="overflow-notice">
             <Settings size={16} />
             <span>
-              Showing {currentLayout.maxStreams} of {activeCameras.length} active cameras. 
+              Showing {currentLayout.maxStreams} of {activeCameras.length} active cameras.
               Increase grid size to view more streams.
             </span>
           </div>

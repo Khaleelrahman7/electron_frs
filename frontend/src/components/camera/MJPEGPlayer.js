@@ -5,7 +5,7 @@ import './MJPEGPlayer.css';
 
 import { API_BASE_URL } from '../../utils/apiConfig';
 
-const MJPEGPlayer = ({ camera, onPlay, onError }) => {
+const MJPEGPlayer = ({ camera, showOverlay = false, onPlay, onError }) => {
   const [streamUrl, setStreamUrl] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
@@ -61,7 +61,8 @@ const MJPEGPlayer = ({ camera, onPlay, onError }) => {
       // CHECK 1: If camera has an ID, it's from camera management - use enhanced stream
       if (camera.id) {
         console.log(`Camera ${camera.id} is from camera management, using enhanced stream endpoint`);
-        const enhancedStreamUrl = `${API_BASE_URL}/api/collections/cameras/${camera.id}/stream${token ? `?token=${token}` : ''}`;
+        const overlayParam = showOverlay ? 'true' : 'false';
+        const enhancedStreamUrl = `${API_BASE_URL}/api/collections/cameras/${camera.id}/stream?overlay=${overlayParam}${token ? `&token=${token}` : ''}`;
         setStreamUrl(enhancedStreamUrl);
         setRetryCount(0);
         console.log(`Using enhanced stream: ${enhancedStreamUrl}`);
@@ -254,6 +255,20 @@ const MJPEGPlayer = ({ camera, onPlay, onError }) => {
       stopStream();
     };
   }, [camera.id]); // Only depend on camera.id to prevent unnecessary restarts
+
+  // Handle overlay toggle changes without restarting the stream
+  useEffect(() => {
+    if (camera.id && streamUrl) {
+      // Update the stream URL with new overlay param
+      const overlayParam = showOverlay ? 'true' : 'false';
+      const newUrl = `${API_BASE_URL}/api/collections/cameras/${camera.id}/stream?overlay=${overlayParam}${token ? `&token=${token}` : ''}`;
+      if (newUrl !== streamUrl) {
+        console.log(`Overlay toggled for camera ${camera.name}: overlay=${overlayParam}`);
+        setStreamUrl(newUrl);
+        setIsLoading(true);
+      }
+    }
+  }, [showOverlay]); // Only react to overlay changes
 
   // Cleanup on unmount
   useEffect(() => {

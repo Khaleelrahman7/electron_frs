@@ -22,10 +22,10 @@ except Exception as e:
     RetinaFace = None
 
 try:
-    from deepface import DeepFace
+    from insightface.app import FaceAnalysis as _InsightFaceApp
 except Exception as e:
-    print(f"Failed to import deepface: {e}")
-    DeepFace = None
+    print(f"Failed to import insightface for demographics: {e}")
+    _InsightFaceApp = None
 from .aug import detect_face, augment_face
 import numpy as np
 import io
@@ -262,110 +262,79 @@ def save_gallery_data(person_id: str, data: dict):
         print(f"Error saving gallery data: {e}")
 
 class DemographicsEstimator:
+    """
+    Estimates age and gender using InsightFace's built-in genderage module.
+    InsightFace (ArcFace-based) achieves MAE ~7.46 years vs DeepFace's ~10.83 years.
+    """
+    _app = None  # Lazy-initialized singleton (CPU mode, used only at registration time)
+
+    @classmethod
+    def _get_app(cls):
+        """Lazily initialize the InsightFace FaceAnalysis app with genderage module."""
+        if cls._app is None:
+            if _InsightFaceApp is None:
+                return None
+            try:
+                app = _InsightFaceApp(
+                    name='buffalo_l',
+                    allowed_modules=['detection', 'genderage']
+                )
+                # ctx_id=-1 → CPU; det_size small enough for single registration images
+                app.prepare(ctx_id=-1, det_size=(320, 320))
+                cls._app = app
+                print("[DemographicsEstimator] InsightFace genderage model loaded (CPU).")
+            except Exception as e:
+                print(f"[DemographicsEstimator] Failed to load InsightFace genderage model: {e}")
+                return None
+        return cls._app
+
     @classmethod
     def estimate_demographics(cls, face_bgr: np.ndarray) -> dict:
         """
-        Estimate age and gender from a face image using DeepFace.
+        Estimate age and gender from a BGR face image using InsightFace genderage module.
+
+        Returns:
+            dict with keys 'age' (int or None) and 'gender' ('Male'/'Female' or None).
+            Returns empty dict {} on failure.
         """
         try:
-            if DeepFace is None:
+            app = cls._get_app()
+            if app is None:
                 return {}
-            
-            # DeepFace's default age model is notoriously sensitive to facial hair (texture bias).
-            # To solve this without washing out real age features (like for older clean-shaven people),
-            # we run a dual-pass estimation and compare the results.
-            
-            # Pass 1: Raw face (Best for clean-shaven people)
-            raw_results = DeepFace.analyze(
-                img_path=face_bgr, 
-                actions=['age', 'gender'],
-                detector_backend='opencv',
-                enforce_detection=False,
-                silent=True
-            )
-            
-            # Pass 2: Moderately filtered face (Smooths stubble but preserves major structures)
-            # Settings optimized to drop beard-biased age significantly while preserving natural aging
-            filtered_face = cv2.bilateralFilter(face_bgr, 15, 100, 100)
-            clean_results = DeepFace.analyze(
-                img_path=filtered_face, 
-                actions=['age'],
-                detector_backend='opencv',
-                enforce_detection=False,
-                silent=True
-            )
-            
-            def extract_age(res):
-                if isinstance(res, list) and len(res) > 0:
-                    return res[0].get('age')
-                elif isinstance(res, dict):
-                    return res.get('age')
-                return None
 
-            raw_age = extract_age(raw_results)
-            clean_age = extract_age(clean_results)
-            
-            # Logic to handle beard bias vs natural aging:
-            # - A beard often causes a massive (+15-20 year) overestimation.
-            # - Natural wrinkles caused by age typically only fluctuate by <10 years under this filter.
-            if raw_age is not None and clean_age is not None:
-                diff = raw_age - clean_age
-                if raw_age > 30 and diff > 12:
-                    # High discrepancy (>12 years) strongly indicates a texture bias (beard).
-                    # We use the clean/filtered value (+1 year buffer).
-                    age = int(clean_age + 1)
-                else:
-                    # Small discrepancy or already young person. 
-                    # Trust the raw image more to avoid underestimating truly older people.
-                    age = raw_age
-            else:
-                age = raw_age or clean_age
-            
-            # Use Pass 1 for gender (gender is much more stable)
-            results = raw_results
-            
-            if results:
-                # DeepFace analyze with enforce_detection=False could return list or dict depending on version
-                if isinstance(results, list) and len(results) > 0:
-                    res_dict = results[0]
-                elif isinstance(results, dict):
-                    res_dict = results
-                else:
-                    res_dict = {}
+            if face_bgr is None or face_bgr.size == 0:
+                return {}
 
-                age = res_dict.get('age')
-                # dominant_gender is typically 'Man' or 'Woman' in DeepFace
-                gender = res_dict.get('dominant_gender') 
-                
-                # Normalize gender string to match our frontend/db conventions
-                normalized_gender = None
-                if gender:
-                    if isinstance(gender, dict):
-                        # Some versions return dict of probabilities, we need the max
-                        gender = max(gender, key=gender.get)
-                    if isinstance(gender, str):
-                        if 'Man' in gender or 'man' in gender or 'Male' in gender:
-                            normalized_gender = 'Male'
-                        elif 'Woman' in gender or 'woman' in gender or 'Female' in gender:
-                            normalized_gender = 'Female'
-                        else:
-                            normalized_gender = gender
+            faces = app.get(face_bgr)
+            if not faces:
+                return {}
 
-                # Ensure age is a raw integer, some versions might return numpy float/int
-                try:
-                    final_age = int(round(float(age))) if age is not None else None
-                except Exception:
-                    final_age = None
+            # Pick the face with the highest detection confidence
+            best_face = max(faces, key=lambda f: float(getattr(f, 'det_score', 0) or 0))
 
-                return {
-                    "age": final_age,
-                    "gender": normalized_gender
-                }
-            
-            return {}
+            # --- Age ---
+            raw_age = getattr(best_face, 'age', None)
+            try:
+                age = int(round(float(raw_age))) if raw_age is not None else None
+            except Exception:
+                age = None
+
+            # --- Gender ---
+            # InsightFace genderage returns gender as int (1=Male, 0=Female)
+            # or occasionally as a string ('M'/'F') depending on model version.
+            raw_gender = getattr(best_face, 'gender', None)
+            gender = None
+            if raw_gender is not None:
+                if isinstance(raw_gender, (int, float, np.integer, np.floating)):
+                    gender = 'Male' if int(raw_gender) == 1 else 'Female'
+                elif isinstance(raw_gender, str):
+                    gender = 'Male' if raw_gender.upper() in ('M', 'MALE', 'MAN') else 'Female'
+
+            return {"age": age, "gender": gender}
+
         except Exception as e:
             import traceback
-            print(f"Error in DemographicsEstimator.estimate_demographics: {e}")
+            print(f"[DemographicsEstimator] Error estimating demographics: {e}")
             traceback.print_exc()
             return {}
 

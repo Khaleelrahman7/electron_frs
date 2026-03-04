@@ -224,10 +224,11 @@ async def stop_camera_stream(
 @router.get("/cameras/{camera_id}/stream")
 async def get_camera_stream(
     camera_id: int,
+    overlay: str = "false",
     service: EnhancedCameraService = Depends(get_camera_service),
     stream_service: CameraStreamManager = Depends(get_stream_service)
 ):
-    """Get MJPEG stream for a camera"""
+    """Get MJPEG stream for a camera. Use ?overlay=true to show bounding boxes."""
     try:
         # Get camera info
         cameras = service._load_cameras()
@@ -241,9 +242,11 @@ async def get_camera_stream(
         if not stream_id:
             stream_id = stream_service.start_stream(camera_id, camera.rtsp_url, camera.name)
 
+        draw_overlay = overlay.lower() == "true"
+        
         # Return MJPEG stream
         return StreamingResponse(
-            stream_service.generate_mjpeg_stream(stream_id),
+            stream_service.generate_mjpeg_stream(stream_id, draw_overlay=draw_overlay),
             media_type="multipart/x-mixed-replace; boundary=frame"
         )
     except HTTPException:
