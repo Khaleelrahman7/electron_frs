@@ -11,7 +11,7 @@ import time
 import cv2
 import threading
 from typing import Dict, Optional
-from face_pipeline import init as init_face_pipeline, process_frame
+from face_pipeline import init as init_face_pipeline, process_frame, render_bounding_boxes
 from auth.middleware import RBACMiddleware
 from auth.routes import router as auth_router
 from auth.user_routes import router as user_router
@@ -22,6 +22,9 @@ from auth.license_checker import start_license_checker
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 FACE_PIPELINE_READY = False
+
+# Global bounding box toggle (default: off)
+show_bounding_box = False
 
 # Create main FastAPI app
 app = FastAPI(
@@ -973,7 +976,10 @@ def generate_mjpeg_stream(stream_id: str):
 
             if frame is not None:
                 try:
-                    processed_frame, _ = process_frame(frame)
+                    processed_frame, detections = process_frame(frame)
+                    # Conditionally render bounding boxes
+                    if show_bounding_box and detections:
+                        processed_frame = render_bounding_boxes(processed_frame, detections, show_bounding_box=True)
                 except Exception as e:
                     logger.debug(f"Face pipeline processing error for {stream_id}: {e}")
                     processed_frame = frame
@@ -1127,6 +1133,38 @@ async def stop_stream(stream_id: str):
 async def options_handler(full_path: str):
     """Handle OPTIONS requests for CORS preflight"""
     return {"message": "OK"}
+
+# ============= BOUNDING BOX TOGGLE ENDPOINTS =============
+
+class BoundingBoxToggle(BaseModel):
+    """Pydantic model for bounding box toggle request"""
+    enabled: bool
+
+@app.post("/api/bounding-box/toggle", tags=["Visualization"])
+async def toggle_bounding_box(payload: BoundingBoxToggle):
+    """Toggle bounding box visualization on the video stream.
+    
+    When enabled, bounding boxes are drawn on detected faces.
+    When disabled, the video stream is shown without any overlays.
+    This does NOT affect detection, recognition, or event-saving.
+    """
+    global show_bounding_box
+    show_bounding_box = payload.enabled
+    
+    # Also update the managed camera stream manager
+    try:
+        from camera_management.streaming import get_stream_manager
+        get_stream_manager().set_bounding_box(payload.enabled)
+    except Exception as e:
+        logger.warning(f"Could not update stream manager bounding box: {e}")
+    
+    logger.info(f"Bounding box visualization {'enabled' if payload.enabled else 'disabled'}")
+    return {"success": True, "enabled": payload.enabled}
+
+@app.get("/api/bounding-box/status", tags=["Visualization"])
+async def get_bounding_box_status():
+    """Get current bounding box toggle state."""
+    return {"enabled": show_bounding_box}
 
 if __name__ == "__main__":
     import uvicorn
