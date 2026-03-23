@@ -13,16 +13,21 @@ import {
   Filter,
   User,
   Camera,
-  ChevronDown
+  ChevronDown,
+  Trash2,
+  Clock as ClockIcon,
+  RotateCw
 } from 'lucide-react';
 import FaceCard from './FaceCard';
 import "react-datepicker/dist/react-datepicker.css";
+import useAuthStore from '../store/authStore';
 import './FaceEvents.css';
 
 import { API_BASE_URL as BASE_URL, fixImageUrl } from '../utils/apiConfig';
 const API_BASE_URL = `${BASE_URL}/api/events`;
 
 const FaceEvents = () => {
+  const { token, user } = useAuthStore();
   // Filter States
   const [cameras, setCameras] = useState(['All Cameras']);
   const [selectedCamera, setSelectedCamera] = useState('All Cameras');
@@ -55,7 +60,10 @@ const FaceEvents = () => {
       const cameraUrl = `${BASE_URL}/api/collections/cameras`;
       const response = await axios.get(cameraUrl, {
         timeout: 5000,
-        headers: { 'Content-Type': 'application/json' }
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
       });
       if (response.data.cameras) {
         const cameraNames = response.data.cameras.map(camera => camera.name);
@@ -77,7 +85,10 @@ const FaceEvents = () => {
       const response = await axios.get(`${API_BASE_URL}/filter`, {
         params,
         timeout: 10000,
-        headers: { 'Content-Type': 'application/json' }
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
       });
       return Array.isArray(response.data) ? response.data : [];
     } catch (err) {
@@ -148,6 +159,10 @@ const FaceEvents = () => {
     handleFilter({}, activeTab);
   };
 
+  const handleRefresh = () => {
+    handleFilter({}, activeTab);
+  };
+
   const onClear = () => {
     setSelectedCamera('All Cameras');
     setNameFilter('');
@@ -174,6 +189,24 @@ const FaceEvents = () => {
       overrides.to_date = null;
     }
     handleFilter(overrides, activeTab);
+  };
+  
+  const handleDeleteEvent = async (event) => {
+    if (!window.confirm('Are you sure you want to delete this event? This will remove the image file from the server.')) return;
+    try {
+      await axios.delete(`${API_BASE_URL}/delete`, {
+        params: { image_path: event.image_path },
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      // Refresh list
+      handleFilter({}, activeTab);
+      if (selectedEvent && selectedEvent.image_path === event.image_path) {
+        setSelectedEvent(null);
+      }
+    } catch (err) {
+      console.error("Delete event failed", err);
+      alert("Failed to delete event: " + (err.response?.data?.detail || err.message));
+    }
   };
 
   useEffect(() => {
@@ -332,6 +365,14 @@ const FaceEvents = () => {
             </div>
           </div>
           <div className="view-actions">
+            <button 
+              className={`refresh-btn ${loading ? 'spinning' : ''}`}
+              onClick={handleRefresh}
+              disabled={loading}
+              title="Refresh events"
+            >
+              <RotateCw size={18} />
+            </button>
             <div className="view-toggle">
               <button
                 className={`toggle-btn ${viewMode === 'list' ? 'active' : ''}`}
@@ -391,7 +432,7 @@ const FaceEvents = () => {
                           <span>{face.name}</span>
                         </div>
                       </td>
-                      <td>{face.camera}</td>
+                      <td>{face.camera || 'Default Source'}</td>
                       <td>{format(new Date(face.timestamp), 'yyyy-MM-dd HH:mm:ss')}</td>
                       <td>
                         <span className={`badge ${face.name === 'Unknown' ? 'badge-unknown' : 'badge-known'}`}>
@@ -399,7 +440,26 @@ const FaceEvents = () => {
                         </span>
                       </td>
                       <td>
-                        <button className="btn-action" onClick={() => setSelectedEvent(face)}>View</button>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button className="btn-action" onClick={() => setSelectedEvent(face)}>View</button>
+                          {user?.role === 'SuperAdmin' && (
+                            <button 
+                              className="btn-action" 
+                              style={{ 
+                                background: 'transparent', 
+                                color: '#ef4444', 
+                                borderColor: '#ef4444',
+                                padding: '2px 8px'
+                              }} 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteEvent(face);
+                              }}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -446,9 +506,29 @@ const FaceEvents = () => {
               </div>
               <div className="modal-details">
                 <p><strong>Name:</strong> <span>{selectedEvent.name}</span></p>
-                <p><strong>Camera:</strong> <span>{selectedEvent.camera}</span></p>
+                <p><strong>Camera:</strong> <span>{selectedEvent.camera || 'Default Source'}</span></p>
                 <p><strong>Time:</strong> <span>{format(new Date(selectedEvent.timestamp), 'yyyy-MM-dd HH:mm:ss')}</span></p>
                 <p><strong>Type:</strong> <span className={`badge ${selectedEvent.name === 'Unknown' ? 'badge-unknown' : 'badge-known'}`}>{selectedEvent.name === 'Unknown' ? 'Unknown' : 'Known'}</span></p>
+              </div>
+              <div style={{ padding: '0 20px 20px', display: 'flex', justifyContent: 'flex-end' }}>
+                 {user?.role === 'SuperAdmin' && (
+                   <button 
+                      className="btn-action" 
+                      style={{ 
+                         background: '#ef4444', 
+                         color: 'white', 
+                         border: 'none',
+                         display: 'flex',
+                         alignItems: 'center',
+                         gap: '8px',
+                         padding: '8px 16px',
+                         cursor: 'pointer'
+                      }}
+                      onClick={() => handleDeleteEvent(selectedEvent)}
+                   >
+                      <Trash2 size={16} /> Delete Event
+                   </button>
+                 )}
               </div>
             </div>
           </div>
@@ -458,12 +538,5 @@ const FaceEvents = () => {
     </div>
   );
 };
-
-const ClockIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10"></circle>
-    <polyline points="12 6 12 12 16 14"></polyline>
-  </svg>
-);
 
 export default FaceEvents;

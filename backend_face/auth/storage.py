@@ -7,6 +7,7 @@ import threading
 AUTH_DATA_DIR = Path("data/auth")
 USERS_FILE = AUTH_DATA_DIR / "users.json"
 SETTINGS_FILE = AUTH_DATA_DIR / "settings.json"
+COMPANIES_FILE = AUTH_DATA_DIR / "companies.json"
 CAMERAS_FILE = Path("data/cameras.json")
 
 _lock = threading.Lock()
@@ -36,21 +37,57 @@ def get_users() -> Dict[str, Any]:
 def save_users(users: Dict[str, Any]):
     atomic_write_json(USERS_FILE, users)
 
-def get_settings() -> Dict[str, Any]:
-    return load_json(SETTINGS_FILE, {
-        "max_cameras_per_admin": 10,
-        "max_cameras_per_supervisor": 5,
-        "require_approval_for_new_users": False
-    })
+DEFAULT_SETTINGS = {
+    "max_cameras_per_admin": 10,
+    "max_cameras_per_supervisor": 5,
+    "require_approval_for_new_users": False,
+    "face_recognition_enabled": True,
+    "show_bounding_boxes": True,
+    "unknown_detection_enabled": True,
+    "long_distance_detection_enabled": True,
+    "min_face_size": 20,
+    "attendance": {
+        "punch_in": "09:30",
+        "punch_out": "18:00",
+        "working_hours": 8,
+        "grace_minutes": 15,
+        "min_hours_present": 4.0,
+        "overtime_after": 9.0
+    }
+}
 
-def save_settings(settings: Dict[str, Any]):
-    atomic_write_json(SETTINGS_FILE, settings)
+def get_settings(company_id: Optional[str] = None) -> Dict[str, Any]:
+    
+    if not company_id:
+        return load_json(SETTINGS_FILE, DEFAULT_SETTINGS)
+        
+    # Load company-specific settings if they exist
+    company_settings_file = AUTH_DATA_DIR / f"settings_{company_id}.json"
+    if company_settings_file.exists():
+        return load_json(company_settings_file, DEFAULT_SETTINGS)
+        
+    # If no company settings file exists, return the hardcoded default template
+    # DO NOT inherit from global/SuperAdmin settings.
+    return DEFAULT_SETTINGS
+
+def save_settings(settings: Dict[str, Any], company_id: Optional[str] = None):
+    if company_id:
+        company_settings_file = AUTH_DATA_DIR / f"settings_{company_id}.json"
+        atomic_write_json(company_settings_file, settings)
+    else:
+        atomic_write_json(SETTINGS_FILE, settings)
 
 def get_cameras() -> Dict[str, Any]:
     return load_json(CAMERAS_FILE, {})
 
 def save_cameras(cameras: Dict[str, Any]):
     atomic_write_json(CAMERAS_FILE, cameras)
+
+def get_companies() -> Dict[str, Any]:
+    return load_json(COMPANIES_FILE, {})
+
+def save_companies(companies: Dict[str, Any]):
+    atomic_write_json(COMPANIES_FILE, companies)
 
 def _tokens_file() -> Path:
     return AUTH_DATA_DIR / "tokens.json"

@@ -13,22 +13,28 @@ import StreamViewer from './components/StreamViewer';
 import AnimatedLoginPage from './components/auth/AnimatedLoginPage';
 import UserManagement from './components/admin/UserManagement';
 import Settings from './components/admin/Settings';
+import BackupDashboard from './components/admin/BackupDashboard';
 import MainLayout from './components/layout/MainLayout';
 import useAuthStore from './store/authStore';
 import { detectBackendUrl, API_BASE_URL } from './utils/apiConfig';
+import HolidayCalendar from './components/HolidayCalendar';
+import AttendanceReport from './components/Attendance/AttendanceReport';
 
 const AppContent = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isCheckingBackend, setIsCheckingBackend] = useState(true);
+  const [backendError, setBackendError] = useState(null);
   const { isAuthenticated, getCurrentUser } = useAuthStore();
 
   useEffect(() => {
     // Auto-detect backend URL and switch if necessary
     const checkBackend = async () => {
+      setIsCheckingBackend(true);
+      setBackendError(null);
       try {
         const workingUrl = await detectBackendUrl();
         const currentUrl = localStorage.getItem('api_base_url');
-        
+
         // If we found a working URL
         if (workingUrl) {
           // If it's different from what we have saved (or we have nothing saved)
@@ -39,24 +45,19 @@ const AppContent = () => {
             window.location.reload();
             return;
           }
+          setIsCheckingBackend(false);
         } else {
-          // If no server found, and we have a stored URL that might be dead
-          if (currentUrl) {
-            console.warn(`Stored backend URL ${currentUrl} is not responding. Resetting to defaults.`);
-            localStorage.removeItem('api_base_url');
-            window.location.reload();
-            return;
-          }
-          
-          console.warn('No backend server detected.');
+          // No backend found
+          setBackendError('Unable to connect to any backend server.');
+          setIsCheckingBackend(false);
         }
       } catch (error) {
         console.error('Backend detection failed:', error);
-      } finally {
+        setBackendError('Failed to detect backend server.');
         setIsCheckingBackend(false);
       }
     };
-    
+
     checkBackend();
   }, []);
 
@@ -76,9 +77,31 @@ const AppContent = () => {
       );
     }
 
+    if (backendError) {
+      return (
+        <div className="loading-container disconnected">
+          <div className="error-icon">⚠️</div>
+          <h2>Server Disconnected</h2>
+          <p>{backendError}</p>
+          <p className="hint">Make sure the backend is running at {API_BASE_URL}</p>
+          <div className="error-actions">
+            <button className="retry-button" onClick={() => window.location.reload()}>Retry Connection</button>
+            <button className="settings-button" onClick={() => {
+              const newIp = prompt('Enter Backend IP (e.g., 192.168.1.50):');
+              if (newIp) {
+                const formattedUrl = newIp.startsWith('http') ? newIp : `http://${newIp}:8005`;
+                localStorage.setItem('api_base_url', formattedUrl);
+                window.location.reload();
+              }
+            }}>Set Manual IP</button>
+          </div>
+        </div>
+      );
+    }
+
     switch (activeTab) {
       case 'dashboard':
-        return <Dashboard />;
+        return <Dashboard setActiveTab={setActiveTab} />;
       case 'gallery':
         return <FaceGallery />;
       case 'events':
@@ -101,6 +124,15 @@ const AppContent = () => {
         return <UserManagement />;
       case 'settings':
         return <Settings />;
+      case 'backup':
+        return <BackupDashboard />;
+      case 'holiday-calendar':
+        return <HolidayCalendar />;
+      case 'attendance-report':
+      case 'day-report':
+      case 'week-report':
+      case 'month-report':
+        return <AttendanceReport reportType={activeTab} setActiveTab={setActiveTab} />;
       default:
         return <Dashboard />;
     }

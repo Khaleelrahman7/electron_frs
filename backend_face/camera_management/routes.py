@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 from typing import Optional
 import os
@@ -53,30 +53,40 @@ async def validate_camera(
 
 @router.get("/cameras", response_model=CameraListResponse)
 async def get_cameras(
+    request: Request,
     page: int = 1,
     per_page: int = 6,
     service: EnhancedCameraService = Depends(get_camera_service)
 ):
     """Get paginated list of cameras with collections"""
     try:
+        current_user = request.scope.get("user", {})
+        company_id = current_user.get("company_id") if current_user.get("role") != "SuperAdmin" else None
+        
         if page < 1:
             page = 1
         if per_page < 1 or per_page > 50:
             per_page = 6
             
-        return service.get_cameras(page, per_page)
+        return service.get_cameras(page, per_page, company_id=company_id)
     except Exception as e:
         logger.error(f"Error getting cameras: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve cameras")
 
 @router.post("/cameras", response_model=CameraOperationResponse)
 async def create_camera(
-    request: CameraCreateRequest,
+    request_data: CameraCreateRequest,
+    request: Request,
     service: EnhancedCameraService = Depends(get_camera_service)
 ):
     """Create a new camera"""
     try:
-        return service.create_camera(request)
+        current_user = request.scope.get("user", {})
+        # If Admin or Supervisor, force company_id from their account
+        if current_user.get("role") != "SuperAdmin":
+            request_data.company_id = current_user.get("company_id")
+            
+        return service.create_camera(request_data)
     except HTTPException:
         raise
     except Exception as e:
@@ -86,12 +96,23 @@ async def create_camera(
 @router.put("/cameras/{camera_id}", response_model=CameraOperationResponse)
 async def update_camera(
     camera_id: int,
-    request: CameraUpdateRequest,
+    request_data: CameraUpdateRequest,
+    request: Request,
     service: EnhancedCameraService = Depends(get_camera_service)
 ):
     """Update an existing camera"""
     try:
-        return service.update_camera(camera_id, request)
+        current_user = request.scope.get("user", {})
+        company_id = current_user.get("company_id") if current_user.get("role") != "SuperAdmin" else None
+
+        # Verify ownership
+        if company_id:
+            cameras = service._load_cameras()
+            camera = next((c for c in cameras if c.id == camera_id), None)
+            if not camera or camera.company_id != company_id:
+                raise HTTPException(status_code=403, detail="Not authorized to update this camera")
+
+        return service.update_camera(camera_id, request_data)
     except HTTPException:
         raise
     except Exception as e:
@@ -101,10 +122,21 @@ async def update_camera(
 @router.delete("/cameras/{camera_id}", response_model=CameraOperationResponse)
 async def delete_camera(
     camera_id: int,
+    request: Request,
     service: EnhancedCameraService = Depends(get_camera_service)
 ):
     """Delete a camera"""
     try:
+        current_user = request.scope.get("user", {})
+        company_id = current_user.get("company_id") if current_user.get("role") != "SuperAdmin" else None
+
+        # Verify ownership
+        if company_id:
+            cameras = service._load_cameras()
+            camera = next((c for c in cameras if c.id == camera_id), None)
+            if not camera or camera.company_id != company_id:
+                raise HTTPException(status_code=403, detail="Not authorized to delete this camera")
+
         return service.delete_camera(camera_id)
     except HTTPException:
         raise
@@ -115,15 +147,23 @@ async def delete_camera(
 @router.get("/cameras/{camera_id}")
 async def get_camera(
     camera_id: int,
+    request: Request,
     service: EnhancedCameraService = Depends(get_camera_service)
 ):
     """Get a specific camera by ID"""
     try:
+        current_user = request.scope.get("user", {})
+        company_id = current_user.get("company_id") if current_user.get("role") != "SuperAdmin" else None
+
         cameras = service._load_cameras()
         camera = next((c for c in cameras if c.id == camera_id), None)
 
         if not camera:
             raise HTTPException(status_code=404, detail="Camera not found")
+
+        # Verify ownership
+        if company_id and camera.company_id != company_id:
+            raise HTTPException(status_code=403, detail="Not authorized to view this camera")
 
         return camera
     except HTTPException:
@@ -135,29 +175,51 @@ async def get_camera(
 @router.post("/cameras/{camera_id}/activate")
 async def activate_camera(
     camera_id: int,
+    request: Request,
     service: EnhancedCameraService = Depends(get_camera_service)
 ):
     """Activate a camera"""
     try:
+        current_user = request.scope.get("user", {})
+        company_id = current_user.get("company_id") if current_user.get("role") != "SuperAdmin" else None
+
+        # Verify ownership
+        if company_id:
+            cameras = service._load_cameras()
+            camera = next((c for c in cameras if c.id == camera_id), None)
+            if not camera or camera.company_id != company_id:
+                raise HTTPException(status_code=403, detail="Not authorized to activate this camera")
+
         return service.activate_camera(camera_id)
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error activating camera: {e}")
+        logger.error(f"Error activating camera {camera_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to activate camera")
 
 @router.post("/cameras/{camera_id}/deactivate")
 async def deactivate_camera(
     camera_id: int,
+    request: Request,
     service: EnhancedCameraService = Depends(get_camera_service)
 ):
     """Deactivate a camera"""
     try:
+        current_user = request.scope.get("user", {})
+        company_id = current_user.get("company_id") if current_user.get("role") != "SuperAdmin" else None
+
+        # Verify ownership
+        if company_id:
+            cameras = service._load_cameras()
+            camera = next((c for c in cameras if c.id == camera_id), None)
+            if not camera or camera.company_id != company_id:
+                raise HTTPException(status_code=403, detail="Not authorized to deactivate this camera")
+
         return service.deactivate_camera(camera_id)
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error deactivating camera: {e}")
+        logger.error(f"Error deactivating camera {camera_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to deactivate camera")
 
 # Streaming endpoints
@@ -186,7 +248,7 @@ async def start_camera_stream(
             }
 
         # Start new stream
-        stream_id = stream_service.start_stream(camera_id, camera.rtsp_url, camera.name)
+        stream_id = stream_service.start_stream(camera_id, camera.rtsp_url, camera.name, company_id=camera.company_id)
 
         return {
             "success": True,
@@ -239,7 +301,7 @@ async def get_camera_stream(
         # Get or create stream
         stream_id = stream_service.get_camera_stream(camera_id)
         if not stream_id:
-            stream_id = stream_service.start_stream(camera_id, camera.rtsp_url, camera.name)
+            stream_id = stream_service.start_stream(camera_id, camera.rtsp_url, camera.name, company_id=camera.company_id)
 
         # Return MJPEG stream
         return StreamingResponse(
@@ -496,11 +558,20 @@ async def get_active_recordings(
 # Collection management endpoints
 @router.get("/")
 async def get_collections(
+    request: Request,
     service: EnhancedCameraService = Depends(get_camera_service)
 ):
     """Get all collections"""
     try:
+        current_user = request.scope.get("user", {})
+        company_id = current_user.get("company_id") if current_user.get("role") != "SuperAdmin" else None
+        
         collections = service._load_collections()
+        
+        # Filter by company_id strictly (no default collection leak)
+        if company_id:
+            collections = [c for c in collections if c.company_id == company_id]
+            
         return {"collections": collections}
     except Exception as e:
         logger.error(f"Error getting collections: {e}")
@@ -508,7 +579,8 @@ async def get_collections(
 
 @router.post("/")
 async def create_collection(
-    request: CollectionCreateRequest,
+    request_data: CollectionCreateRequest,
+    request: Request,
     service: EnhancedCameraService = Depends(get_camera_service)
 ):
     """Create a new collection"""
@@ -517,18 +589,22 @@ async def create_collection(
         from datetime import datetime
         from .models import CameraCollection
         
+        current_user = request.scope.get("user", {})
+        company_id = current_user.get("company_id")
+        
         collections = service._load_collections()
         
-        # Check for duplicate names
-        if any(c.name.lower() == request.name.lower() for c in collections):
-            raise HTTPException(status_code=409, detail="Collection name already exists")
+        # Check for duplicate names (within the same company)
+        if any(c.name.lower() == request_data.name.lower() and c.company_id == company_id for c in collections):
+            raise HTTPException(status_code=409, detail="Collection name already exists for this company")
         
         new_collection = CameraCollection(
             id=str(uuid.uuid4()),
-            name=request.name,
-            description=request.description,
+            name=request_data.name,
+            description=request_data.description,
             created_at=datetime.now(),
-            camera_count=0
+            camera_count=0,
+            company_id=company_id
         )
         
         collections.append(new_collection)
@@ -544,11 +620,15 @@ async def create_collection(
 @router.put("/{collection_id}")
 async def update_collection(
     collection_id: str,
-    request: CollectionUpdateRequest,
+    request_data: CollectionUpdateRequest,   # Re-aliased parameter to not conflict with FastAPI Request
+    request: Request,                      # Added FastAPI Request for auth
     service: EnhancedCameraService = Depends(get_camera_service)
 ):
     """Update a collection"""
     try:
+        current_user = request.scope.get("user", {})
+        company_id = current_user.get("company_id") if current_user.get("role") != "SuperAdmin" else None
+
         collections = service._load_collections()
         
         # Find the collection to update
@@ -556,19 +636,23 @@ async def update_collection(
         if not collection:
             raise HTTPException(status_code=404, detail="Collection not found")
         
-        # Check for duplicate names (excluding current collection)
-        if request.name:
-            if any(c.name.lower() == request.name.lower() and c.id != collection_id for c in collections):
-                raise HTTPException(status_code=409, detail="Collection name already exists")
-            collection.name = request.name
+        # Authorization check
+        if company_id and collection.company_id != company_id:
+            raise HTTPException(status_code=403, detail="Not authorized to edit this collection")
         
-        if request.description is not None:
-            collection.description = request.description
+        # Check for duplicate names (excluding current collection in same company)
+        if request_data.name:
+            if any(c.name.lower() == request_data.name.lower() and c.id != collection_id and c.company_id == collection.company_id for c in collections):
+                raise HTTPException(status_code=409, detail="Collection name already exists in your company")
+            collection.name = request_data.name
+        
+        if request_data.description is not None:
+            collection.description = request_data.description
         
         service._save_collections(collections)
         
         # Update collection name in all cameras
-        if request.name:
+        if request_data.name:
             cameras = service._load_cameras()
             for camera in cameras:
                 if camera.collection_id == collection_id:
@@ -585,27 +669,31 @@ async def update_collection(
 @router.delete("/{collection_id}")
 async def delete_collection(
     collection_id: str,
+    request: Request,
     service: EnhancedCameraService = Depends(get_camera_service)
 ):
     """Delete a collection"""
     try:
-        # Prevent deletion of default collection
-        if collection_id == "default":
-            raise HTTPException(status_code=400, detail="Cannot delete the default collection")
-        
+        current_user = request.scope.get("user", {})
+        company_id = current_user.get("company_id") if current_user.get("role") != "SuperAdmin" else None
+
         collections = service._load_collections()
         
         # Find the collection
         collection = next((c for c in collections if c.id == collection_id), None)
         if not collection:
             raise HTTPException(status_code=404, detail="Collection not found")
-        
-        # Move all cameras in this collection to default
+            
+        # Authorization check
+        if company_id and collection.company_id != company_id:
+            raise HTTPException(status_code=403, detail="Not authorized to delete this collection")
+            
+        # Remove this collection from all cameras
         cameras = service._load_cameras()
         for camera in cameras:
             if camera.collection_id == collection_id:
-                camera.collection_id = "default"
-                camera.collection_name = "Default Collection"
+                camera.collection_id = None
+                camera.collection_name = None
         service._save_cameras(cameras)
         
         # Remove the collection
@@ -631,12 +719,29 @@ async def health_check():
 @router.get("/{collection_id}/streams")
 async def get_collection_streams(
     collection_id: str,
+    request: Request,
     service: EnhancedCameraService = Depends(get_camera_service)
 ):
     """Get all streams for a collection (Compatibility with frontend)"""
     try:
+        current_user = request.scope.get("user", {})
+        company_id = current_user.get("company_id") if current_user.get("role") != "SuperAdmin" else None
+
+        # Verify collection access
+        if company_id:
+            collections = service._load_collections()
+            collection = next((c for c in collections if c.id == collection_id), None)
+            if not collection or collection.company_id != company_id:
+                # Still allow 'default' but it won't have cameras for this company anyway if filtered
+                if collection_id != "default":
+                    raise HTTPException(status_code=403, detail="Not authorized to access this collection")
+
         cameras = service._load_cameras()
+        
+        # Filter cameras by collection AND company_id
         collection_cameras = [c for c in cameras if c.collection_id == collection_id]
+        if company_id:
+            collection_cameras = [c for c in collection_cameras if c.company_id == company_id]
         
         streams = []
         for camera in collection_cameras:
@@ -653,6 +758,8 @@ async def get_collection_streams(
             })
             
         return {"success": True, "streams": streams}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error getting collection streams: {e}")
         raise HTTPException(status_code=500, detail="Failed to get collection streams")

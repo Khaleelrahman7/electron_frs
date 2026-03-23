@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, Request, UploadFile, File, Form, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import StreamingResponse, JSONResponse
@@ -17,14 +17,25 @@ from auth.routes import router as auth_router
 from auth.user_routes import router as user_router
 from auth.camera_routes import router as camera_router
 from auth.license_checker import start_license_checker
+from ws_manager import ws_manager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 FACE_PIPELINE_READY = False
 
-# Global bounding box toggle (default: off)
-show_bounding_box = False
+# Global bounding box settings cache (company_id -> bool)
+# Loaded from auth/storage.py on demand
+company_bbox_settings: Dict[str, bool] = {}
+bbox_lock = threading.Lock()
+
+def get_company_bbox_setting(company_id: Optional[str] = None, stream_id: Optional[str] = None) -> bool:
+    """Get bounding box setting, checking stream-specific first then company."""
+    try:
+        from camera_management.streaming import get_stream_manager
+        return get_stream_manager().get_bounding_box(stream_id=stream_id, company_id=company_id)
+    except Exception:
+        return True
 
 # Create main FastAPI app
 app = FastAPI(
@@ -33,10 +44,79 @@ app = FastAPI(
     version="1.0.0"
 )
 
+async def start_persistent_streams():
+    """Start streams for all cameras marked as active in the database"""
+    print("\n[DEBUG] Starting persistent streams check...")
+    logger.info("Starting persistent streams check...")
+    try:
+        from camera_management.service import EnhancedCameraService
+        from camera_management.streaming import get_stream_manager
+        
+        # Initialize camera service with absolute path relative to main.py
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        data_dir = os.path.join(base_dir, "data", "camera_management")
+        print(f"[DEBUG] Loading cameras from: {data_dir}")
+        camera_service = EnhancedCameraService(data_dir)
+        stream_manager = get_stream_manager()
+        
+        # Load all cameras
+        cameras = camera_service._load_cameras()
+        print(f"[DEBUG] Found {len(cameras)} total cameras")
+        active_count = 0
+        
+        for camera in cameras:
+            if camera.is_active:
+                try:
+                    # Check if stream already exists
+                    existing_stream = stream_manager.get_camera_stream(camera.id)
+                    if not existing_stream:
+                        # Start new stream
+                        stream_id = stream_manager.start_stream(
+                            camera_id=camera.id,
+                            rtsp_url=camera.rtsp_url,
+                            camera_name=camera.name,
+                            company_id=camera.company_id
+                        )
+                        logger.info(f"✓ Persistent stream started: {camera.name} ({stream_id})")
+                        active_count += 1
+                    else:
+                        logger.info(f"Stream already running for camera: {camera.name}")
+                        active_count += 1
+                except Exception as stream_err:
+                    logger.error(f"✗ Failed to start persistent stream for {camera.name}: {stream_err}")
+        
+        logger.info(f"Total persistent streams active: {active_count}")
+        
+    except Exception as e:
+        logger.error(f"Error starting persistent streams: {e}")
+
 @app.on_event("startup")
 async def startup_event():
     start_license_checker()
     logger.info("License checker background task started")
+    
+    # Start persistent streams for all active cameras
+    await start_persistent_streams()
+    
+    # Start backup scheduler (non-blocking, handles Redis unavailability gracefully)
+    try:
+        from backup.backup_service import RedisBackupService
+        from backup.backup_scheduler import BackupScheduler
+        backup_service = RedisBackupService()
+        scheduler = BackupScheduler(backup_service)
+        scheduler.start()
+        logger.info("✓ Backup scheduler started (monthly backups on 1st)")
+    except Exception as e:
+        logger.warning(f"⚠ Backup scheduler not started: {e}")
+        logger.info("Backup management will work on-demand only (no auto-scheduling)")
+
+    # Start image retention worker
+    try:
+        from image_retention import start_retention_worker
+        start_retention_worker()
+        logger.info("✓ Image retention worker started")
+    except Exception as e:
+        logger.warning(f"⚠ Image retention worker not started: {e}")
 
 # Add RBAC middleware for authentication and authorization
 app.add_middleware(RBACMiddleware)
@@ -50,16 +130,39 @@ app.add_middleware(
     allow_headers=["*"],  # Allows all headers
 )
 
+# ============= WEBSOCKET ENDPOINT =============
+
+@app.websocket("/ws/recognitions/{company_id}")
+async def websocket_endpoint(websocket: WebSocket, company_id: str):
+    """
+    WebSocket endpoint for real-time recognition events.
+    Filtered by company_id for multi-tenancy.
+    """
+    await ws_manager.connect(websocket, company_id)
+    try:
+        while True:
+            # Keep connection alive and wait for client to disconnect
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        ws_manager.disconnect(websocket, company_id)
+    except Exception as e:
+        logger.error(f"WebSocket error for {company_id}: {e}")
+        ws_manager.disconnect(websocket, company_id)
+
+# ============= END WEBSOCKET =============
+
 # Mount individual service applications
 def mount_services():
     """Mount all service applications"""
     
     # Mount authentication service
     try:
+        from auth.company_routes import router as company_router
         app.include_router(auth_router, prefix="/api")
         app.include_router(user_router, prefix="/api")
         app.include_router(camera_router, prefix="/api")
-        logger.info("✓ Authentication service mounted")
+        app.include_router(company_router, prefix="/api")
+        logger.info("✓ Authentication and Company services mounted")
     except Exception as e:
         logger.error(f"✗ Failed to mount authentication service: {e}")
 
@@ -67,9 +170,9 @@ def mount_services():
     try:
         from event.event_api import router as event_router
         app.include_router(event_router, prefix="/api/events", tags=["Events"])
-        logger.info("? Event service mounted")
+        logger.info("✓ Event service mounted")
     except Exception as e:
-        logger.error(f"? Failed to mount event service: {e}")
+        logger.error(f"✗ Failed to mount event service: {e}")
 
     # Old camera service removed - using enhanced camera management instead
     # Add a basic status endpoint
@@ -86,26 +189,35 @@ def mount_services():
     try:
         from registration.reg import app as registration_app
         app.mount("/api/registration", registration_app)
-        logger.info("? Registration service mounted")
+        logger.info("✓ Registration service mounted")
     except Exception as e:
-        logger.error(f"? Failed to mount registration service: {e}")
+        logger.error(f"✗ Failed to mount registration service: {e}")
 
     # Mount enhanced camera management service
     try:
         from camera_management.routes import router as camera_management_router
         app.include_router(camera_management_router)
-        logger.info("? Enhanced camera management service mounted")
+        logger.info("✓ Enhanced camera management service mounted")
     except Exception as e:
-        logger.error(f"? Failed to mount enhanced camera management service: {e}")
+        logger.error(f"✗ Failed to mount enhanced camera management service: {e}")
 
     # Mount WebRTC streaming service
     try:
         from webrtc_streaming.routes import router as webrtc_router
         app.include_router(webrtc_router, prefix="/api/webrtc")
-        logger.info("? WebRTC streaming service mounted")
+        logger.info("✓ WebRTC streaming service mounted")
     except Exception as e:
-        logger.error(f"? Failed to mount WebRTC streaming service: {e}")
+        logger.error(f"✗ Failed to mount WebRTC streaming service: {e}")
         logger.info("Continuing with basic camera service only")
+
+    # Mount backup management service (SuperAdmin only)
+    try:
+        from backup.backup_routes import router as backup_router
+        app.include_router(backup_router, prefix="/api/backup", tags=["Backup"])
+        logger.info("✓ Backup management service mounted")
+    except Exception as e:
+        logger.error(f"✗ Failed to mount backup service: {e}")
+        logger.info("Backup management will be unavailable")
 
     # Mount matching service
     try:
@@ -113,7 +225,7 @@ def mount_services():
         app.mount("/api/matching", matching_app)
         logger.info("? Matching service mounted")
     except Exception as e:
-        logger.error(f"? Failed to mount matching service: {e}")
+        logger.error(f"✗ Failed to mount matching service: {e}")
 
     # Mount video processing service
     try:
@@ -121,7 +233,7 @@ def mount_services():
         app.mount("/api/video", video_app)
         logger.info("? Video processing service mounted")
     except Exception as e:
-        logger.error(f"? Failed to mount video processing service: {e}")
+        logger.error(f"✗ Failed to mount video processing service: {e}")
         logger.info("Adding basic video endpoints as fallback")
 
         # Add basic video endpoints as fallback
@@ -169,9 +281,9 @@ mount_services()
 # Initialize face pipeline (non-disruptive; skips if unavailable)
 # Try GPU first (ctx=0), will auto-fallback to CPU if GPU unavailable
 try:
-    # Optimized for Tesla T4 GPU: Higher detection size for better accuracy
-    # (1024, 1024) provides excellent quality while Tesla T4 can handle it efficiently
-    init_face_pipeline(os.path.join(os.path.dirname(__file__), "data"), ctx=0, det_size=(1024, 1024))
+    # Optimized for Tesla T4 GPU: Balance of speed and accuracy
+    # (640, 640) significantly reduces compute load while maintaining detection quality
+    init_face_pipeline(os.path.join(os.path.dirname(__file__), "data"), ctx=0, det_size=(640, 640))
     FACE_PIPELINE_READY = True
     logger.info("? Face pipeline initialized")
 except Exception as e:
@@ -200,10 +312,21 @@ app.mount("/static/captured", StaticFiles(directory=CAPTURED_FACES_DIR), name="c
 from fastapi import HTTPException
 from fastapi.responses import FileResponse
 
-@app.get("/api/gallery/image/{person_name}/{image_name:path}")
-async def get_gallery_image(person_name: str, image_name: str):
+@app.api_route("/api/gallery/image/{company_id}/{person_name}/{image_name:path}", methods=["GET", "HEAD"])
+async def get_gallery_image(request: Request, company_id: str, person_name: str, image_name: str):
     """Serve gallery images with proper error handling and fallback"""
     try:
+        # Security: Verify company access
+        current_user = request.scope.get("user", {})
+        user_company_id = current_user.get("company_id")
+        user_role = current_user.get("role")
+        
+        # If no user is found in scope or it's an empty dict, we allow access to public gallery paths
+        # (RBACMiddleware already verified it's a public path)
+        if current_user and isinstance(current_user, dict) and "company_id" in current_user:
+            if user_role != "SuperAdmin" and user_company_id != company_id:
+                raise HTTPException(status_code=403, detail="Unauthorized to access this company's gallery")
+
         # Sanitize the inputs to prevent directory traversal
         person_name = person_name.replace('..', '').replace('/', '').replace('\\', '')
         # Extract just the filename from image_name (in case full path is passed)
@@ -211,7 +334,14 @@ async def get_gallery_image(person_name: str, image_name: str):
         image_name = image_name.replace('..', '').replace('/', '').replace('\\', '')
 
         # Construct the image path
-        image_path = os.path.join(GALLERY_DIR, person_name, image_name)
+        image_path = os.path.join(GALLERY_DIR, company_id, person_name, image_name)
+
+        # Fallback: If company_id is "default" and folder doesn't exist, check gallery root
+        if not os.path.exists(image_path) and company_id == "default":
+            root_fallback = os.path.join(GALLERY_DIR, person_name, image_name)
+            if os.path.exists(root_fallback):
+                image_path = root_fallback
+                logger.info(f"Using root gallery fallback for {person_name}/{image_name}")
 
         # Check if file exists and is within the gallery directory
         if not os.path.exists(image_path):
@@ -219,7 +349,7 @@ async def get_gallery_image(person_name: str, image_name: str):
             fallback_names = ['1.jpg', 'original.jpg']
             if image_name not in fallback_names:
                 for fallback_name in fallback_names:
-                    fallback_path = os.path.join(GALLERY_DIR, person_name, fallback_name)
+                    fallback_path = os.path.join(GALLERY_DIR, company_id, person_name, fallback_name)
                     if os.path.exists(fallback_path):
                         image_path = fallback_path
                         logger.info(f"Using fallback image {fallback_name} for {person_name}/{image_name}")
@@ -245,10 +375,24 @@ async def get_gallery_image(person_name: str, image_name: str):
         logger.error(f"Error serving gallery image {person_name}/{image_name}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-@app.get("/api/captured/image/{face_type}/{camera}/{person}/{image_name}")
-async def get_captured_image(face_type: str, camera: str, person: str, image_name: str):
+@app.api_route("/api/gallery/image/{person_name}/{image_name:path}", methods=["GET", "HEAD"])
+async def get_gallery_image_legacy(request: Request, person_name: str, image_name: str):
+    """Fallback for 2-parameter legacy gallery URLs"""
+    return await get_gallery_image(request, "default", person_name, image_name)
+
+@app.api_route("/api/captured/image/{face_type}/{company_id}/{camera}/{person}/{image_name}", methods=["GET", "HEAD"])
+async def get_captured_image(request: Request, face_type: str, company_id: str, camera: str, person: str, image_name: str):
     """Serve captured face images with proper error handling"""
     try:
+        # Security: Verify company access
+        current_user = request.scope.get("user", {})
+        user_company_id = current_user.get("company_id")
+        user_role = current_user.get("role")
+        
+        if current_user and isinstance(current_user, dict) and "company_id" in current_user:
+            if user_role != "SuperAdmin" and user_company_id != company_id:
+                raise HTTPException(status_code=403, detail="Unauthorized to access this company's data")
+
         # Validate face_type
         if face_type not in ['known', 'unknown']:
             raise HTTPException(status_code=400, detail="Invalid face type. Must be 'known' or 'unknown'")
@@ -260,18 +404,20 @@ async def get_captured_image(face_type: str, camera: str, person: str, image_nam
         image_name = os.path.basename(image_name)
         image_name = image_name.replace('..', '').replace('/', '').replace('\\', '')
 
-        base_dir = os.path.join(CAPTURED_FACES_DIR, face_type)
+        base_dir = os.path.join(CAPTURED_FACES_DIR, face_type, company_id)
+        fallback_base_dir = os.path.join(CAPTURED_FACES_DIR, face_type)
         candidates = []
 
-        if camera == "default":
-            candidates.append(os.path.join(base_dir, image_name))
-            if person and person not in ["default", "unknown"]:
-                candidates.append(os.path.join(base_dir, person, image_name))
-        else:
-            candidates.append(os.path.join(base_dir, camera, person, image_name))
-            candidates.append(os.path.join(base_dir, camera, image_name))
-            if person and person not in ["default", "unknown"]:
-                candidates.append(os.path.join(base_dir, person, image_name))
+        for b_dir in [base_dir, fallback_base_dir]:
+            if camera == "default":
+                candidates.append(os.path.join(b_dir, image_name))
+                if person and person not in ["default", "unknown"]:
+                    candidates.append(os.path.join(b_dir, person, image_name))
+            else:
+                candidates.append(os.path.join(b_dir, camera, person, image_name))
+                candidates.append(os.path.join(b_dir, camera, image_name))
+                if person and person not in ["default", "unknown"]:
+                    candidates.append(os.path.join(b_dir, person, image_name))
 
         image_path = next((path for path in candidates if os.path.exists(path)), None)
 
@@ -318,11 +464,13 @@ async def root():
 # ============= ANALYTICS ENDPOINTS =============
 
 @app.get("/api/analytics/overview", tags=["Analytics"])
-async def get_analytics_overview():
+async def get_analytics_overview(request: Request):
     """Get overall analytics overview"""
     try:
-        from event.event_api import filter_faces
-        all_faces = await filter_faces(name=None, from_date=None, to_date=None, camera="all_cameras", face_type=None)
+        from event.event_api import filter_faces_logic
+        import csv
+        
+        all_faces = await filter_faces_logic(request=request, name=None, from_date=None, to_date=None, camera="all_cameras", face_type=None)
 
         total_faces = len(all_faces)
         known_faces = sum(1 for f in all_faces if f["type"] == "known")
@@ -330,7 +478,35 @@ async def get_analytics_overview():
         unique_persons = set(f["name"] for f in all_faces if f["type"] == "known" and f["name"] != "Unknown")
 
         recognition_rate = (known_faces / total_faces * 100) if total_faces > 0 else 0
-        avg_confidence = 0.85 # Default if not available in events
+        
+        avg_confidence = 0.85
+        # Compute real average confidence from capture logs
+        try:
+            current_user = request.scope.get("user", {})
+            user_company_id = current_user.get("company_id")
+            user_role = current_user.get("role")
+            
+            log_csv_path = os.path.join(CAPTURED_FACES_DIR, "capture_log.csv")
+            if os.path.exists(log_csv_path):
+                total_conf = 0.0
+                count_conf = 0
+                with open(log_csv_path, 'r', newline='', encoding='utf-8') as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        # RBAC
+                        if user_role != "SuperAdmin" and row.get("company_id") != user_company_id:
+                            continue
+                        conf_str = row.get("confidence", "")
+                        if conf_str:
+                            try:
+                                total_conf += float(conf_conf := float(conf_str))
+                                count_conf += 1
+                            except ValueError:
+                                pass
+                if count_conf > 0:
+                    avg_confidence = total_conf / count_conf
+        except Exception as e:
+            logger.warning(f"Failed to compute avg_confidence from log: {e}")
 
         return {
             "total_faces": total_faces,
@@ -345,14 +521,14 @@ async def get_analytics_overview():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/analytics/face-detection-trend", tags=["Analytics"])
-async def get_face_detection_trend(days: int = 7):
+async def get_face_detection_trend(request: Request, days: int = 7):
     """Get face detection trends over time"""
     try:
-        from event.event_api import filter_faces
+        from event.event_api import filter_faces_logic
         from datetime import datetime, timedelta
         from collections import defaultdict
 
-        all_faces = await filter_faces(name=None, from_date=None, to_date=None, camera="all_cameras", face_type=None)
+        all_faces = await filter_faces_logic(request=request, name=None, from_date=None, to_date=None, camera="all_cameras", face_type=None)
         cutoff_date = datetime.now() - timedelta(days=days)
         daily_stats = defaultdict(lambda: defaultdict(int))
 
@@ -387,14 +563,14 @@ async def get_face_detection_trend(days: int = 7):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/analytics/confidence-distribution", tags=["Analytics"])
-async def get_confidence_distribution():
+async def get_confidence_distribution(request: Request):
     """Get confidence score distribution"""
     try:
         # Confidence is not strictly available in events mapping, returning placeholder distribution
         labels = ['0-0.2', '0.2-0.4', '0.4-0.6', '0.6-0.8', '0.8-1.0']
         
-        from event.event_api import filter_faces
-        all_faces = await filter_faces(name=None, from_date=None, to_date=None, camera="all_cameras", face_type=None)
+        from event.event_api import filter_faces_logic
+        all_faces = await filter_faces_logic(request=request, name=None, from_date=None, to_date=None, camera="all_cameras", face_type=None)
         
         # Simulate confidence distribution based on known/unknown
         data = [0, 0, 0, 0, 0]
@@ -413,13 +589,13 @@ async def get_confidence_distribution():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/analytics/person-frequency", tags=["Analytics"])
-async def get_person_frequency(limit: int = 10):
+async def get_person_frequency(request: Request, limit: int = 10):
     """Get most frequently recognized persons"""
     try:
-        from event.event_api import filter_faces
+        from event.event_api import filter_faces_logic
         from collections import defaultdict
         
-        all_faces = await filter_faces(name=None, from_date=None, to_date=None, camera="all_cameras", face_type=None)
+        all_faces = await filter_faces_logic(request=request, name=None, from_date=None, to_date=None, camera="all_cameras", face_type=None)
         person_freq = defaultdict(int)
 
         for face in all_faces:
@@ -439,14 +615,14 @@ async def get_person_frequency(limit: int = 10):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/analytics/hourly-activity", tags=["Analytics"])
-async def get_hourly_activity():
+async def get_hourly_activity(request: Request):
     """Get face detection activity by hour of day"""
     try:
-        from event.event_api import filter_faces
+        from event.event_api import filter_faces_logic
         from datetime import datetime
         from collections import defaultdict
         
-        all_faces = await filter_faces(name=None, from_date=None, to_date=None, camera="all_cameras", face_type=None)
+        all_faces = await filter_faces_logic(request=request, name=None, from_date=None, to_date=None, camera="all_cameras", face_type=None)
         hourly_activity = defaultdict(int)
 
         for face in all_faces:
@@ -470,13 +646,13 @@ async def get_hourly_activity():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/analytics/camera-activity", tags=["Analytics"])
-async def get_camera_activity():
+async def get_camera_activity(request: Request):
     """Get face detection activity by camera/source"""
     try:
-        from event.event_api import filter_faces
+        from event.event_api import filter_faces_logic
         from collections import defaultdict
         
-        all_faces = await filter_faces(name=None, from_date=None, to_date=None, camera="all_cameras", face_type=None)
+        all_faces = await filter_faces_logic(request=request, name=None, from_date=None, to_date=None, camera="all_cameras", face_type=None)
         camera_activity = defaultdict(int)
 
         for face in all_faces:
@@ -491,20 +667,20 @@ async def get_camera_activity():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/analytics/top-persons", tags=["Analytics"])
-async def get_top_persons(limit: int = 5):
+async def get_top_persons(request: Request, limit: int = 5):
     """Get top detected persons (alias for person-frequency)"""
-    return await get_person_frequency(limit)
+    return await get_person_frequency(request, limit)
 
 @app.get("/api/analytics/detections-over-time", tags=["Analytics"])
-async def get_detections_over_time(days: int = 7):
+async def get_detections_over_time(request: Request, days: int = 7):
     """Get detections over time (alias for face-detection-trend)"""
-    return await get_face_detection_trend(days)
+    return await get_face_detection_trend(request, days)
 
 @app.get("/api/analytics/face-types", tags=["Analytics"])
-async def get_face_types():
+async def get_face_types(request: Request):
     """Get distribution of face types (Known vs Unknown)"""
     try:
-        overview = await get_analytics_overview()
+        overview = await get_analytics_overview(request)
         return {
             "labels": ["Known Faces", "Unknown Faces"],
             "data": [overview["known_faces"], overview["unknown_faces"]]
@@ -514,14 +690,14 @@ async def get_face_types():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/analytics/persons-list", tags=["Analytics"])
-async def get_persons_list():
+async def get_persons_list(request: Request):
     """Get list of all persons with their profile images and basic stats"""
     try:
-        from event.event_api import filter_faces
+        from event.event_api import filter_faces_logic
         from collections import defaultdict
         from datetime import datetime
 
-        all_faces = await filter_faces(name=None, from_date=None, to_date=None, camera="all_cameras", face_type=None)
+        all_faces = await filter_faces_logic(request=request, name=None, from_date=None, to_date=None, camera="all_cameras", face_type=None)
         persons_data = defaultdict(lambda: {
             "count": 0,
             "avg_confidence": 0.0,
@@ -574,14 +750,14 @@ async def get_persons_list():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/analytics/person/{person_name}", tags=["Analytics"])
-async def get_person_analytics(person_name: str):
+async def get_person_analytics(request: Request, person_name: str):
     """Get detailed analytics for a specific person"""
     try:
-        from event.event_api import filter_faces
+        from event.event_api import filter_faces_logic
         from datetime import datetime, timedelta
         from collections import defaultdict
 
-        all_faces = await filter_faces(name=None, from_date=None, to_date=None, camera="all_cameras", face_type=None)
+        all_faces = await filter_faces_logic(request=request, name=None, from_date=None, to_date=None, camera="all_cameras", face_type=None)
         person_faces = [f for f in all_faces if f["name"] == person_name and f["type"] == "known"]
 
         if not person_faces:
@@ -683,7 +859,7 @@ def convert_file_path_to_url(file_path: str) -> str:
             if len(parts) >= 2:
                 person_name = parts[0]
                 image_name = parts[-1]
-                return f"{API_BASE_URL}/api/gallery/image/{person_name}/{image_name}"
+                return f"{API_BASE_URL}/api/gallery/image/default/{person_name}/{image_name}"
         
         # Check if it's a captured face (known)
         known_faces_dir = os.path.join(CAPTURED_FACES_DIR, "known")
@@ -722,7 +898,7 @@ def convert_file_path_to_url(file_path: str) -> str:
                 if len(path_segments) >= 2:
                     person = path_segments[0]
                     img = path_segments[-1]
-                    return f"{API_BASE_URL}/api/gallery/image/{person}/{img}"
+                    return f"{API_BASE_URL}/api/gallery/image/default/{person}/{img}"
 
         # Try to detect captured known faces
         if 'captured_faces/known/' in path_str:
@@ -946,8 +1122,8 @@ class SimpleRTSPStream:
         with self.lock:
             if self.last_frame is not None:
                 try:
-                    # Optimized for Tesla T4: Encode frame as JPEG with maximum quality
-                    _, buffer = cv2.imencode('.jpg', self.last_frame, [cv2.IMWRITE_JPEG_QUALITY, 95])
+                    # Balanced JPEG quality for smooth streaming
+                    _, buffer = cv2.imencode('.jpg', self.last_frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
                     return buffer.tobytes()
                 except Exception as e:
                     logger.error(f"Error encoding frame: {e}")
@@ -976,15 +1152,29 @@ def generate_mjpeg_stream(stream_id: str):
 
             if frame is not None:
                 try:
-                    processed_frame, detections = process_frame(frame)
-                    # Conditionally render bounding boxes
-                    if show_bounding_box and detections:
-                        processed_frame = render_bounding_boxes(processed_frame, detections, show_bounding_box=True)
+                    stream_company_id = active_streams.get(stream_id, {}).get('company_id')
+                    processed_frame, detections = process_frame(
+                        frame, stream_id=stream_id, company_id=stream_company_id
+                    )
+                    # Broad diagnostic: Are we detecting anything?
+                    if detections:
+                        logger.debug(f"[BBOX-MAIN-PRE] Detected {len(detections)} faces for {stream_id}")
+                    
+                    # Only render when faces were actually detected in THIS frame.
+                    # An empty list or None means no faces – skip entirely.
+                    # Get bounding box setting for this stream's company
+                    show_bbox = get_company_bbox_setting(company_id=stream_company_id, stream_id=stream_id)
+                    
+                    if show_bbox and detections:
+                        logger.debug(f"[BBOX-MAIN] detections={len(detections)}, company={stream_company_id}")
+                        processed_frame = render_bounding_boxes(
+                            processed_frame, detections, show_bounding_box=True
+                        )
                 except Exception as e:
-                    logger.debug(f"Face pipeline processing error for {stream_id}: {e}")
-                    processed_frame = frame
+                    logger.warning(f"Face pipeline processing error for {stream_id}: {e}")
+                    processed_frame = frame  # fall back to raw frame
                 try:
-                    _, buffer = cv2.imencode('.jpg', processed_frame, [cv2.IMWRITE_JPEG_QUALITY, 95])
+                    _, buffer = cv2.imencode('.jpg', processed_frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
                     yield (b'--frame\r\n'
                            b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
                 except Exception as e:
@@ -1099,6 +1289,7 @@ async def start_stream(request: Request):
         active_streams[stream_id] = {
             'stream': stream,
             'rtsp_url': rtsp_url,
+            'company_id': body.get("company_id"),
             'created_at': time.time()
         }
 
@@ -1139,32 +1330,49 @@ async def options_handler(full_path: str):
 class BoundingBoxToggle(BaseModel):
     """Pydantic model for bounding box toggle request"""
     enabled: bool
+    stream_id: Optional[str] = None
+    camera_id: Optional[int] = None
 
 @app.post("/api/bounding-box/toggle", tags=["Visualization"])
-async def toggle_bounding_box(payload: BoundingBoxToggle):
+async def toggle_bounding_box(request: Request, payload: BoundingBoxToggle):
     """Toggle bounding box visualization on the video stream.
     
     When enabled, bounding boxes are drawn on detected faces.
     When disabled, the video stream is shown without any overlays.
     This does NOT affect detection, recognition, or event-saving.
+    Optionally accepts stream_id for per-camera control.
     """
-    global show_bounding_box
-    show_bounding_box = payload.enabled
+    current_user = request.scope.get("user", {})
+    company_id: Optional[str] = None
+    if current_user.get("role") != "SuperAdmin":
+        company_id = current_user.get("company_id")
+    else:
+        company_id = "default"
+        
+    company_id = company_id if company_id and str(company_id).strip() else "default"
     
-    # Also update the managed camera stream manager
+    # Update stream manager with per-stream or per-company toggle
     try:
         from camera_management.streaming import get_stream_manager
-        get_stream_manager().set_bounding_box(payload.enabled)
+        get_stream_manager().set_bounding_box(
+            enabled=payload.enabled,
+            stream_id=payload.stream_id,
+            company_id=company_id,
+            camera_id=payload.camera_id
+        )
+        logger.debug(f"[BBOX-TOGG] {payload.enabled} for stream={payload.stream_id} company={company_id}")
     except Exception as e:
-        logger.warning(f"Could not update stream manager bounding box: {e}")
-    
-    logger.info(f"Bounding box visualization {'enabled' if payload.enabled else 'disabled'}")
-    return {"success": True, "enabled": payload.enabled}
+        logger.error(f"Error updating stream manager bbox: {e}")
+        
+    return {"status": "success", "show_bounding_box": payload.enabled, "stream_id": payload.stream_id}
 
 @app.get("/api/bounding-box/status", tags=["Visualization"])
-async def get_bounding_box_status():
-    """Get current bounding box toggle state."""
-    return {"enabled": show_bounding_box}
+async def get_bounding_box_status(request: Request, stream_id: Optional[str] = None):
+    """Get current bounding box toggle state, optionally per-stream."""
+    user = request.scope.get("user", {})
+    company_id = user.get("company_id", "default")
+    enabled = get_company_bbox_setting(company_id=company_id, stream_id=stream_id)
+    return {"enabled": enabled, "company_id": company_id, "stream_id": stream_id}
 
 if __name__ == "__main__":
     import uvicorn

@@ -20,8 +20,13 @@ class CameraStreamManager:
     def __init__(self):
         self.active_streams: Dict[str, Dict] = {}
         self.stream_lock = threading.Lock()
-        # Bounding box visualization toggle (default: off)
-        self.show_bounding_box: bool = False
+        # Per-stream bounding box visualization toggle (stream_id -> bool)
+        self.stream_bounding_boxes: Dict[str, bool] = {}
+        
+        # Diagnostic logging for singleton verification
+        instance_id = id(self)
+        logger.info(f"Initialized CameraStreamManager instance ID: {instance_id}")
+        
         # Per-stream frame shared state (replaces queues to prevent buffering/looping)
         self.current_frames: Dict[str, Tuple[np.ndarray, int]] = {}  # The absolute latest raw frame to process
         self.processed_frames_latest: Dict[str, np.ndarray] = {}  # The absolute latest processed frame
@@ -35,12 +40,16 @@ class CameraStreamManager:
         self.frame_buffers: Dict[str, deque] = {}  # Buffer of raw frames for best capture
         self.max_frame_buffer_size = 20  # Optimized for Tesla T4: More frames = better sharpness selection
         
+        # Lock for thread-safe detection updates
+        self.detections_lock = threading.Lock()
+        self.latest_detections: Dict[str, List] = {}
+        
         # Set FFmpeg environment variables to suppress H.264 error messages and handle errors better
         os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = 'rtsp_transport;tcp|fflags;nobuffer|flags;low_delay|strict;experimental|err_detect;ignore_err'
         # Suppress FFmpeg stderr output for H.264 errors (they're handled gracefully)
         os.environ['OPENCV_LOG_LEVEL'] = 'ERROR'
     
-    def start_stream(self, camera_id: int, rtsp_url: str, camera_name: str = "Unknown") -> str:
+    def start_stream(self, camera_id: int, rtsp_url: str, camera_name: str = "Unknown", company_id: Optional[str] = None) -> str:
         """Start a new camera stream"""
         stream_id = str(uuid.uuid4())
         
@@ -68,6 +77,7 @@ class CameraStreamManager:
                     'camera_id': camera_id,
                     'camera_name': camera_name,
                     'rtsp_url': rtsp_url,
+                    'company_id': company_id,
                     'created_at': time.time(),
                     'is_active': True,
                     'frame_count': 0
@@ -136,14 +146,62 @@ class CameraStreamManager:
                     return stream_id
         return None
     
-    def set_bounding_box(self, enabled: bool) -> None:
-        """Set bounding box visualization toggle."""
-        self.show_bounding_box = enabled
-        logger.info(f"Bounding box visualization {'enabled' if enabled else 'disabled'}")
+    def set_bounding_box(self, enabled: bool, stream_id: Optional[str] = None, company_id: Optional[str] = None, camera_id: Optional[str] = None) -> None:
+        """Set bounding box visualization toggle for a specific stream.
+        
+        Also resolves the real stream UUID when camera_id or a non-UUID stream_id is provided.
+        """
+        # Direct key storage
+        key = stream_id or company_id or "default"
+        self.stream_bounding_boxes[key] = enabled
+        
+        if camera_id:
+            self.stream_bounding_boxes[str(camera_id)] = enabled
+            
+        # Also resolve actual UUID stream IDs from active streams
+        # Frontend may pass camera_id or 'collection_ip' format instead of UUID
+        with self.stream_lock:
+            for sid, sinfo in self.active_streams.items():
+                # Match by camera_id
+                if camera_id and str(sinfo.get('camera_id')) == str(camera_id):
+                    self.stream_bounding_boxes[sid] = enabled
+                    logger.info(f"Bounding box {'enabled' if enabled else 'disabled'} for stream UUID: {sid} (matched camera_id={camera_id})")
+                # Match by IP in stream_id (frontend sends 'collection_ip')
+                elif stream_id and sinfo.get('rtsp_url'):
+                    cam_ip = sinfo.get('rtsp_url', '').split('@')[-1].split('/')[0].split(':')[0]
+                    if cam_ip and cam_ip in str(stream_id):
+                        self.stream_bounding_boxes[sid] = enabled
+                        logger.info(f"Bounding box {'enabled' if enabled else 'disabled'} for stream UUID: {sid} (matched IP in stream_id={stream_id})")
+        
+        logger.info(f"Bounding box {'enabled' if enabled else 'disabled'} for key: {key} and camera_id: {camera_id}")
     
-    def get_bounding_box(self) -> bool:
-        """Get current bounding box toggle state."""
-        return self.show_bounding_box
+    def get_bounding_box(self, stream_id: Optional[str] = None, company_id: Optional[str] = None) -> bool:
+        """Get bounding box toggle state for a stream (default: True)."""
+        # First check direct hit
+        if stream_id and stream_id in self.stream_bounding_boxes:
+            return self.stream_bounding_boxes[stream_id]
+            
+        # Then, fallback to searching active streams to resolve stream_id
+        if stream_id:
+            with self.stream_lock:
+                # If we know the UUID, grab its camera_id
+                sinfo = self.active_streams.get(stream_id)
+                if sinfo:
+                    cam_id = str(sinfo.get('camera_id', ''))
+                    # Check if we stored a persistent state for this camera_id
+                    if cam_id in self.stream_bounding_boxes:
+                        return self.stream_bounding_boxes[cam_id]
+                        
+                # Alternative resolution if the given stream_id was from the frontend instead of backend UUID
+                for sid, sinfo in self.active_streams.items():
+                    cam_id = str(sinfo.get('camera_id', ''))
+                    # If the passed stream_id is actually a camera_id or ip-based format
+                    if cam_id == str(stream_id) or (sinfo.get('rtsp_url') and stream_id in sinfo.get('rtsp_url', '')):
+                        if sid in self.stream_bounding_boxes:
+                            return self.stream_bounding_boxes[sid]
+                            
+        key = company_id or "default"
+        return self.stream_bounding_boxes.get(key, True)
     
     def _validate_frame(self, frame: np.ndarray) -> bool:
         """Validate frame quality - check for corruption or pixelation"""
@@ -305,6 +363,13 @@ class CameraStreamManager:
         
         last_processed_frame_num = -1
         
+        # Resolve company_id from stream info once (for embedding lookup)
+        company_id = None
+        stream_info = self.get_stream_info(stream_id)
+        if stream_info:
+            company_id = stream_info.get('company_id')
+        logger.info(f"Face processing worker for {stream_id} using company_id={company_id}")
+        
         try:
             while self._is_stream_active(stream_id):
                 try:
@@ -323,24 +388,31 @@ class CameraStreamManager:
                     last_processed_frame_num = frame_num
                     frame_counter += 1
                     
-                    # Skip processing for some frames to maintain frame rate
+                    # Re-resolve company_id if it was None (stream may have started before info was set)
+                    if company_id is None:
+                        stream_info = self.get_stream_info(stream_id)
+                        if stream_info:
+                            company_id = stream_info.get('company_id')
+                    
+                    # Skip processing for some frames to maintain frame rate.
                     if frame_counter % PROCESS_EVERY_N_FRAMES != 0:
-                        # Use raw frame WITHOUT bounding boxes on skipped frames
-                        # (avoids stale bbox positions appearing on wrong faces)
-                        self.processed_frames_latest[stream_id] = frame.copy()
+                        pass
                     else:
-                        # Process frame for face detection
+                        # Process frame for face detection + recognition
                         try:
                             from face_pipeline import process_frame as face_process_frame
-                            from face_pipeline import render_bounding_boxes
-                            processed_frame, detections = face_process_frame(frame, force_process=True, stream_id=stream_id)
-                            # Only render bounding boxes from THIS frame's fresh detections
-                            if self.show_bounding_box and detections:
-                                processed_frame = render_bounding_boxes(processed_frame, detections, show_bounding_box=True)
-                            self.processed_frames_latest[stream_id] = processed_frame
-                        except Exception as face_error:
-                            logger.debug(f"Face processing error for stream {stream_id}: {face_error}")
-                            self.processed_frames_latest[stream_id] = frame.copy()
+                            _, detections = face_process_frame(
+                                frame, force_process=True,
+                                stream_id=stream_id,
+                                company_id=company_id
+                            )
+                            
+                            # Store detections thread-safely for the rendering generator
+                            with self.detections_lock:
+                                self.latest_detections[stream_id] = detections
+                        except Exception as e:
+                            logger.error(f"Error in face processing: {e}")
+                            pass
                             
                 except Exception as e:
                     logger.error(f"Error in face processing worker for {stream_id}: {e}")
@@ -350,25 +422,24 @@ class CameraStreamManager:
             logger.error(f"Face processing worker exited for {stream_id}: {e}")
     
     def _generate_real_camera_stream(self, stream_id: str, stream_info: Dict, rtsp_url: str):
-        """Generate stream from real camera with enhanced stability and async face processing"""
+        """Generate stream from real camera with robust reconnection and exponential backoff."""
         cap = None
-        consecutive_failures = 0
-        max_failures = 10
         frame_count = 0
         last_frame = None
-        reconnect_attempts = 0
-        max_reconnect_attempts = 5
-
-        # JPEG encoding parameters - Optimized for smooth streaming
-        encode_params = [cv2.IMWRITE_JPEG_QUALITY, 85]
+        consecutive_failures = 0
+        max_failures = 15  # Slightly more tolerant for network jitter
         
-        # Initialize processing thread for this stream
+        # Exponential backoff parameters
+        reconnect_delays = [5, 10, 20, 40, 60]
+        reconnect_index = 0
+
+        # JPEG encoding parameters
+        encode_params = [cv2.IMWRITE_JPEG_QUALITY, 80]
+        
+        # Initialize processing thread
         if stream_id not in self.processing_threads:
             self.frame_counters[stream_id] = 0
-            # Initialize the shared state
             self.current_frames[stream_id] = (np.zeros((10,10,3), dtype=np.uint8), 0)
-            
-            # Start processing thread
             processing_thread = threading.Thread(
                 target=self._face_processing_worker,
                 args=(stream_id,),
@@ -378,207 +449,111 @@ class CameraStreamManager:
             self.processing_threads[stream_id] = processing_thread
             logger.info(f"Started face processing thread for stream {stream_id}")
 
-        # Keep retrying as long as stream is active - no demo fallback
         while self._is_stream_active(stream_id):
             try:
-                # Connect to camera
+                # 1. CONNECT PHASE
                 if cap is None or not cap.isOpened():
-                    logger.info(f"Connecting to camera for stream {stream_id}")
-                    # Handle camera index (0, 1, 2, etc.) vs RTSP URL
+                    logger.info(f"Connecting to camera {rtsp_url} for stream {stream_id}")
                     if isinstance(rtsp_url, str) and rtsp_url.isdigit():
                         cap = cv2.VideoCapture(int(rtsp_url))
                     else:
-                        # Use FFMPEG backend for RTSP streams to better handle H.264
                         cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
 
-                    if cap.isOpened():
-                        # Optimize capture settings to reduce H.264 errors
-                        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimal buffering to reduce latency
-                        cap.set(cv2.CAP_PROP_FPS, 25)  # Target 25 FPS
+                    if not cap.isOpened():
+                        delay = reconnect_delays[min(reconnect_index, len(reconnect_delays)-1)]
+                        logger.warning(f"Camera connection failed. Retrying in {delay}s (Attempt {reconnect_index+1})")
+                        reconnect_index += 1
                         
-                        # Enhanced GPU acceleration for Tesla T4 (NVDEC hardware decoding)
-                        if not isinstance(rtsp_url, str) or not rtsp_url.isdigit():
-                            try:
-                                # Optimized for Tesla T4: Full GPU acceleration for video decoding
-                                # This uses NVDEC on NVIDIA GPUs for hardware-accelerated decoding
-                                os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = (
-                                    'rtsp_transport;tcp|'
-                                    'fflags;nobuffer|'
-                                    'flags;low_delay|'
-                                    'strict;experimental|'
-                                    'err_detect;ignore_err|'
-                                    'hwaccel;nvdec|'  # NVIDIA hardware acceleration
-                                    'hwaccel_device;0|'
-                                    'hwaccel_output_format;cuda|'  # Keep frames on GPU when possible
-                                    'c:v;h264_cuvid'  # Explicit CUDA decoder for H.264
-                                )
-                                logger.info(f"Enabled NVDEC GPU acceleration for stream {stream_id}")
-                            except Exception as gpu_err:
-                                logger.warning(f"GPU acceleration setup failed for stream {stream_id}: {gpu_err}")
-                                pass
-                            
-                            try:
-                                # Try to set MJPG codec preference (less errors than H264)
-                                fourcc = cv2.VideoWriter_fourcc(*'MJPG')
-                                cap.set(cv2.CAP_PROP_FOURCC, fourcc)
-                            except:
-                                pass  # Some cameras don't support codec change
-                        
-                        # Set timeouts
-                        try:
-                            cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 30000)  # 30 seconds
-                            cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000)   # 5 seconds
-                        except:
-                            pass  # Some backends don't support timeouts
-
-                        logger.info(f"Successfully connected to camera for stream {stream_id}")
-                        consecutive_failures = 0
-                    else:
-                        raise Exception("Failed to open camera")
-
-                # Use grab()/retrieve() pattern to avoid FFmpeg backlogs
-                if not cap.grab():
-                    consecutive_failures += 1
-                    if consecutive_failures >= max_failures:
-                        logger.error(f"Too many consecutive grab failures for stream {stream_id}, reconnecting...")
-                        if cap:
-                            cap.release()
-                            cap = None
-                        reconnect_attempts += 1
-                        time.sleep(2)
+                        # Sleep in small chunks to remain responsive to deactivation
+                        for _ in range(delay * 10):
+                            if not self._is_stream_active(stream_id):
+                                break
+                            time.sleep(0.1)
                         continue
-                    time.sleep(0.01)
-                    continue
-                
-                ret, frame = cap.retrieve()
-                
-                if ret and frame is not None and frame.size > 0:
-                    # Validate frame quality - skip corrupted/pixelated frames
-                    frame_valid = True
-                    if self.frame_validation_enabled:
-                        frame_valid = self._validate_frame(frame)
                     
-                    if frame_valid:
-                        consecutive_failures = 0
-                        last_frame = frame.copy()
-                        self.last_good_frames[stream_id] = frame.copy()  # Store good frame
-                        frame_count += 1
-                        self.frame_counters[stream_id] = frame_count
+                    # Successfully connected
+                    logger.info(f"Camera connected: {stream_id}")
+                    reconnect_index = 0
+                    consecutive_failures = 0
+                    
+                    # Optimize cap settings
+                    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                    if not isinstance(rtsp_url, str) or not rtsp_url.isdigit():
+                        # Try to enable GPU acceleration if available
+                        os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = 'rtsp_transport;tcp|fflags;nobuffer'
 
-                        # Add to frame buffer for sharp face capture (use original resolution)
-                        if stream_id not in self.frame_buffers:
-                            self.frame_buffers[stream_id] = deque(maxlen=self.max_frame_buffer_size)
-                        # Store full resolution frame for better quality captures
-                        self.frame_buffers[stream_id].append((frame.copy(), frame_count))
+                # 2. STREAM PHASE
+                while self._is_stream_active(stream_id):
+                    if not cap.grab():
+                        consecutive_failures += 1
+                        if consecutive_failures >= max_failures:
+                            logger.error(f"Camera lost for {stream_id}. Reconnecting...")
+                            break
+                        time.sleep(0.01)
+                        continue
+                    
+                    ret, frame = cap.retrieve()
+                    if not ret or frame is None or frame.size == 0:
+                        consecutive_failures += 1
+                        if consecutive_failures >= max_failures:
+                            break
+                        continue
 
-                        # Send frame to processing via shared state (drops any backlog instantly)
-                        self.current_frames[stream_id] = (frame.copy(), frame_count)
+                    # Successfull frame
+                    consecutive_failures = 0
+                    frame_count += 1
+                    self.frame_counters[stream_id] = frame_count
 
-                        # Get absolute freshest processed frame
-                        processed_frame = self.processed_frames_latest.get(stream_id, frame)
-                        
-                        # Fallback to raw frame if processing hasn't started yet
-                        if processed_frame is None or processed_frame.shape[0] < 10:
+                    # Shared state update for face processing background worker
+                    self.current_frames[stream_id] = (frame.copy(), frame_count)
+
+                    # --- RENDERING PHASE (Synchronous with stream for flicker-free UI) ---
+                    # 1. Get current detections thread-safely
+                    with self.detections_lock:
+                        detections = self.latest_detections.get(stream_id, [])
+
+                    # 2. Get toggle status for this stream
+                    cid = stream_info.get('company_id') or "default"
+                    show_bbox = self.get_bounding_box(stream_id=stream_id, company_id=cid)
+
+                    # 3. Render if enabled — only copy frame when drawing
+                    processed_frame = frame
+                    if show_bbox and detections:
+                        try:
+                            from face_pipeline import render_bounding_boxes
+                            processed_frame = render_bounding_boxes(
+                                frame.copy(), detections, show_bounding_box=True
+                            )
+                        except Exception as e:
                             processed_frame = frame
 
-                        # Encode and send frame immediately (don't wait for processing)
-                        try:
-                            ret_encode, buffer = cv2.imencode('.jpg', processed_frame, encode_params)
-                            if ret_encode and buffer is not None:
-                                # Update stream info
-                                with self.stream_lock:
-                                    if stream_id in self.active_streams:
-                                        self.active_streams[stream_id]['frame_count'] = frame_count
-                                        self.active_streams[stream_id]['last_frame_time'] = time.time()
+                    # Encode and yield
+                    try:
+                        ret_encode, buffer = cv2.imencode('.jpg', processed_frame, encode_params)
+                        if ret_encode:
+                            yield (b'--frame\r\n'
+                                   b'Content-Type: image/jpeg\r\n'
+                                   b'Content-Length: ' + str(len(buffer)).encode() + b'\r\n\r\n' +
+                                   buffer.tobytes() + b'\r\n')
+                    except Exception as e:
+                        logger.error(f"Encoding error: {e}")
 
-                                # Yield frame
-                                yield (b'--frame\r\n'
-                                       b'Content-Type: image/jpeg\r\n'
-                                       b'Content-Length: ' + str(len(buffer)).encode() + b'\r\n\r\n' +
-                                       buffer.tobytes() + b'\r\n')
-                                
-                                last_processed_frame = processed_frame
-                            else:
-                                logger.warning(f"Failed to encode frame for stream {stream_id}")
-                        except Exception as encode_error:
-                            logger.error(f"Frame encoding error for stream {stream_id}: {encode_error}")
-                    else:
-                        # Frame is corrupted - use last good frame
-                        if stream_id in self.last_good_frames:
-                            frame = self.last_good_frames[stream_id].copy()
-                            # Continue with the good frame (don't increment failure counter)
-                            # Put the good raw frame into shared state so processor can see it
-                            self.current_frames[stream_id] = (frame.copy(), frame_count)
-                            
-                            # Get processed frame or use raw
-                            processed_frame = self.processed_frames_latest.get(stream_id, frame)
-                            if processed_frame is None or processed_frame.shape[0] < 10:
-                                processed_frame = frame
-                            
-                            # Send the good frame
-                            try:
-                                ret_encode, buffer = cv2.imencode('.jpg', processed_frame, encode_params)
-                                if ret_encode and buffer is not None:
-                                    yield (b'--frame\r\n'
-                                           b'Content-Type: image/jpeg\r\n'
-                                           b'Content-Length: ' + str(len(buffer)).encode() + b'\r\n\r\n' +
-                                           buffer.tobytes() + b'\r\n')
-                                    last_processed_frame = processed_frame
-                            except:
-                                pass
-                        else:
-                            # No good frame available yet, skip this frame
-                            consecutive_failures += 1
-                else:
-                    consecutive_failures += 1
-                    logger.warning(f"Failed to read frame {consecutive_failures}/{max_failures} for stream {stream_id}")
-
-                    if consecutive_failures >= max_failures:
-                        logger.error(f"Too many consecutive failures for stream {stream_id}, reconnecting...")
-                        if cap:
-                            cap.release()
-                            cap = None
-                        consecutive_failures = 0  # Reset for next reconnection attempt
-                        time.sleep(2)  # Wait before reconnecting
-                        continue
-
-                    # Use last processed frame if available, otherwise last good raw frame
-                    frame_to_send = None
-                    # Reduced fallback looping to prevent 'going back and coming' ghosting effects
-                    if last_processed_frame is not None:
-                        frame_to_send = last_processed_frame
-                    elif last_frame is not None:
-                        frame_to_send = last_frame
-                    
-                    if frame_to_send is not None:
-                        try:
-                            ret_encode, buffer = cv2.imencode('.jpg', frame_to_send, encode_params)
-                            if ret_encode and buffer is not None:
-                                yield (b'--frame\r\n'
-                                       b'Content-Type: image/jpeg\r\n'
-                                       b'Content-Length: ' + str(len(buffer)).encode() + b'\r\n\r\n' +
-                                       buffer.tobytes() + b'\r\n')
-                        except:
-                            pass
-
-                # Removed manual time.sleep(0.033) which was causing buffer backlog and stream latency
-                # cv2.VideoCapture/retrieve() natively blocks at the stream FPS already.
-
-            except Exception as e:
-                logger.error(f"Error in camera stream {stream_id}: {e}")
+                # Cleanup cap before reconnecting or exiting
                 if cap:
                     cap.release()
                     cap = None
-                consecutive_failures += 1
-                time.sleep(2)  # Wait before retrying
 
-        # Cleanup
+            except Exception as e:
+                logger.error(f"Unexpected error in stream {stream_id}: {e}")
+                if cap:
+                    cap.release()
+                    cap = None
+                time.sleep(2)
+
+        # FINAL CLEANUP
         if cap:
             cap.release()
-
-        # Keep retrying instead of falling back to demo
-        # If we reach here, it means stream was stopped or deactivated
-        logger.info(f"Stream {stream_id} ended - stream was stopped or deactivated")
+        logger.info(f"Stream {stream_id} loop exited (Deactivated)")
 
     def _generate_demo_stream(self, stream_id: str, stream_info: Dict):
         """Generate a demo stream when real camera is not available"""
@@ -627,6 +602,21 @@ class CameraStreamManager:
                 # Add timestamp in corner
                 cv2.putText(frame, f"Uptime: {int(elapsed)}s", (450, 450),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+
+                # Get latest detections and toggle status
+                with self.detections_lock:
+                    detections = self.latest_detections.get(stream_id, [])
+                
+                cid = stream_info.get('company_id') or "default"
+                show_bbox = self.get_bounding_box(stream_id=stream_id, company_id=cid)
+
+                # Render detections on demo frame
+                if show_bbox and detections:
+                    try:
+                        from face_pipeline import render_bounding_boxes
+                        frame = render_bounding_boxes(frame, detections, show_bounding_box=True)
+                    except Exception as e:
+                        logger.error(f"Demo rendering error: {e}")
 
                 # Encode frame as JPEG
                 ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])

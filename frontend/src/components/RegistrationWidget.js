@@ -1,16 +1,30 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { User, Image as ImageIcon, Upload, Check, Info, RefreshCw, FileSpreadsheet, Folder, AlertCircle } from 'lucide-react';
+import { User, Image as ImageIcon, Upload, Check, Info, RefreshCw, FileSpreadsheet, Folder, AlertCircle, Download, FileText, Trash2 } from 'lucide-react';
+import useAuthStore from '../store/authStore';
 import './RegistrationWidget.css';
 
 import { API_BASE_URL as BASE_URL } from '../utils/apiConfig';
 
 const RegistrationWidget = () => {
-  const [activeMode, setActiveMode] = useState('single');
+  const { user: currentUser, token } = useAuthStore();
+  const [activeMode, setActiveMode] = useState('list');
+  const [employees, setEmployees] = useState([]);
+  const [loadingEmployees, setLoadingEmployees] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
   const [formData, setFormData] = useState({
+    emp_id: '',
     name: '',
+    email: '',
+    phone: '',
+    department: '',
+    designation: '',
+    category: 'Employee',
+    status: 'Active',
     age: '18',
-    gender: '',
-    category: ''
+    gender: ''
   });
   const [autoDetectAge, setAutoDetectAge] = useState(true);
   const [imageFile, setImageFile] = useState(null);
@@ -19,7 +33,6 @@ const RegistrationWidget = () => {
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState(''); // 'success' or 'error'
   const [ageError, setAgeError] = useState('');
-  const [categoryError, setCategoryError] = useState('');
   const fileInputRef = useRef(null);
 
   // Bulk registration with Excel + Folder
@@ -27,15 +40,44 @@ const RegistrationWidget = () => {
   const [selectedFolder, setSelectedFolder] = useState('');
   const [imageFilesForBulk, setImageFilesForBulk] = useState([]);
   const excelFileInputRef = useRef(null);
+  const browserFolderInputRef = useRef(null);
 
   // Ensure age is always 18 or above on component mount
   useEffect(() => {
+    fetchEmployees();
     const ageNum = parseInt(formData.age, 10);
     if (!formData.age || isNaN(ageNum) || ageNum < 18) {
       setFormData(prev => ({ ...prev, age: '18' }));
       setAgeError('');
     }
   }, []);
+
+  const fetchEmployees = async () => {
+    setLoadingEmployees(true);
+    try {
+      const response = await fetch(`${BASE_URL}/api/registration/gallery`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const data = await response.json();
+      const empList = Object.keys(data).map(key => ({
+        id: key,
+        ...data[key]
+      }));
+      setEmployees(empList);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingEmployees(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeMode === 'list') {
+      fetchEmployees();
+    }
+  }, [activeMode, token]);
 
   const handleInputChange = (field, value) => {
     // Validate age - must be 18 or above
@@ -55,12 +97,6 @@ const RegistrationWidget = () => {
       }
     }
 
-    // Validate category - simplified to allow more standard input types
-    if (field === 'category') {
-      const categoryValue = value.trim();
-      setCategoryError('');
-      // Always update the form field to allow user typing freely
-    }
 
     setFormData(prev => ({
       ...prev,
@@ -97,15 +133,20 @@ const RegistrationWidget = () => {
 
   const resetForm = () => {
     setFormData({
+      emp_id: '',
       name: '',
+      email: '',
+      phone: '',
+      department: '',
+      designation: '',
+      category: 'Employee',
+      status: 'Active',
       age: '18',
-      gender: '',
-      category: ''
+      gender: ''
     });
     setImageFile(null);
     setImagePreview(null);
     setAgeError('');
-    setCategoryError('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -123,6 +164,32 @@ const RegistrationWidget = () => {
       return;
     }
 
+    if (!formData.emp_id.trim()) {
+      showMessage('Please enter an Employee ID', 'error');
+      return;
+    }
+
+    if (!formData.department.trim()) {
+      showMessage('Please enter a Department', 'error');
+      return;
+    }
+
+    if (!formData.email.trim() || !formData.email.trim().toLowerCase().endsWith('@gmail.com')) {
+      showMessage('A valid @gmail.com email is required', 'error');
+      return;
+    }
+
+    const cleanPhone = formData.phone.trim().replace(/\D/g, '');
+    if (cleanPhone.length !== 10) {
+      showMessage('Phone number must be exactly 10 digits', 'error');
+      return;
+    }
+
+    if (!formData.category) {
+      showMessage('Please select a Category', 'error');
+      return;
+    }
+
     // Validate age if provided
     if (formData.age.trim()) {
       const ageNum = parseInt(formData.age.trim(), 10);
@@ -133,12 +200,6 @@ const RegistrationWidget = () => {
       }
     }
 
-    // Basic category check without strict pattern
-    if (formData.category.trim() && formData.category.trim().length > 50) {
-      showMessage('Category is too long (max 50 characters)', 'error');
-      setCategoryError('Category is too long');
-      return;
-    }
 
     setIsLoading(true);
     setMessage('Registering person...');
@@ -146,13 +207,22 @@ const RegistrationWidget = () => {
     try {
       const formDataToSend = new FormData();
       formDataToSend.append('image', imageFile);
+      formDataToSend.append('emp_id', formData.emp_id.trim());
       formDataToSend.append('name', formData.name.trim());
+      formDataToSend.append('email', formData.email.trim());
+      formDataToSend.append('phone', formData.phone.trim());
+      formDataToSend.append('department', formData.department.trim());
+      formDataToSend.append('designation', formData.designation.trim());
+      formDataToSend.append('category', formData.category);
+      formDataToSend.append('status', formData.status.trim());
       formDataToSend.append('age', autoDetectAge ? '' : (formData.age || ''));
       formDataToSend.append('gender', formData.gender);
-      formDataToSend.append('category', formData.category.trim());
 
       const response = await fetch(`${BASE_URL}/api/registration/register/single`, {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
         body: formDataToSend,
       });
 
@@ -177,6 +247,61 @@ const RegistrationWidget = () => {
     }
   };
 
+  const handleToggleStatus = async (personId, currentStatus) => {
+    const newStatus = currentStatus === 'Active' ? 'Inactive' : 'Active';
+    if (!window.confirm(`Are you sure you want to mark this person as ${newStatus}?`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${BASE_URL}/api/registration/metadata/person/${personId}/status`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ status: newStatus })
+      });
+
+      if (response.ok) {
+        showMessage(`Person marked as ${newStatus}`, 'success');
+        fetchEmployees(); // Refresh list
+      } else {
+        const error = await response.json();
+        showMessage(error.detail || 'Failed to update status', 'error');
+      }
+    } catch (err) {
+      console.error('Status override error:', err);
+      showMessage('Failed to connect to server', 'error');
+    }
+  };
+
+  const handleDeletePerson = async (personId) => {
+    if (!window.confirm(`Are you sure you want to delete this person and all their biometric data? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${BASE_URL}/api/registration/metadata/person/${personId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        showMessage('Person deleted successfully', 'success');
+        fetchEmployees(); // Refresh list
+      } else {
+        const error = await response.json();
+        showMessage(error.detail || 'Failed to delete person', 'error');
+      }
+    } catch (err) {
+      console.error('Delete error:', err);
+      showMessage('Failed to connect to server', 'error');
+    }
+  };
+
   const handleExcelFileSelect = (event) => {
     const file = event.target.files[0];
     if (file) {
@@ -185,7 +310,36 @@ const RegistrationWidget = () => {
     }
   };
 
+  const handleBrowserFolderSelect = (event) => {
+    const files = Array.from(event.target.files);
+    
+    // Filter only images
+    const validExtensions = ['.jpg', '.jpeg', '.png'];
+    const imageFiles = files.filter(f => {
+      const ext = f.name.substring(f.name.lastIndexOf('.')).toLowerCase();
+      return validExtensions.includes(ext);
+    });
+
+    if (imageFiles.length > 0) {
+      setSelectedFolder(`Browser Folder (${imageFiles.length} files)`);
+      setImageFilesForBulk(imageFiles);
+      showMessage(`Folder selected: ${imageFiles.length} image(s) found`, 'success');
+    } else {
+      showMessage('Folder selected but no image files found', 'error');
+      setImageFilesForBulk([]);
+      setSelectedFolder('');
+    }
+  };
+
   const handleFolderSelect = async () => {
+    if (!window.electronAPI) {
+      // Browser fallback
+      if (browserFolderInputRef.current) {
+        browserFolderInputRef.current.click();
+      }
+      return;
+    }
+
     try {
       const result = await window.electronAPI.selectFolder();
       if (result.success && result.folderPath) {
@@ -226,28 +380,64 @@ const RegistrationWidget = () => {
     setMessage('Processing bulk registration...');
 
     try {
-      const excelBuffer = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (e) => resolve(new Uint8Array(e.target.result));
-        reader.onerror = reject;
-        reader.readAsArrayBuffer(excelFile);
-      });
+      let result;
+      
+      if (window.electronAPI) {
+        const excelBuffer = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => resolve(new Uint8Array(e.target.result));
+          reader.onerror = reject;
+          reader.readAsArrayBuffer(excelFile);
+        });
 
-      const result = await window.electronAPI.registerBulk(
-        Array.from(excelBuffer),
-        imageFilesForBulk
-      );
+        result = await window.electronAPI.registerBulk(
+          Array.from(excelBuffer),
+          imageFilesForBulk
+        );
+      } else {
+        // Browser fallback using FormData
+        const formDataToSend = new FormData();
+        formDataToSend.append('excel_file', excelFile);
+        
+        imageFilesForBulk.forEach(file => {
+          const path = file.webkitRelativePath || file.name;
+          formDataToSend.append('image_files', file, path);
+        });
+
+        const response = await fetch(`${BASE_URL}/api/registration/register/bulk`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          body: formDataToSend,
+        });
+        
+        const data = await response.json();
+        result = {
+          success: response.ok,
+          data: data,
+          error: data.detail || data.message
+        };
+      }
 
       if (result.success) {
-        const successCount = result.data.filter(r => r.status === 'success').length;
-        const totalCount = result.data.length;
-        showMessage(`Bulk registration completed: ${successCount}/${totalCount} successful`, 'success');
+        let successCount = 0;
+        let totalCount = 0;
+        if (Array.isArray(result.data)) {
+          successCount = result.data.filter(r => r.status === 'success').length;
+          totalCount = result.data.length;
+        }
+        
+        showMessage(`Bulk registration completed: ${successCount} successful`, 'success');
 
         setExcelFile(null);
         setSelectedFolder('');
         setImageFilesForBulk([]);
         if (excelFileInputRef.current) {
           excelFileInputRef.current.value = '';
+        }
+        if (browserFolderInputRef.current) {
+          browserFolderInputRef.current.value = '';
         }
       } else {
         showMessage(result.error || 'Bulk registration failed', 'error');
@@ -268,6 +458,12 @@ const RegistrationWidget = () => {
           <p>Add new persons to the database</p>
         </div>
         <div className="mode-selector-pill">
+          <button
+            className={`mode-pill ${activeMode === 'list' ? 'active' : ''}`}
+            onClick={() => setActiveMode('list')}
+          >
+            Employee List
+          </button>
           <button
             className={`mode-pill ${activeMode === 'single' ? 'active' : ''}`}
             onClick={() => setActiveMode('single')}
@@ -309,6 +505,196 @@ const RegistrationWidget = () => {
         </div>
       )}
 
+      {activeMode === 'list' && (
+        <div className="employee-list-layout">
+          <div className="list-controls" style={{ marginBottom: '16px', display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <input
+              type="text"
+              placeholder="Search employees..."
+              value={searchTerm}
+              onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+              className="input-clean"
+              style={{ maxWidth: '300px' }}
+            />
+            <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+              {employees.filter(e => e.name.toLowerCase().includes(searchTerm.toLowerCase()) || (e.emp_id && e.emp_id.toLowerCase().includes(searchTerm.toLowerCase()))).length} employees
+            </span>
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
+              <button className="btn-submit-clean" onClick={async () => {
+                try {
+                  const response = await fetch(`${BASE_URL}/api/events/employees/export`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                  });
+                  if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.detail || 'Export failed');
+                  }
+                  const blob = await response.blob();
+                  const url = window.URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = 'employees_export.csv';
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  window.URL.revokeObjectURL(url);
+                } catch (err) {
+                  console.error('Export error:', err);
+                  showMessage(err.message || 'Failed to export employee data', 'error');
+                }
+              }} style={{ width: 'auto', background: 'var(--bg-panel)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}>
+                <Download size={16} /> Export CSV
+              </button>
+              <button className="btn-submit-clean" onClick={async () => {
+                try {
+                  const response = await fetch(`${BASE_URL}/api/events/export/employees-pdf`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                  });
+                  if (!response.ok) {
+                    const errData = await response.json().catch(() => ({}));
+                    throw new Error(errData.detail || 'Failed to generate PDF');
+                  }
+                  const blob = await response.blob();
+                  const url = window.URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = 'employees_report.pdf';
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  window.URL.revokeObjectURL(url);
+                } catch (err) {
+                  console.error('Export error:', err);
+                  showMessage(err.message || 'Failed to export PDF', 'error');
+                }
+              }} style={{ width: 'auto', background: 'var(--bg-panel)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}>
+                <FileText size={16} /> Export PDF
+              </button>
+              <button className="btn-submit-clean" onClick={() => setActiveMode('single')} style={{ width: 'auto' }}>
+                + Add Employee
+              </button>
+            </div>
+          </div>
+
+          <div className="table-container">
+            {loadingEmployees ? (
+              <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>Loading employees...</div>
+            ) : (() => {
+              const filtered = employees.filter(e => e.name.toLowerCase().includes(searchTerm.toLowerCase()) || (e.emp_id && e.emp_id.toLowerCase().includes(searchTerm.toLowerCase())));
+              const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+              const paginatedData = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+              return (
+                <>
+                  <table className="attendance-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr>
+                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid var(--border-color)' }}>Emp ID</th>
+                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid var(--border-color)' }}>Name</th>
+                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid var(--border-color)' }}>Department</th>
+                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid var(--border-color)' }}>Designation</th>
+                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid var(--border-color)' }}>Email</th>
+                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid var(--border-color)' }}>Phone</th>
+                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid var(--border-color)' }}>Status</th>
+                        <th style={{ padding: '12px', textAlign: 'center', borderBottom: '1px solid var(--border-color)' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginatedData.map((emp, idx) => (
+                        <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                          <td style={{ padding: '12px' }}>{emp.emp_id || '-'}</td>
+                          <td style={{ padding: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <img
+                              src={emp.image_url ? `${BASE_URL}${emp.image_url}` : `${BASE_URL}/api/gallery/image/${emp.company_id || 'default'}/${emp.name}/${emp.image_filename || 'original.jpg'}`}
+                              alt={emp.name}
+                              style={{ width: '30px', height: '30px', borderRadius: '50%', objectFit: 'cover' }}
+                              onError={(e) => { e.target.style.display = 'none'; }}
+                            />
+                            {emp.name}
+                          </td>
+                          <td style={{ padding: '12px' }}>{emp.department || '-'}</td>
+                          <td style={{ padding: '12px' }}>{emp.designation || '-'}</td>
+                          <td style={{ padding: '12px' }}>{emp.email || '-'}</td>
+                          <td style={{ padding: '12px' }}>{emp.phone || '-'}</td>
+                          <td style={{ padding: '12px' }}>
+                            <span 
+                              onClick={() => {
+                                if (currentUser?.role?.toLowerCase() === 'superadmin' || currentUser?.role?.toLowerCase() === 'admin') {
+                                  handleToggleStatus(emp.id, emp.status || 'Active');
+                                }
+                              }}
+                              title={(currentUser?.role?.toLowerCase() === 'superadmin' || currentUser?.role?.toLowerCase() === 'admin') ? 'Click to toggle status' : ''}
+                              style={{
+                                padding: '4px 8px',
+                                borderRadius: '12px',
+                                fontSize: '0.8rem',
+                                backgroundColor: (emp.status || 'Active') === 'Active' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                                color: (emp.status || 'Active') === 'Active' ? '#10b981' : '#ef4444',
+                                cursor: (currentUser?.role?.toLowerCase() === 'superadmin' || currentUser?.role?.toLowerCase() === 'admin') ? 'pointer' : 'default',
+                                display: 'inline-block',
+                                transition: 'opacity 0.2s'
+                              }}
+                              onMouseOver={(e) => { if (currentUser?.role?.toLowerCase() === 'superadmin' || currentUser?.role?.toLowerCase() === 'admin') e.currentTarget.style.opacity = 0.8; }}
+                              onMouseOut={(e) => { if (currentUser?.role?.toLowerCase() === 'superadmin' || currentUser?.role?.toLowerCase() === 'admin') e.currentTarget.style.opacity = 1; }}
+                            >
+                              {emp.status || 'Active'}
+                            </span>
+                          </td>
+                          <td style={{ padding: '12px', textAlign: 'center' }}>
+                            {(emp.status && emp.status !== 'Active') && (currentUser?.role?.toLowerCase() === 'superadmin' || currentUser?.role?.toLowerCase() === 'admin') && (
+                              <button 
+                                onClick={() => handleDeletePerson(emp.id)}
+                                className="btn-icon-delete"
+                                title="Delete Person"
+                                style={{
+                                  background: 'transparent',
+                                  border: 'none',
+                                  color: '#ef4444',
+                                  cursor: 'pointer',
+                                  padding: '4px',
+                                  borderRadius: '4px',
+                                  transition: 'background 0.2s'
+                                }}
+                                onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)'}
+                                onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                      {filtered.length === 0 && (
+                        <tr>
+                          <td colSpan="8" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>No employees found</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+
+                  {/* Pagination */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 0', flexWrap: 'wrap', gap: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Rows per page:</span>
+                      <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }} className="select-clean" style={{ width: 'auto', padding: '4px 8px' }}>
+                        <option value={10}>10</option>
+                        <option value={25}>25</option>
+                        <option value={50}>50</option>
+                      </select>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Page {currentPage} of {totalPages}</span>
+                      <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} style={{ padding: '4px 10px', cursor: 'pointer', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-panel)', color: 'var(--text-primary)' }}>←</button>
+                      <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} style={{ padding: '4px 10px', cursor: 'pointer', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-panel)', color: 'var(--text-primary)' }}>→</button>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
       {activeMode === 'single' && (
         <div className="single-registration-layout">
           {/* Left Panel: Person Info */}
@@ -335,6 +721,88 @@ const RegistrationWidget = () => {
                   className="input-clean"
                 />
               </div>
+
+              <div className="form-row-split">
+                <div className="form-group">
+                  <label>Emp ID <span className="required">*</span></label>
+                  <input
+                    type="text"
+                    value={formData.emp_id}
+                    onChange={(e) => handleInputChange('emp_id', e.target.value)}
+                    placeholder="e.g. EMP1001"
+                    disabled={isLoading}
+                    className="input-clean"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Department <span className="required">*</span></label>
+                  <input
+                    type="text"
+                    value={formData.department}
+                    onChange={(e) => handleInputChange('department', e.target.value)}
+                    placeholder="e.g. IT"
+                    disabled={isLoading}
+                    className="input-clean"
+                  />
+                </div>
+              </div>
+
+              <div className="form-row-split">
+                <div className="form-group">
+                  <label>Designation</label>
+                  <input
+                    type="text"
+                    value={formData.designation}
+                    onChange={(e) => handleInputChange('designation', e.target.value)}
+                    placeholder="e.g. Developer"
+                    disabled={isLoading}
+                    className="input-clean"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Email <span className="required">*</span></label>
+                  <input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => handleInputChange('email', e.target.value)}
+                    placeholder="example@gmail.com"
+                    disabled={isLoading}
+                    className="input-clean"
+                  />
+                </div>
+              </div>
+
+              <div className="form-row-split">
+                <div className="form-group">
+                  <label>Phone <span className="required">*</span></label>
+                  <input
+                    type="text"
+                    value={formData.phone}
+                    onChange={(e) => handleInputChange('phone', e.target.value)}
+                    placeholder="10 digit number"
+                    disabled={isLoading}
+                    className="input-clean"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Category <span className="required">*</span></label>
+                  <select
+                    value={formData.category}
+                    onChange={(e) => handleInputChange('category', e.target.value)}
+                    disabled={isLoading}
+                    className="select-clean"
+                  >
+                    <option value="Employee">Employee</option>
+                    <option value="Visitor">Visitor</option>
+                    <option value="Criminal">Criminal</option>
+                    <option value="Offender">Offender</option>
+                    <option value="VIP">VIP</option>
+                    <option value="Staff">Staff</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Status field removed from Registration Form as it defaults to Active */}
 
               <div className="form-row-split">
                 <div className="form-group age-group">
@@ -436,18 +904,6 @@ const RegistrationWidget = () => {
                 </div>
               </div>
 
-              <div className="form-group">
-                <label>Category</label>
-                <input
-                  type="text"
-                  value={formData.category}
-                  onChange={(e) => handleInputChange('category', e.target.value)}
-                  placeholder="e.g., Employee, Visitor, Student"
-                  disabled={isLoading}
-                  className="input-clean"
-                />
-                {categoryError && <span className="field-error">{categoryError}</span>}
-              </div>
 
               <div className="info-alert">
                 <Info size={16} />
@@ -587,6 +1043,16 @@ const RegistrationWidget = () => {
 
                 <div className="bulk-step">
                   <h4>2. Select Data Folder</h4>
+                  <input
+                    ref={browserFolderInputRef}
+                    type="file"
+                    webkitdirectory="true"
+                    directory="true"
+                    onChange={handleBrowserFolderSelect}
+                    style={{ display: 'none' }}
+                    disabled={isLoading}
+                    multiple
+                  />
                   <div
                     className={`file-select-box ${selectedFolder ? 'selected' : ''}`}
                     onClick={handleFolderSelect}
@@ -604,11 +1070,23 @@ const RegistrationWidget = () => {
 
               <div className="bulk-instructions">
                 <h4>Instructions</h4>
-                <ul>
-                  <li>Excel file must have a 'name' column (required)</li>
-                  <li>Optional columns: 'age', 'gender', 'category'</li>
-                  <li>Data folder should contain images named of each person</li>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                  Please ensure your Excel file contains the following mandatory columns:
+                </p>
+                <ul style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '12px', paddingLeft: '20px' }}>
+                  <li><strong>name</strong> (Matches the image filename)</li>
+                  <li><strong>Employee Full Name</strong></li>
+                  <li><strong>Employee Details</strong></li>
+                  <li><strong>Designation</strong></li>
+                  <li><strong>Email</strong></li>
+                  <li><strong>Phone Number</strong></li>
+                  <li><strong>Roles</strong></li>
+                  <li><strong>Status</strong></li>
+                  <li><strong>Gender</strong></li>
                 </ul>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                  <strong>Note:</strong> The selected Data Folder should contain images named identically to the 'name' column for each person. Optional columns: 'age', 'category'.
+                </p>
               </div>
             </div>
 

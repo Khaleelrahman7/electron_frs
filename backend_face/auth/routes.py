@@ -1,3 +1,4 @@
+import logging
 from datetime import timedelta, datetime, timezone
 from typing import Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, Depends, Request
@@ -7,12 +8,14 @@ from .users import create_user, get_user, list_users
 from .storage import ensure_auth_data_dir, get_tokens, save_tokens
 from .license_dates import parse_license_datetime
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
 class LoginRequest(BaseModel):
     username: str
     password: str
-    role: str
+    role: Optional[str] = None
 
 class LoginResponse(BaseModel):
     access_token: str
@@ -23,10 +26,19 @@ class LoginResponse(BaseModel):
     assigned_menus: list
     license_start_date: Optional[str] = None
     license_end_date: Optional[str] = None
+    company_id: Optional[str] = None
 
 class BootstrapSuperAdminRequest(BaseModel):
     username: str
     password: str
+
+class ForgotPasswordRequest(BaseModel):
+    username: str
+
+class ResetPasswordRequest(BaseModel):
+    username: str
+    token: str # Simple token check for now
+    new_password: str
 
 class UserResponse(BaseModel):
     username: str
@@ -37,6 +49,7 @@ class UserResponse(BaseModel):
     assigned_menus: list
     max_users_limit: Optional[int] = 0
     max_cameras_limit: Optional[int] = 0
+    company_id: Optional[str] = None
     license_start_date: Optional[str] = None
     license_end_date: Optional[str] = None
 
@@ -46,12 +59,21 @@ async def login(request: LoginRequest):
     
     # Special handling for SuperAdmin - allow login without role matching
     user = get_user(request.username)
+    
+    # Auto-discover role if not provided
+    effective_role = request.role
+    if not effective_role and user:
+        effective_role = user.get("role")
+        logger.info(f"Auto-discovered role '{effective_role}' for user '{request.username}'")
+
     if user and user["role"] == "SuperAdmin":
         # For SuperAdmin, authenticate without role check
         auth_user = authenticate_user(request.username, request.password, user["role"])
     else:
         # For other roles, require exact role match
-        auth_user = authenticate_user(request.username, request.password, request.role)
+        if not effective_role:
+             raise HTTPException(status_code=400, detail="Role selection required for this user")
+        auth_user = authenticate_user(request.username, request.password, effective_role)
     
     if not auth_user:
         raise HTTPException(status_code=401, detail="Invalid credentials or role")
@@ -66,8 +88,13 @@ async def login(request: LoginRequest):
                 raise HTTPException(status_code=403, detail="License expired. Contact SuperAdmin.")
     
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    token_data = {
+        "sub": auth_user["username"], 
+        "role": auth_user["role"],
+        "company_id": auth_user.get("company_id")
+    }
     access_token = create_access_token(
-        data={"sub": auth_user["username"], "role": auth_user["role"]},
+        data=token_data,
         expires_delta=access_token_expires
     )
     
@@ -76,6 +103,7 @@ async def login(request: LoginRequest):
     tokens[access_token] = {
         "username": auth_user["username"],
         "role": auth_user["role"],
+        "company_id": auth_user.get("company_id"),
         "issued_at": int(datetime.now(timezone.utc).timestamp())
     }
     save_tokens(tokens)
@@ -88,7 +116,8 @@ async def login(request: LoginRequest):
         email=auth_user.get("email"),
         assigned_menus=auth_user.get("assigned_menus", auth_user.get("menus", [])),
         license_start_date=auth_user.get("license_start_date"),
-        license_end_date=auth_user.get("license_end_date")
+        license_end_date=auth_user.get("license_end_date"),
+        company_id=auth_user.get("company_id")
     )
 
 @router.get("/me", response_model=UserResponse)
@@ -106,6 +135,7 @@ async def get_current_user(request: Request):
         assigned_menus=user.get("assigned_menus", user.get("menus", [])),
         max_users_limit=user.get("max_users_limit", 0),
         max_cameras_limit=user.get("max_cameras_limit", 0),
+        company_id=user.get("company_id"),
         license_start_date=user.get("license_start_date"),
         license_end_date=user.get("license_end_date")
     )
@@ -144,3 +174,47 @@ async def logout(request: Request):
             save_tokens(tokens)
             return {"message": "Logout successful"}
     return {"message": "Logout successful"}
+
+@router.post("/forgot-password")
+async def forgot_password(request: ForgotPasswordRequest):
+    user = get_user(request.username)
+    if not user:
+        # Don't reveal user existence for security, but logs will help
+        logger.info(f"Forgot password requested for non-existent user: {request.username}")
+        return {"message": "If an email is associated with this account, instructions have been sent."}
+    
+    email = user.get("email")
+    if not email:
+        logger.warn(f"User {request.username} requested password reset but has no email configured.")
+        return {"message": "No email associated with this account. Please contact your Admin."}
+    
+    # Simple token for demonstration: username_timestamp_reset
+    token = f"{request.username}_{int(datetime.now(timezone.utc).timestamp())}_reset"
+    
+    # In a real app, you'd store this token with an expiry
+    # For now, we'll just log it and send a simulated email
+    from .email_utils import send_email
+    subject = "Password Reset Request"
+    body = f"Hello {request.username},\n\nYou requested a password reset. Use the following token to reset your password: {token}\n\nIf you did not request this, please ignore this email."
+    
+    if send_email(email, subject, body):
+        return {"message": "Reset instructions sent to your email."}
+    else:
+        # Fallback for dev/unconfigured SMTP
+        return {"message": "Reset token generated (simulated): " + token}
+
+@router.post("/reset-password")
+async def reset_password(request: ResetPasswordRequest):
+    user = get_user(request.username)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Basic token validation (in production, use a secure signed token or DB lookup)
+    if not request.token.startswith(request.username) or "_reset" not in request.token:
+        raise HTTPException(status_code=400, detail="Invalid reset token")
+    
+    from .users import update_user
+    update_user(request.username, {"password": request.new_password})
+    logger.info(f"Password reset successful for user: {request.username}")
+    
+    return {"message": "Password has been reset successfully."}

@@ -37,7 +37,10 @@ const useAuthStore = create(
       // Actions
       login: async (username, password, role, skipAuthUpdate = false) => {
         set({ isLoading: true, error: null });
-        
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
         try {
           const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
             method: 'POST',
@@ -45,7 +48,10 @@ const useAuthStore = create(
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({ username, password, role }),
+            signal: controller.signal,
           });
+
+          clearTimeout(timeoutId);
 
           if (!response.ok) {
             const errorData = await response.json().catch(() => ({ detail: 'Login failed' }));
@@ -53,12 +59,13 @@ const useAuthStore = create(
           }
 
           const data = await response.json();
-          
+
           const newState = {
             user: {
               username: data.username,
               role: data.role,
               assigned_menus: data.assigned_menus,
+              company_id: data.company_id,
               license_start_date: data.license_start_date,
               license_end_date: data.license_end_date,
             },
@@ -73,16 +80,18 @@ const useAuthStore = create(
           // Store token in localStorage for global fetch shim
           localStorage.setItem('auth_token', data.access_token);
           if (window && window.electronAPI && typeof window.electronAPI.setAuthToken === 'function') {
-            window.electronAPI.setAuthToken(data.access_token).catch(() => {});
+            window.electronAPI.setAuthToken(data.access_token).catch(() => { });
           }
-          
+
           return { success: true };
         } catch (error) {
+          clearTimeout(timeoutId);
+          const message = error.name === 'AbortError' ? 'Connection timed out. Please check your IP settings.' : error.message;
           set({
             isLoading: false,
-            error: error.message,
+            error: message,
           });
-          return { success: false, error: error.message };
+          return { success: false, error: message };
         }
       },
 
@@ -99,7 +108,7 @@ const useAuthStore = create(
             headers: {
               'Authorization': `Bearer ${token}`
             }
-          }).catch(() => {});
+          }).catch(() => { });
         }
         set({
           user: null,
@@ -109,7 +118,7 @@ const useAuthStore = create(
         });
         localStorage.removeItem('auth_token');
         if (window && window.electronAPI && typeof window.electronAPI.clearAuthToken === 'function') {
-          window.electronAPI.clearAuthToken().catch(() => {});
+          window.electronAPI.clearAuthToken().catch(() => { });
         }
       },
 
@@ -121,12 +130,18 @@ const useAuthStore = create(
         const { token } = get();
         if (!token) return null;
 
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
         try {
           const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
             headers: {
               'Authorization': `Bearer ${token}`,
             },
+            signal: controller.signal,
           });
+
+          clearTimeout(timeoutId);
 
           if (response.ok) {
             const userData = await response.json();
@@ -138,6 +153,7 @@ const useAuthStore = create(
             return null;
           }
         } catch (error) {
+          clearTimeout(timeoutId);
           console.error('Error fetching current user:', error);
           return null;
         }
@@ -183,7 +199,7 @@ const useAuthStore = create(
         });
         return menus.includes(menu);
       },
-      
+
       isLicenseExpired: () => {
         const { user } = get();
         if (!user) return false;
@@ -196,10 +212,10 @@ const useAuthStore = create(
     }),
     {
       name: 'auth-storage', // unique name for localStorage key
-      partialize: (state) => ({ 
-        user: state.user, 
-        token: state.token, 
-        isAuthenticated: state.isAuthenticated 
+      partialize: (state) => ({
+        user: state.user,
+        token: state.token,
+        isAuthenticated: state.isAuthenticated
       }), // Only persist these fields
     }
   )

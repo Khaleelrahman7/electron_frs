@@ -24,8 +24,7 @@ class EnhancedCameraService:
         os.makedirs(data_dir, exist_ok=True)
         
         # Initialize default collection
-        self._ensure_default_collection()
-    
+        
     def _ensure_default_collection(self):
         """Ensure default collection exists"""
         collections = self._load_collections()
@@ -191,6 +190,7 @@ class EnhancedCameraService:
                 status="inactive",
                 created_at=datetime.now(),
                 error_count=0,
+                company_id=request.company_id,
                 is_active=False
             )
             
@@ -210,11 +210,16 @@ class EnhancedCameraService:
             logger.error(f"Error creating camera: {e}")
             raise HTTPException(status_code=500, detail=f"Failed to create camera: {str(e)}")
     
-    def get_cameras(self, page: int = 1, per_page: int = 6) -> CameraListResponse:
+    def get_cameras(self, page: int = 1, per_page: int = 6, company_id: Optional[str] = None) -> CameraListResponse:
         """Get paginated list of cameras with collections"""
         try:
             cameras = self._load_cameras()
             collections = self._load_collections()
+            
+            # Filter by company_id if provided
+            if company_id:
+                cameras = [c for c in cameras if c.company_id == company_id]
+                collections = [c for c in collections if c.company_id == company_id]
             
             # Calculate pagination
             total_cameras = len(cameras)
@@ -265,8 +270,8 @@ class EnhancedCameraService:
                 existing_stream = stream_manager.get_camera_stream(camera_id)
                 if not existing_stream:
                     # Start new stream
-                    stream_id = stream_manager.start_stream(camera_id, camera.rtsp_url)
-                    logger.info(f"Started stream {stream_id} for activated camera {camera_id}")
+                    stream_id = stream_manager.start_stream(camera_id, camera.rtsp_url, camera.name, company_id=camera.company_id)
+                    logger.info(f"Started stream {stream_id} for activated camera {camera_id} (Company: {camera.company_id})")
                 else:
                     logger.info(f"Stream already exists for camera {camera_id}: {existing_stream}")
             except Exception as stream_error:

@@ -1,8 +1,46 @@
 import React, { useState, useEffect } from 'react';
 import useAuthStore from '../../store/authStore';
 import { API_BASE_URL } from '../../utils/apiConfig';
-import { Users, UserPlus, Edit2, Trash2, X, Shield, Search, Check } from 'lucide-react';
+import { Users, UserPlus, Edit2, Trash2, X, Shield, Search, Check, FileText, ChevronDown } from 'lucide-react';
 import './UserManagement.css';
+
+const CustomDropdown = ({ options, value, onChange, placeholder = 'Select...', openUp = false }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const selectedOption = options.find(o => o.value === value);
+
+  useEffect(() => {
+    const handleClickOutside = () => setIsOpen(false);
+    if (isOpen) {
+      document.addEventListener('click', handleClickOutside);
+    }
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [isOpen]);
+
+  return (
+    <div className="custom-dropdown-container" onClick={(e) => e.stopPropagation()}>
+      <div className={`custom-dropdown-header ${isOpen ? 'active' : ''}`} onClick={() => setIsOpen(!isOpen)}>
+        <span>{selectedOption ? selectedOption.label : placeholder}</span>
+        <ChevronDown size={18} className={`arrow ${isOpen ? 'rotated' : ''}`} />
+      </div>
+      {isOpen && (
+        <div className={`custom-dropdown-list ${openUp ? 'open-up' : ''}`}>
+          {options.map(option => (
+            <div 
+              key={option.value} 
+              className={`custom-dropdown-item ${value === option.value ? 'selected' : ''}`}
+              onClick={() => {
+                onChange({ target: { name: '', value: option.value } }); // Adapt for existing handleInputChange
+                setIsOpen(false);
+              }}
+            >
+              {option.label}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const UserManagement = () => {
   const [users, setUsers] = useState([]);
@@ -20,7 +58,9 @@ const UserManagement = () => {
     assigned_menus: [],
     license_duration: '1y', // '1y' | '2y' | 'custom'
     license_start_date: '',
-    license_end_date: ''
+    license_end_date: '',
+    company_name: '',
+    company_id: ''
   });
 
   const availableMenus = [
@@ -28,11 +68,11 @@ const UserManagement = () => {
     { id: 'registration', label: 'Registration' },
     { id: 'gallery', label: 'Gallery' },
     { id: 'events', label: 'Events' },
-    { id: 'matching', label: 'Face Matching' },
     { id: 'video', label: 'Video Processing' },
     { id: 'camera', label: 'Camera Management' },
     { id: 'stream-viewer', label: 'Stream Viewer' },
     { id: 'users', label: 'User Management' },
+    { id: 'settings', label: 'Settings' },
   ];
 
   const { user: currentUser, token } = useAuthStore();
@@ -113,8 +153,10 @@ const UserManagement = () => {
       const body = { ...formData };
       if (isEditing) {
         // Only send updates if editing
-        delete body.password; // Don't update password here for now
         delete body.username; // Can't change username
+        if (!body.password) {
+          delete body.password; // Don't send empty password
+        }
       }
       // Normalize license fields: only include for Admin when SuperAdmin is acting
       if (!((currentUser.role === 'SuperAdmin') && (formData.role === 'Admin'))) {
@@ -138,7 +180,11 @@ const UserManagement = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(body)
+        body: JSON.stringify({
+          ...body,
+          company_name: formData.role === 'Admin' ? formData.company_name : undefined,
+          company_id: formData.role === 'Admin' ? formData.company_id : undefined
+        })
       });
 
       if (!response.ok) {
@@ -238,6 +284,43 @@ const UserManagement = () => {
           }}>
             <UserPlus size={18} /> Add User
           </button>
+          <button
+            className="export-btn-pdf"
+            onClick={async () => {
+              try {
+                const response = await fetch(`${API_BASE_URL}/api/events/export/users-pdf`, {
+                  headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!response.ok) throw new Error('Failed to export PDF');
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'user_management_report.pdf';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+              } catch (err) {
+                alert('PDF Export Error: ' + err.message);
+              }
+            }}
+            style={{
+              background: '#1e293b',
+              color: 'white',
+              border: 'none',
+              padding: '8px 16px',
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              cursor: 'pointer',
+              fontSize: '0.9rem',
+              fontWeight: '500'
+            }}
+          >
+            <FileText size={18} /> PDF Report
+          </button>
         </div>
       </div>
 
@@ -331,28 +414,36 @@ const UserManagement = () => {
                           className={isEditing ? 'disabled-input' : ''}
                         />
                       </div>
-                      {!isEditing && (
-                        <div className="form-group">
-                          <label>PASSWORD</label>
-                          <input
-                            type="password"
-                            name="password"
-                            value={formData.password}
-                            onChange={handleInputChange}
-                            required
-                            placeholder="Enter password"
-                          />
-                        </div>
-                      )}
+                      <div className="form-group">
+                        <label>{isEditing ? 'RESET PASSWORD' : 'PASSWORD'}</label>
+                        <input
+                          type="password"
+                          name="password"
+                          value={formData.password}
+                          onChange={handleInputChange}
+                          required={!isEditing}
+                          placeholder={isEditing ? "Leave blank to keep current" : "Enter password"}
+                        />
+                      </div>
                     </div>
 
                     <div className="form-row">
                       <div className="form-group">
                         <label>ROLE</label>
-                        <select name="role" value={formData.role} onChange={handleInputChange} disabled={isEditing}>
-                          {currentUser.role === 'SuperAdmin' && <option value="Admin">Admin</option>}
-                          <option value="Supervisor">Supervisor</option>
-                        </select>
+                        <CustomDropdown
+                          value={formData.role}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setFormData(prev => ({ ...prev, role: val }));
+                            if (val !== 'Admin') {
+                              setFormData(prev => ({ ...prev, company_name: '', company_id: '' }));
+                            }
+                          }}
+                          options={[
+                            ...(currentUser.role === 'SuperAdmin' ? [{ value: 'Admin', label: 'Admin' }] : []),
+                            { value: 'Supervisor', label: 'Supervisor' }
+                          ]}
+                        />
                       </div>
                       <div className="form-group">
                         <label>EMAIL (FOR NOTIFICATIONS)</label>
@@ -365,6 +456,37 @@ const UserManagement = () => {
                         />
                       </div>
                     </div>
+
+                    {(currentUser.role === 'SuperAdmin' && formData.role === 'Admin' && !isEditing) && (
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label>COMPANY NAME</label>
+                          <input
+                            type="text"
+                            name="company_name"
+                            value={formData.company_name}
+                            onChange={(e) => {
+                              const name = e.target.value;
+                              const slug = name.toLowerCase().replace(/ /g, '-').replace(/[^\w-]/g, '');
+                              setFormData(prev => ({ ...prev, company_name: name, company_id: slug }));
+                            }}
+                            required
+                            placeholder="e.g. Acme Corp"
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>COMPANY ID (SLUG)</label>
+                          <input
+                            type="text"
+                            name="company_id"
+                            value={formData.company_id}
+                            onChange={handleInputChange}
+                            required
+                            placeholder="e.g. acme-corp"
+                          />
+                        </div>
+                      </div>
+                    )}
 
                     {(currentUser.role === 'SuperAdmin' && formData.role === 'Admin') && (
                       <>
@@ -396,11 +518,16 @@ const UserManagement = () => {
                         <div className="form-row" style={{ gridTemplateColumns: formData.license_duration === 'custom' ? '1fr 1fr 1fr' : 'repeat(2, 1fr)' }}>
                           <div className="form-group">
                             <label>LICENCE DURATION</label>
-                            <select name="license_duration" value={formData.license_duration} onChange={handleLicenseDurationChange}>
-                              <option value="1y">1 Year</option>
-                              <option value="2y">2 Years</option>
-                              <option value="custom">Custom Range</option>
-                            </select>
+                            <CustomDropdown
+                              openUp={true}
+                              value={formData.license_duration}
+                              onChange={(e) => handleLicenseDurationChange(e)}
+                              options={[
+                                { value: '1y', label: '1 Year' },
+                                { value: '2y', label: '2 Years' },
+                                { value: 'custom', label: 'Custom Range' }
+                              ]}
+                            />
                           </div>
                           {formData.license_duration === 'custom' && (
                             <>

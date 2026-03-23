@@ -1,20 +1,37 @@
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 import jwt
-from passlib.context import CryptContext
-from .storage import get_users
+import bcrypt
 
 SECRET_KEY = "your-secret-key-here-change-in-production"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        # bcrypt requires bytes
+        if isinstance(plain_password, str):
+            plain_password = plain_password.encode('utf-8')
+        if isinstance(hashed_password, str):
+            hashed_password = hashed_password.encode('utf-8')
+        
+        # Verify
+        return bcrypt.checkpw(plain_password, hashed_password)
+    except Exception as e:
+        print(f"Error verifying password: {e}")
+        return False
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    # bcrypt requires bytes
+    if isinstance(password, str):
+        password = password.encode('utf-8')
+    
+    # Hash
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password, salt)
+    
+    # Return as string for storage
+    return hashed.decode('utf-8')
 
 def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()
@@ -29,21 +46,26 @@ def verify_token(token: str) -> Optional[Dict[str, Any]]:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_exp": False})
         username: str = payload.get("sub")
         role: str = payload.get("role")
+        company_id: Optional[str] = payload.get("company_id")
         if username is None or role is None:
             return None
-        return {"username": username, "role": role}
+        return {"username": username, "role": role, "company_id": company_id}
     except jwt.PyJWTError:
         return None
 
-def authenticate_user(username: str, password: str, role: str) -> Optional[Dict[str, Any]]:
+def authenticate_user(username: str, password: str, role: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    from .storage import get_users
     users = get_users()
     user = users.get(username)
     if not user:
         return None
     if not verify_password(password, user["hashed_password"]):
         return None
-    if user.get("role") != role:
+    
+    # If role is provided, it must match (except for existing SuperAdmin special logic in routes.py)
+    if role and user.get("role") != role:
         return None
+    
     if not user.get("is_active", True):
         return None
     return user
