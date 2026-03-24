@@ -65,13 +65,16 @@ const UserManagement = () => {
 
   const availableMenus = [
     { id: 'dashboard', label: 'Dashboard' },
-    { id: 'registration', label: 'Registration' },
+    { id: 'registration', label: 'Employees' },
+    { id: 'reports', label: 'Known Face Reports' },
     { id: 'gallery', label: 'Gallery' },
     { id: 'events', label: 'Events' },
+    { id: 'holiday-calendar', label: 'Holiday Calendar' },
     { id: 'video', label: 'Video Processing' },
-    { id: 'camera', label: 'Camera Management' },
+    { id: 'camera', label: 'Cameras' },
     { id: 'stream-viewer', label: 'Stream Viewer' },
     { id: 'users', label: 'User Management' },
+    { id: 'backupmgmt', label: 'Backup Management' },
     { id: 'settings', label: 'Settings' },
   ];
 

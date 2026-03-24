@@ -72,14 +72,6 @@ const Settings = () => {
     unknown_detection_enabled: true,
     long_distance_detection_enabled: true,
     min_face_size: 40,
-    attendance: {
-      punch_in: '09:30',
-      punch_out: '18:00',
-      working_hours: 8,
-      grace_minutes: 15,
-      min_hours_present: 4.0,
-      overtime_after: 9.0
-    }
   });
 
   const [loading, setLoading] = useState(false);
@@ -120,12 +112,7 @@ const Settings = () => {
         const incomingSettings = data.settings || {};
         // Merge with defaults to ensure all keys exist
         setSettings(prev => ({
-          ...prev,
-          ...incomingSettings,
-          attendance: {
-            ...prev.attendance,
-            ...(incomingSettings.attendance || {})
-          }
+          ...incomingSettings
         }));
       } else {
         setMessage({ type: 'error', text: data.detail || 'Failed to fetch settings' });
@@ -152,22 +139,10 @@ const Settings = () => {
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
-
-    if (name.startsWith('attendance.')) {
-      const field = name.split('.')[1];
-      setSettings(prev => ({
-        ...prev,
-        attendance: {
-          ...prev.attendance,
-          [field]: type === 'number' ? parseFloat(value) || 0 : value
-        }
-      }));
-    } else {
-      setSettings(prev => ({
-        ...prev,
-        [name]: type === 'checkbox' ? checked : (type === 'number' ? parseInt(value) || 0 : value)
-      }));
-    }
+    setSettings(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : (type === 'number' ? parseInt(value) || 0 : value)
+    }));
   };
 
   const handleToggleChange = (e) => {
@@ -202,36 +177,20 @@ const Settings = () => {
     setMessage({ type, text });
   };
 
-  const calculateWindow = () => {
-    const { punch_in, punch_out } = settings.attendance || {};
-    if (!punch_in || !punch_out) return 0;
-    
-    const [h1, m1] = punch_in.split(':').map(Number);
-    const [h2, m2] = punch_out.split(':').map(Number);
-    
-    const d1 = new Date(); d1.setHours(h1, m1, 0);
-    const d2 = new Date(); d2.setHours(h2, m2, 0);
-    
-    let diff = (d2 - d1) / (1000 * 60 * 60);
-    if (diff < 0) diff += 24; // Handle overnight shifts if needed
-    return diff;
-  };
-
   const humanizeError = (detail) => {
     if (typeof detail === 'string') return detail;
     if (Array.isArray(detail)) {
       return detail.map(err => {
         // Last part of the location is the field name
         let field = err.loc[err.loc.length - 1];
-        if (field === 'body' || field === 'attendance') {
+        if (field === 'body') {
            field = err.loc[err.loc.length - 2] || field;
         }
         
-        // Clean up field name: max_cameras_per_admin -> Max Cameras Per Admin
+        // Clean up field name
         const displayField = field.toString().replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
         
         let msg = err.msg;
-        // Strip technical prefixes added by backend or pydantic
         if (msg.includes('Value error, ')) msg = msg.split('Value error, ')[1];
         
         return `${displayField}: ${msg}`;
@@ -246,14 +205,6 @@ const Settings = () => {
       setLoading(true);
       setMessage({ type: '', text: '' });
       
-      // Client-side validation for attendance window
-      const windowHours = calculateWindow();
-      const workingHours = settings.attendance?.working_hours || 0;
-      
-      if (workingHours > windowHours) {
-        throw new Error(`Invalid Configuration: Target Working Hours (${workingHours}h) cannot exceed the time window between Punch In and Punch Out (${windowHours.toFixed(1)}h).`);
-      }
-
       const query = (user?.role === 'SuperAdmin' && selectedCompanyId) ? `?cid=${selectedCompanyId}` : '';
       const response = await fetch(`${API_BASE_URL}/api/users/settings/system${query}`, {
         method: 'PUT',
@@ -441,80 +392,7 @@ const Settings = () => {
           </div>
         </div>
 
-        {/* Attendance Settings - Visible to SuperAdmin and Admin */}
-        <div className="settings-section">
-          <div className="section-title">
-            <Server size={18} />
-            <h3>Attendance Configuration</h3>
-          </div>
-          <p className="section-desc">Set global thresholds for punch-in, punch-out, and daily targets.</p>
-          <div className="settings-grid">
-            <div className="form-group">
-              <label>Punch In Time (Late Threshold)</label>
-              <input
-                type="time"
-                name="attendance.punch_in"
-                value={settings.attendance?.punch_in || '09:30'}
-                onChange={handleInputChange}
-              />
-            </div>
-            <div className="form-group">
-              <label>Punch Out Time</label>
-              <input
-                type="time"
-                name="attendance.punch_out"
-                value={settings.attendance?.punch_out || '18:00'}
-                onChange={handleInputChange}
-              />
-            </div>
-            <div className="form-group">
-              <label>Target Working Hours</label>
-              <input
-                type="number"
-                name="attendance.working_hours"
-                value={settings.attendance?.working_hours || 8}
-                onChange={handleInputChange}
-                min="1"
-                max="24"
-              />
-            </div>
-            <div className="form-group">
-              <label>Grace Period (Minutes)</label>
-              <input
-                type="number"
-                name="attendance.grace_minutes"
-                value={settings.attendance?.grace_minutes || 0}
-                onChange={handleInputChange}
-                min="0"
-                max="120"
-              />
-            </div>
-            <div className="form-group">
-              <label>Min Hours Present (Threshold)</label>
-              <input
-                type="number"
-                name="attendance.min_hours_present"
-                value={settings.attendance?.min_hours_present || 0}
-                onChange={handleInputChange}
-                min="0"
-                max="24"
-                step="0.5"
-              />
-            </div>
-            <div className="form-group">
-              <label>Overtime After (Hours)</label>
-              <input
-                type="number"
-                name="attendance.overtime_after"
-                value={settings.attendance?.overtime_after || 0}
-                onChange={handleInputChange}
-                min="1"
-                max="24"
-                step="0.5"
-              />
-            </div>
-          </div>
-        </div>
+
 
         {user?.role === 'Admin' && (
           <div className="settings-section">

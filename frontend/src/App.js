@@ -109,7 +109,9 @@ const AppContent = () => {
       case 'registration':
         return <RegistrationWidget />;
       case 'matching':
-        return <FaceMatching />;
+      case 'matching-1to1':
+      case 'matching-1toM':
+        return <FaceMatching initialTab={activeTab === 'matching-1to1' ? 'one-to-one' : 'one-to-many'} />;
       case 'video':
         return <VideoWidget />;
       case 'camera':
@@ -128,8 +130,6 @@ const AppContent = () => {
         return <BackupDashboard />;
       case 'holiday-calendar':
         return <HolidayCalendar />;
-      case 'attendance-report':
-      case 'day-report':
       case 'week-report':
       case 'month-report':
         return <AttendanceReport reportType={activeTab} setActiveTab={setActiveTab} />;

@@ -17,14 +17,9 @@ const RegistrationWidget = () => {
   const [formData, setFormData] = useState({
     emp_id: '',
     name: '',
-    email: '',
-    phone: '',
-    department: '',
-    designation: '',
-    category: 'Employee',
+    category: 'Criminal',
     status: 'Active',
-    age: '18',
-    gender: ''
+    role: 'User'
   });
   const [autoDetectAge, setAutoDetectAge] = useState(true);
   const [imageFile, setImageFile] = useState(null);
@@ -32,7 +27,6 @@ const RegistrationWidget = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState(''); // 'success' or 'error'
-  const [ageError, setAgeError] = useState('');
   const fileInputRef = useRef(null);
 
   // Bulk registration with Excel + Folder
@@ -45,11 +39,6 @@ const RegistrationWidget = () => {
   // Ensure age is always 18 or above on component mount
   useEffect(() => {
     fetchEmployees();
-    const ageNum = parseInt(formData.age, 10);
-    if (!formData.age || isNaN(ageNum) || ageNum < 18) {
-      setFormData(prev => ({ ...prev, age: '18' }));
-      setAgeError('');
-    }
   }, []);
 
   const fetchEmployees = async () => {
@@ -80,24 +69,6 @@ const RegistrationWidget = () => {
   }, [activeMode, token]);
 
   const handleInputChange = (field, value) => {
-    // Validate age - must be 18 or above
-    if (field === 'age') {
-      const ageValue = value.trim();
-      if (ageValue === '') {
-        // If empty, set to 18 as default
-        setAgeError('');
-        setFormData(prev => ({ ...prev, [field]: '18' }));
-        return;
-      }
-      const ageNum = parseInt(ageValue, 10);
-      if (isNaN(ageNum) || ageNum < 18) {
-        setAgeError('Age must be 18 or above');
-      } else {
-        setAgeError('');
-      }
-    }
-
-
     setFormData(prev => ({
       ...prev,
       [field]: value
@@ -135,18 +106,12 @@ const RegistrationWidget = () => {
     setFormData({
       emp_id: '',
       name: '',
-      email: '',
-      phone: '',
-      department: '',
-      designation: '',
-      category: 'Employee',
+      category: 'Criminal',
       status: 'Active',
-      age: '18',
-      gender: ''
+      role: 'User'
     });
     setImageFile(null);
     setImagePreview(null);
-    setAgeError('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -165,39 +130,13 @@ const RegistrationWidget = () => {
     }
 
     if (!formData.emp_id.trim()) {
-      showMessage('Please enter an Employee ID', 'error');
-      return;
-    }
-
-    if (!formData.department.trim()) {
-      showMessage('Please enter a Department', 'error');
-      return;
-    }
-
-    if (!formData.email.trim() || !formData.email.trim().toLowerCase().endsWith('@gmail.com')) {
-      showMessage('A valid @gmail.com email is required', 'error');
-      return;
-    }
-
-    const cleanPhone = formData.phone.trim().replace(/\D/g, '');
-    if (cleanPhone.length !== 10) {
-      showMessage('Phone number must be exactly 10 digits', 'error');
+      showMessage('Please enter a Criminal ID', 'error');
       return;
     }
 
     if (!formData.category) {
       showMessage('Please select a Category', 'error');
       return;
-    }
-
-    // Validate age if provided
-    if (formData.age.trim()) {
-      const ageNum = parseInt(formData.age.trim(), 10);
-      if (isNaN(ageNum) || ageNum < 18) {
-        showMessage('Age must be 18 or above', 'error');
-        setAgeError('Age must be 18 or above');
-        return;
-      }
     }
 
 
@@ -209,10 +148,6 @@ const RegistrationWidget = () => {
       formDataToSend.append('image', imageFile);
       formDataToSend.append('emp_id', formData.emp_id.trim());
       formDataToSend.append('name', formData.name.trim());
-      formDataToSend.append('email', formData.email.trim());
-      formDataToSend.append('phone', formData.phone.trim());
-      formDataToSend.append('department', formData.department.trim());
-      formDataToSend.append('designation', formData.designation.trim());
       formDataToSend.append('category', formData.category);
       formDataToSend.append('status', formData.status.trim());
       formDataToSend.append('age', autoDetectAge ? '' : (formData.age || ''));
@@ -229,10 +164,7 @@ const RegistrationWidget = () => {
       const result = await response.json();
 
       if (response.ok && result.status === 'success') {
-        const extra = result.age_range
-          ? ` Age range: ${result.age_range}${result.age_source ? ` (${result.age_source})` : ''}.`
-          : '';
-        showMessage(`Successfully registered ${formData.name}!${extra}`, 'success');
+        showMessage(`Successfully registered ${formData.name}!`, 'success');
         resetForm();
       } else {
         // FastAPI returns error messages in the 'detail' field for HTTPException
@@ -454,15 +386,15 @@ const RegistrationWidget = () => {
     <div className="registration-widget">
       <div className="registration-header-clean">
         <div className="header-title">
-          <h2>Registration</h2>
-          <p>Add new persons to the database</p>
+          <h2>Criminal Registration</h2>
+          <p>Add new criminals to the database</p>
         </div>
         <div className="mode-selector-pill">
           <button
             className={`mode-pill ${activeMode === 'list' ? 'active' : ''}`}
             onClick={() => setActiveMode('list')}
           >
-            Employee List
+            Criminal Database
           </button>
           <button
             className={`mode-pill ${activeMode === 'single' ? 'active' : ''}`}
@@ -510,19 +442,19 @@ const RegistrationWidget = () => {
           <div className="list-controls" style={{ marginBottom: '16px', display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
             <input
               type="text"
-              placeholder="Search employees..."
+              placeholder="Search database..."
               value={searchTerm}
               onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
               className="input-clean"
               style={{ maxWidth: '300px' }}
             />
             <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-              {employees.filter(e => e.name.toLowerCase().includes(searchTerm.toLowerCase()) || (e.emp_id && e.emp_id.toLowerCase().includes(searchTerm.toLowerCase()))).length} employees
+              {employees.filter(e => e.name.toLowerCase().includes(searchTerm.toLowerCase()) || (e.emp_id && e.emp_id.toLowerCase().includes(searchTerm.toLowerCase()))).length} records
             </span>
             <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
               <button className="btn-submit-clean" onClick={async () => {
                 try {
-                  const response = await fetch(`${BASE_URL}/api/events/employees/export`, {
+                  const response = await fetch(`${BASE_URL}/api/events/criminals/export`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                   });
                   if (!response.ok) {
@@ -533,21 +465,21 @@ const RegistrationWidget = () => {
                   const url = window.URL.createObjectURL(blob);
                   const a = document.createElement('a');
                   a.href = url;
-                  a.download = 'employees_export.csv';
+                  a.download = 'criminal_database_export.csv';
                   document.body.appendChild(a);
                   a.click();
                   document.body.removeChild(a);
                   window.URL.revokeObjectURL(url);
                 } catch (err) {
                   console.error('Export error:', err);
-                  showMessage(err.message || 'Failed to export employee data', 'error');
+                  showMessage(err.message || 'Failed to export criminal data', 'error');
                 }
               }} style={{ width: 'auto', background: 'var(--bg-panel)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}>
                 <Download size={16} /> Export CSV
               </button>
               <button className="btn-submit-clean" onClick={async () => {
                 try {
-                  const response = await fetch(`${BASE_URL}/api/events/export/employees-pdf`, {
+                  const response = await fetch(`${BASE_URL}/api/events/export/criminals-pdf`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                   });
                   if (!response.ok) {
@@ -558,7 +490,7 @@ const RegistrationWidget = () => {
                   const url = window.URL.createObjectURL(blob);
                   const a = document.createElement('a');
                   a.href = url;
-                  a.download = 'employees_report.pdf';
+                  a.download = 'criminal_report.pdf';
                   document.body.appendChild(a);
                   a.click();
                   document.body.removeChild(a);
@@ -571,14 +503,14 @@ const RegistrationWidget = () => {
                 <FileText size={16} /> Export PDF
               </button>
               <button className="btn-submit-clean" onClick={() => setActiveMode('single')} style={{ width: 'auto' }}>
-                + Add Employee
+                + Add Criminal
               </button>
             </div>
           </div>
 
           <div className="table-container">
             {loadingEmployees ? (
-              <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>Loading employees...</div>
+              <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>Loading database...</div>
             ) : (() => {
               const filtered = employees.filter(e => e.name.toLowerCase().includes(searchTerm.toLowerCase()) || (e.emp_id && e.emp_id.toLowerCase().includes(searchTerm.toLowerCase())));
               const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -589,12 +521,8 @@ const RegistrationWidget = () => {
                   <table className="attendance-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr>
-                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid var(--border-color)' }}>Emp ID</th>
+                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid var(--border-color)' }}>Criminal ID</th>
                         <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid var(--border-color)' }}>Name</th>
-                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid var(--border-color)' }}>Department</th>
-                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid var(--border-color)' }}>Designation</th>
-                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid var(--border-color)' }}>Email</th>
-                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid var(--border-color)' }}>Phone</th>
                         <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid var(--border-color)' }}>Status</th>
                         <th style={{ padding: '12px', textAlign: 'center', borderBottom: '1px solid var(--border-color)' }}>Actions</th>
                       </tr>
@@ -612,10 +540,6 @@ const RegistrationWidget = () => {
                             />
                             {emp.name}
                           </td>
-                          <td style={{ padding: '12px' }}>{emp.department || '-'}</td>
-                          <td style={{ padding: '12px' }}>{emp.designation || '-'}</td>
-                          <td style={{ padding: '12px' }}>{emp.email || '-'}</td>
-                          <td style={{ padding: '12px' }}>{emp.phone || '-'}</td>
                           <td style={{ padding: '12px' }}>
                             <span 
                               onClick={() => {
@@ -666,7 +590,7 @@ const RegistrationWidget = () => {
                       ))}
                       {filtered.length === 0 && (
                         <tr>
-                          <td colSpan="8" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>No employees found</td>
+                          <td colSpan="8" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>No records found</td>
                         </tr>
                       )}
                     </tbody>
@@ -724,62 +648,12 @@ const RegistrationWidget = () => {
 
               <div className="form-row-split">
                 <div className="form-group">
-                  <label>Emp ID <span className="required">*</span></label>
+                  <label>Criminal ID <span className="required">*</span></label>
                   <input
                     type="text"
                     value={formData.emp_id}
                     onChange={(e) => handleInputChange('emp_id', e.target.value)}
-                    placeholder="e.g. EMP1001"
-                    disabled={isLoading}
-                    className="input-clean"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Department <span className="required">*</span></label>
-                  <input
-                    type="text"
-                    value={formData.department}
-                    onChange={(e) => handleInputChange('department', e.target.value)}
-                    placeholder="e.g. IT"
-                    disabled={isLoading}
-                    className="input-clean"
-                  />
-                </div>
-              </div>
-
-              <div className="form-row-split">
-                <div className="form-group">
-                  <label>Designation</label>
-                  <input
-                    type="text"
-                    value={formData.designation}
-                    onChange={(e) => handleInputChange('designation', e.target.value)}
-                    placeholder="e.g. Developer"
-                    disabled={isLoading}
-                    className="input-clean"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Email <span className="required">*</span></label>
-                  <input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => handleInputChange('email', e.target.value)}
-                    placeholder="example@gmail.com"
-                    disabled={isLoading}
-                    className="input-clean"
-                  />
-                </div>
-              </div>
-
-              <div className="form-row-split">
-                <div className="form-group">
-                  <label>Phone <span className="required">*</span></label>
-                  <input
-                    type="text"
-                    value={formData.phone}
-                    onChange={(e) => handleInputChange('phone', e.target.value)}
-                    placeholder="10 digit number"
+                    placeholder="e.g. CR-1001"
                     disabled={isLoading}
                     className="input-clean"
                   />
@@ -792,117 +666,18 @@ const RegistrationWidget = () => {
                     disabled={isLoading}
                     className="select-clean"
                   >
-                    <option value="Employee">Employee</option>
-                    <option value="Visitor">Visitor</option>
                     <option value="Criminal">Criminal</option>
                     <option value="Offender">Offender</option>
+                    <option value="Suspect">Suspect</option>
                     <option value="VIP">VIP</option>
-                    <option value="Staff">Staff</option>
+                    <option value="Other">Other</option>
                   </select>
                 </div>
               </div>
 
               {/* Status field removed from Registration Form as it defaults to Active */}
 
-              <div className="form-row-split">
-                <div className="form-group age-group">
-                  <label>
-                    Age
-                    <span className="ai-badge-clean">AI</span>
-                  </label>
-
-                  {autoDetectAge ? (
-                    <div
-                      className="auto-detect-box selected"
-                      onClick={() => setAutoDetectAge(false)}
-                      title="Click to switch to manual age entry"
-                    >
-                      <div className="check-circle">
-                        <Check size={14} />
-                      </div>
-                      <div className="auto-detect-text">
-                        <strong>Auto-detect from photo</strong>
-                        <span>Uses AI to estimate age range from the uploaded photo</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="manual-age-container-clean">
-                      <div className="age-stepper-clean">
-                        <button
-                          type="button"
-                          className="step-btn-clean"
-                          onClick={() => {
-                            const current = parseInt(formData.age || '18', 10);
-                            const next = isNaN(current) ? 18 : Math.max(18, current - 1);
-                            setAgeError('');
-                            setFormData(prev => ({ ...prev, age: String(next) }));
-                          }}
-                          disabled={isLoading || (() => {
-                            const v = parseInt(formData.age || '18', 10);
-                            return !isFinite(v) || v <= 18;
-                          })()}
-                        >
-                          −
-                        </button>
-                        <input
-                          type="number"
-                          value={(() => {
-                            const ageValue = formData.age || '18';
-                            const ageNum = parseInt(ageValue, 10);
-                            const finalValue = (isNaN(ageNum) || ageNum < 18) ? '18' : String(Math.min(120, ageNum));
-                            return finalValue;
-                          })()}
-                          readOnly
-                          min={18}
-                          max={120}
-                          step={1}
-                          disabled={isLoading}
-                        />
-                        <button
-                          type="button"
-                          className="step-btn-clean"
-                          onClick={() => {
-                            const current = parseInt(formData.age || '18', 10);
-                            const next = isNaN(current) ? 18 : Math.min(120, current + 1);
-                            setAgeError('');
-                            setFormData(prev => ({ ...prev, age: String(next) }));
-                          }}
-                          disabled={isLoading || (() => {
-                            const v = parseInt(formData.age || '18', 10);
-                            return !isFinite(v) || v >= 120;
-                          })()}
-                        >
-                          +
-                        </button>
-                      </div>
-                      <button
-                        type="button"
-                        className="btn-link"
-                        onClick={() => setAutoDetectAge(true)}
-                      >
-                        Use Auto-detect
-                      </button>
-                    </div>
-                  )}
-
-                  {ageError && <span className="field-error">{ageError}</span>}
-                </div>
-
-                <div className="form-group gender-group">
-                  <label>Gender</label>
-                  <select
-                    value={formData.gender}
-                    onChange={(e) => handleInputChange('gender', e.target.value)}
-                    disabled={isLoading}
-                    className="select-clean"
-                  >
-                    <option value="" disabled>Select Gender</option>
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-              </div>
+              {/* Age and Gender Removed */}
 
 
               <div className="info-alert">
@@ -1075,14 +850,9 @@ const RegistrationWidget = () => {
                 </p>
                 <ul style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '12px', paddingLeft: '20px' }}>
                   <li><strong>name</strong> (Matches the image filename)</li>
-                  <li><strong>Employee Full Name</strong></li>
-                  <li><strong>Employee Details</strong></li>
-                  <li><strong>Designation</strong></li>
-                  <li><strong>Email</strong></li>
-                  <li><strong>Phone Number</strong></li>
-                  <li><strong>Roles</strong></li>
-                  <li><strong>Status</strong></li>
-                  <li><strong>Gender</strong></li>
+                  <li><strong>Criminal Full Name</strong></li>
+                  <li><strong>Criminal ID</strong></li>
+                  <li><strong>Category</strong> (e.g. Criminal, Suspect)</li>
                 </ul>
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                   <strong>Note:</strong> The selected Data Folder should contain images named identically to the 'name' column for each person. Optional columns: 'age', 'category'.

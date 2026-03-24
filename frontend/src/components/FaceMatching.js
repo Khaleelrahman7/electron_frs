@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import useAuthStore from '../store/authStore';
 import FaceCard from './FaceCard';
@@ -38,9 +39,9 @@ const convertImagePathToUrl = (imagePath, companyId) => {
   }
 };
 
-const FaceMatching = () => {
+const FaceMatching = ({ initialTab }) => {
   const { user, token } = useAuthStore();
-  const [activeTab, setActiveTab] = useState('one-to-many');
+  const [activeTab, setActiveTab] = useState(initialTab || 'one-to-many');
   const [selectedImage1, setSelectedImage1] = useState(null);
   const [selectedImage2, setSelectedImage2] = useState(null);
   const [selectedImagePath1, setSelectedImagePath1] = useState('');
@@ -51,10 +52,13 @@ const FaceMatching = () => {
   const [error, setError] = useState(null);
   const [galleryStats, setGalleryStats] = useState(null);
 
-  const tabs = [
-    { id: 'one-to-many', label: 'One-to-Many', icon: '🔍' },
-    { id: 'one-to-one', label: 'One-to-One', icon: '⚖️' },
-  ];
+  // Internal tabs removed - navigation handled by sidebar
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   const handleImageSelect = (event, imageNumber) => {
     const file = event.target.files[0];
@@ -428,19 +432,7 @@ const FaceMatching = () => {
   return (
     <div className="face-matching">
       <div className="matching-header">
-        <h2>Face Matching System</h2>
-        <div className="matching-tabs">
-          {tabs.map(tab => (
-            <button
-              key={tab.id}
-              className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab.id)}
-            >
-              <span className="tab-icon">{tab.icon}</span>
-              <span className="tab-text">{tab.label}</span>
-            </button>
-          ))}
-        </div>
+        <h2>Face Matching System - {activeTab === 'one-to-one' ? 'One on One' : 'One on Many'}</h2>
       </div>
 
       {error && (

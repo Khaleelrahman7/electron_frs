@@ -13,8 +13,8 @@ import FaceRecognitionAnalytics from './FaceRecognitionAnalytics';
 import {
   fetchDashboardStats,
   fetchWeeklyAttendance,
-  fetchDepartments,
-  fetchEmployees,
+  fetchCategories,
+  fetchCriminals,
   fetchAlerts,
   fetchLiveRecognitions
 } from '../../services/api';
@@ -115,16 +115,15 @@ export default function Dashboard({ setActiveTab }) {
 
   // Dashboard Data
   const [stats, setStats] = useState({
-    present: 0, absent: 0, late: 0, total: 0, cameras: 0, alerts: 0,
-    present_change: "0%", absent_change: "0%", late_change: "0%"
+    recognized: 0, unrecognized: 0, total: 0, cameras: 0, alerts: 0,
+    recognized_change: "0%", unrecognized_change: "0%"
   });
-  const [employees, setEmployees] = useState([]);
+  const [criminals, setCriminals] = useState([]);
   const [weeklyData, setWeeklyData] = useState([]);
-  const [departmentData, setDepartmentData] = useState([]);
+  const [categoryData, setCategoryData] = useState([]);
   const [sparklines, setSparklines] = useState({
-    present: [{ value: 0 }, { value: 5 }, { value: 3 }, { value: 8 }],
-    absent: [{ value: 0 }, { value: 2 }, { value: 1 }, { value: 3 }],
-    late: [{ value: 0 }, { value: 1 }, { value: 4 }, { value: 2 }],
+    recognized: [{ value: 0 }, { value: 5 }, { value: 3 }, { value: 8 }],
+    unrecognized: [{ value: 0 }, { value: 2 }, { value: 1 }, { value: 3 }],
     total: [{ value: 100 }, { value: 100 }, { value: 100 }],
     cameras: [{ value: 2 }, { value: 2 }, { value: 2 }],
     alerts: [{ value: 0 }, { value: 1 }, { value: 0 }]
@@ -141,31 +140,29 @@ export default function Dashboard({ setActiveTab }) {
     try {
       const statsData = await fetchDashboardStats();
       const weekly = await fetchWeeklyAttendance();
-      const depts = await fetchDepartments();
-      const emp = await fetchEmployees();
+      const cats = await fetchCategories();
+      const crim = await fetchCriminals(); // Backend still uses fetchCriminals for criminals
       const alertData = await fetchAlerts();
       const live = await fetchLiveRecognitions();
 
       setStats({
-        present: statsData.present_today || 0,
-        absent: statsData.absent || 0,
-        late: statsData.late || 0,
-        total: statsData.total_employees || 0,
+        recognized: statsData.present_today || 0,
+        unrecognized: statsData.absent || 0,
+        total: statsData.total_criminals || statsData.total_employees || 0,
         cameras: statsData.cameras_active || 0,
         alerts: statsData.recognitions_today || 0,
-        present_change: statsData.present_change || "0%",
-        absent_change: statsData.absent_change || "0%",
-        late_change: statsData.late_change || "0%"
+        recognized_change: statsData.present_change || "0%",
+        unrecognized_change: statsData.absent_change || "0%"
       });
 
       // Update sparklines if backend provides trend data
       if (statsData.present_trend) {
-        setSparklines(prev => ({ ...prev, present: statsData.present_trend }));
+        setSparklines(prev => ({ ...prev, recognized: statsData.present_trend }));
       }
 
       setWeeklyData(weekly);
-      setDepartmentData(depts);
-      setEmployees(emp);
+      setCategoryData(cats);
+      setCriminals(crim);
       setAlerts(alertData);
       setLiveRecognitions(live);
     } catch (err) {
@@ -193,10 +190,10 @@ export default function Dashboard({ setActiveTab }) {
         const data = JSON.parse(event.data);
         if (data.type === 'RECOGNITION') {
           setLiveRecognitions(prev => [data.payload, ...prev].slice(0, 5));
-          // Optionally update employee list if present
-          setEmployees(prevEmp => prevEmp.map(emp =>
-            emp.emp_id === data.payload.empId || emp.name === data.payload.name
-              ? { ...emp, status: 'Present', punch_in: data.payload.time } : emp
+          // Optionally update criminal list if present
+          setCriminals(prevCrim => prevCrim.map(crim =>
+            crim.emp_id === data.payload.empId || crim.name === data.payload.name
+              ? { ...crim, status: 'Recognized', punch_in: data.payload.time } : crim
           ));
         } else if (data.type === 'ALERT') {
           setAlerts(prev => [data.payload, ...prev].slice(0, 5));
@@ -213,17 +210,17 @@ export default function Dashboard({ setActiveTab }) {
   }, [company_id]);
 
   // --- FILTERING ---
-  const filteredEmployees = employees.filter(emp =>
-    emp?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    emp?.emp_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    emp?.department?.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredCriminals = criminals.filter(crim =>
+    crim?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    crim?.emp_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    crim?.criminal_id?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   // --- EXPORT ---
   const exportCSV = () => {
-    const csvHeaders = "EMP ID,NAME,DEPARTMENT,STATUS,PUNCH IN\n";
-    const csvRows = employees.map(e =>
-      `${e.emp_id || ''},${e.name || ''},${e.department || ''},${e.status || ''},${e.punch_in || ''}`
+    const csvHeaders = "CRIMINAL ID,NAME,CATEGORY,RECOGNITION TIME\n";
+    const csvRows = criminals.map(e =>
+      `${e.emp_id || e.criminal_id || ''},${e.name || ''},${e.category || 'Criminal'},${e.punch_in || e.timestamp || ''}`
     ).join("\n");
 
     const blob = new Blob([csvHeaders + csvRows], { type: "text/csv" });
@@ -231,7 +228,7 @@ export default function Dashboard({ setActiveTab }) {
 
     const a = document.createElement("a");
     a.href = url;
-    a.download = `attendance_${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `recognitions_${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -257,11 +254,11 @@ export default function Dashboard({ setActiveTab }) {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Dashboard Overview</h1>
-          <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Real-time attendance & security analytics</p>
+          <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Real-time criminal recognition & security analytics</p>
         </div>
         <div className="flex items-center gap-3">
           <div className="hidden md:flex items-center gap-2 bg-green-900/30 px-3 py-1.5 rounded-full border border-green-100">
-            <div className="w-2 h-2 bg-green-900/300 rounded-full animate-pulse"></div>
+            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
             <span className="text-xs font-semibold text-green-400">System Online</span>
           </div>
           <div className="flex items-center gap-2">
@@ -269,7 +266,7 @@ export default function Dashboard({ setActiveTab }) {
               onClick={exportCSV}
               className="flex items-center gap-2 px-3 py-1.5 transition rounded-lg shadow-sm border text-xs font-semibold"
               style={{ color: 'var(--text-secondary)', backgroundColor: 'var(--bg-panel)', borderColor: 'var(--border-color)' }}
-              title="Export attendance as CSV"
+              title="Export recognitions as CSV"
             >
               <Download size={16} /> Export CSV
             </button>
@@ -284,7 +281,7 @@ export default function Dashboard({ setActiveTab }) {
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement('a');
                   a.href = url;
-                  a.download = `dashboard_report_${new Date().toISOString().split('T')[0]}.pdf`;
+                  a.download = `criminal_report_${new Date().toISOString().split('T')[0]}.pdf`;
                   a.click();
                 } catch (err) {
                   console.error("Dashboard PDF Export Error", err);
@@ -310,13 +307,11 @@ export default function Dashboard({ setActiveTab }) {
       <div className="space-y-8">
 
         {/* ROW 1: KPI CARDS */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-5">
-          <KPICard title="Present Today" value={stats.present} trend="up" trendValue={stats.present_change} icon={UserCheck} colorClass="text-green-600" data={sparklines.present} gradient="from-green-400 to-emerald-500" />
-          <KPICard title="Absent" value={stats.absent} trend="down" trendValue={stats.absent_change} icon={UserX} colorClass="text-red-500" data={sparklines.absent} gradient="from-red-400 to-rose-500" />
-          <KPICard title="Late" value={stats.late} trend="up" trendValue={stats.late_change} icon={Clock} colorClass="text-orange-500" data={sparklines.late} gradient="from-orange-400 to-amber-500" />
-          <KPICard title="Total Employees" value={stats.total} trend="up" trendValue="0%" icon={Users} colorClass="text-blue-400" data={sparklines.total} gradient="from-blue-400 to-indigo-500" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4 gap-5">
+          <KPICard title="Recognized Today" value={stats.recognized} trend="up" trendValue={stats.recognized_change} icon={UserCheck} colorClass="text-green-600" data={sparklines.recognized} gradient="from-green-400 to-emerald-500" />
+          <KPICard title="Total Criminals" value={stats.total} trend="up" trendValue="0%" icon={Users} colorClass="text-blue-400" data={sparklines.total} gradient="from-blue-400 to-indigo-500" />
           <KPICard title="Active Cameras" value={stats.cameras} trend="up" trendValue="0%" icon={Camera} colorClass="text-purple-600" data={sparklines.cameras} gradient="from-purple-400 to-violet-500" />
-          <KPICard title="Alerts Today" value={stats.alerts} trend="up" trendValue="0" icon={AlertTriangle} colorClass="text-rose-600" data={sparklines.alerts} gradient="from-rose-500 to-red-600" />
+          <KPICard title="Total Recognitions" value={stats.alerts} trend="up" trendValue="0" icon={Activity} colorClass="text-rose-600" data={sparklines.alerts} gradient="from-rose-500 to-red-600" />
         </div>
 
         {/* ROW 2: SYSTEM HEALTH */}
@@ -330,7 +325,7 @@ export default function Dashboard({ setActiveTab }) {
               <div className="flex justify-between items-center p-3 rounded-xl border border-transparent hover:border-[var(--border-color)] transition-all" style={{ backgroundColor: 'var(--bg-input)' }}>
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg shadow-sm bg-blue-500/20"><Cpu size={16} className="text-blue-500" /></div>
-                  <span className="text-xs font-bold uppercase tracking-tight" style={{ color: 'var(--text-primary)' }}>AI Inference Engine</span>
+                  <span className="text-xs font-bold uppercase tracking-tight" style={{ color: 'var(--text-primary)' }}>VisionAI Engine</span>
                 </div>
                 <span className="text-xs font-bold text-green-600 bg-green-100 px-2 py-1 rounded-md">Running</span>
               </div>
@@ -351,7 +346,7 @@ export default function Dashboard({ setActiveTab }) {
 
               <div className="pt-2">
                 <div className="flex justify-between text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
-                  <span>GPU Usage</span>
+                  <span>GPU Performance</span>
                   <span>12%</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
@@ -370,7 +365,7 @@ export default function Dashboard({ setActiveTab }) {
             <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 blur-3xl -mr-16 -mt-16"></div>
             <h3 className="font-bold mb-6 flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
               <Activity size={18} className="text-blue-500" />
-              <span className="text-xs uppercase tracking-widest">Weekly Attendance Analytics</span>
+              <span className="text-xs uppercase tracking-widest">Weekly Recognition Analytics</span>
             </h3>
             <div className="h-[300px]">
               {weeklyData.length > 0 ? (
@@ -383,9 +378,7 @@ export default function Dashboard({ setActiveTab }) {
                       contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                     />
                     <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
-                    <Bar dataKey="present" name="Present" stackId="a" fill="#22c55e" radius={[0, 0, 4, 4]} />
-                    <Bar dataKey="late" name="Late" stackId="a" fill="#f97316" />
-                    <Bar dataKey="absent" name="Absent" stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="present" name="Recognized" fill="#22c55e" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
@@ -406,7 +399,7 @@ export default function Dashboard({ setActiveTab }) {
                 <span className="text-xs uppercase tracking-widest">Live Recognition Feed</span>
                 <span className="flex h-3 w-3 relative">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-900/300"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-400"></span>
                 </span>
               </h3>
               <div className="space-y-3">
@@ -422,9 +415,9 @@ export default function Dashboard({ setActiveTab }) {
                         {rec.time} • {rec.camera}
                       </p>
                     </div>
-                    <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${rec.status === 'Recognized' ? 'bg-green-100 text-green-400' : 'bg-red-100 text-red-400 animate-pulse'
+                    <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${rec.status === 'Recognized' || rec.status === 'Present' ? 'bg-green-100 text-green-600 border border-green-200' : 'bg-red-100 text-red-600 animate-pulse border border-red-200'
                       }`}>
-                      {rec.status}
+                      {rec.status === 'Present' ? 'Recognized' : rec.status}
                     </span>
                   </div>
                 )) : (
@@ -438,7 +431,7 @@ export default function Dashboard({ setActiveTab }) {
               <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-rose-500/10 blur-2xl rounded-full"></div>
               <h3 className="font-bold text-rose-500 mb-3 flex items-center gap-2">
                 <ShieldAlert size={18} />
-                <span className="text-xs uppercase tracking-widest">System Alerts</span>
+                <span className="text-xs uppercase tracking-widest">Security Alerts</span>
               </h3>
               <div className="space-y-2">
                 {alerts.length > 0 ? alerts.map(alert => (
@@ -452,7 +445,7 @@ export default function Dashboard({ setActiveTab }) {
                     </p>
                   </div>
                 )) : (
-                  <div className="text-center py-4 text-sm text-rose-400/70">No active alerts</div>
+                  <div className="text-center py-4 text-sm text-rose-400/70">No active security alerts</div>
                 )}
               </div>
             </div>

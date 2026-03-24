@@ -7,6 +7,7 @@ import {
   Image,
   Bell,
   ScanFace,
+  Search,
   Video,
   MonitorPlay,
   LogOut,
@@ -18,7 +19,8 @@ import {
   Palette,
   CalendarDays,
   CalendarCheck,
-  Database
+  Database,
+  FileText
 } from 'lucide-react';
 import './MainLayout.css';
 
@@ -66,19 +68,25 @@ const MainLayout = ({ children, activeTab, onTabChange }) => {
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
     { id: 'companies', label: 'Companies', icon: <ScanFace size={20} /> }, // Added Companies
-    { id: 'registration', label: 'Employees', icon: <Users size={20} /> }, // Renamed to Employees
+    { id: 'registration', label: 'Criminal Database', icon: <Users size={20} /> },
     {
-      id: 'attendance',
-      label: 'Attendance',
-      icon: <CalendarCheck size={20} />,
+      id: 'matching',
+      label: 'Face Matching',
+      icon: <Search size={20} />,
       subItems: [
-        { id: 'attendance-report', label: 'Attendance Report' },
-        { id: 'day-report', label: 'Day Report' },
-        { id: 'week-report', label: 'Week Report' },
-        { id: 'month-report', label: 'Month Report' },
+        { id: 'matching-1to1', label: 'One on One' },
+        { id: 'matching-1toM', label: 'One on Many' },
       ]
     },
-    { id: 'holiday-calendar', label: 'Holiday Calendar', icon: <CalendarDays size={20} /> },
+    {
+      id: 'reports',
+      label: 'Known Face Reports',
+      icon: <FileText size={20} />,
+      subItems: [
+        { id: 'week-report', label: 'Weekly Report' },
+        { id: 'month-report', label: 'Monthly Report' },
+      ]
+    },
     { id: 'gallery', label: 'Gallery', icon: <Image size={20} /> },
     { id: 'events', label: 'Events', icon: <Bell size={20} /> },
     { id: 'camera', label: 'Cameras', icon: <Camera size={20} /> }, // Renamed to Cameras
@@ -92,20 +100,25 @@ const MainLayout = ({ children, activeTab, onTabChange }) => {
   const visibleTabs = tabs.filter(tab => {
     const userRole = user?.role ? user.role.toLowerCase() : '';
     if (user?.assigned_menus && user.assigned_menus.length > 0) {
-      const normalizedMenus = user.assigned_menus.map(m => {
-        if (m === 'cameras') return 'camera';
-        if (m === 'admin') return 'users';
-        if (m === 'backupmgmt') return 'backup';
-        return m;
+      const normalizedMenus = [];
+      user.assigned_menus.forEach(m => {
+        if (m === 'cameras') normalizedMenus.push('camera');
+        else if (m === 'admin') normalizedMenus.push('users');
+        else if (m === 'backupmgmt') normalizedMenus.push('backup');
+        else if (m === 'matching') {
+          normalizedMenus.push('matching');
+        }
+        else normalizedMenus.push(m);
       });
       if (['admin', 'superadmin'].includes(userRole)) {
-        if (!normalizedMenus.includes('attendance')) normalizedMenus.push('attendance');
+        if (!normalizedMenus.includes('reports')) normalizedMenus.push('reports');
         if (!normalizedMenus.includes('backup')) normalizedMenus.push('backup');
       }
       return normalizedMenus.includes(tab.id);
     }
-    if (userRole === 'superadmin') return ['dashboard', 'companies', 'registration', 'attendance', 'holiday-calendar', 'gallery', 'events', 'camera', 'stream-viewer', 'video', 'users', 'settings', 'backup'].includes(tab.id);
-    if (userRole === 'admin') return ['dashboard', 'registration', 'attendance', 'holiday-calendar', 'gallery', 'events', 'camera', 'stream-viewer', 'video', 'users', 'settings', 'backup'].includes(tab.id);
+    if (userRole === 'superadmin') return ['dashboard', 'companies', 'registration', 'matching', 'matching-1to1', 'matching-1toM', 'reports', 'gallery', 'events', 'camera', 'stream-viewer', 'video', 'users', 'settings', 'backup'].includes(tab.id);
+    if (userRole === 'admin') return ['dashboard', 'registration', 'matching', 'matching-1to1', 'matching-1toM', 'reports', 'gallery', 'events', 'camera', 'stream-viewer', 'video', 'users', 'settings', 'backup'].includes(tab.id);
+    if (userRole === 'supervisor') return ['dashboard', 'registration', 'matching', 'matching-1to1', 'matching-1toM', 'reports', 'gallery', 'events', 'camera', 'stream-viewer'].includes(tab.id);
     return ['dashboard'].includes(tab.id);
   });
 
@@ -196,8 +209,11 @@ const MainLayout = ({ children, activeTab, onTabChange }) => {
               <Menu size={24} />
             </button>
             <h1 className="page-title">
-              {tabs.find(t => t.id === activeTab)?.label || 'Dashboard'}
+              {tabs.find(t => t.id === activeTab || (t.subItems && t.subItems.some(s => s.id === activeTab)))?.label || 'Dashboard'}
             </h1>
+          </div>
+          <div className="quick-stats-header">
+            {/* Quick stats could go here if needed, but keeping it clean for now */}
           </div>
           <div className="header-right">
             <div className="theme-switcher-container">

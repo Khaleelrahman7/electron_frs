@@ -907,17 +907,11 @@ async def get_attendance_logic(
         name = pdata.get("name", pid)
         attendance_records[pid] = {
             "s_no": 0,
-            "emp_id": pdata.get("emp_id", ""),
+            "emp_id": pdata.get("emp_id", pdata.get("criminal_id", "")),
             "name": name,
-            "department": pdata.get("department", ""),
-            "designation": pdata.get("designation", ""),
-            "email": pdata.get("email", ""),
-            "status": "Absent",
+            "category": pdata.get("category", "Criminal"),
+            "status": "Not Recognized",
             "punch_in": None,
-            "punch_out": None,
-            "working_hours": "-",
-            "is_late": False,
-            "photo_path": pdata.get("photo_path", ""),
             "events": []
         }
 
@@ -1020,21 +1014,17 @@ async def get_attendance_logic(
             punch_out_dt = events[-1]
             record["punch_in"] = punch_in_dt.strftime("%I:%M %p")
             record["punch_out"] = punch_out_dt.strftime("%I:%M %p")
-            record["status"] = "Present"
+            record["status"] = "Recognized"
             
-            # Calculate working hours
+            # Calculate working hours (legacy, keep for time tracking but rename if needed)
             delta = punch_out_dt - punch_in_dt
             total_seconds = max(delta.total_seconds(), 0)
             hours = int(total_seconds // 3600)
             minutes = int((total_seconds % 3600) // 60)
             record["working_hours"] = f"{hours}h {minutes}m"
             
-            # Check if late (using grace period)
-            threshold_dt = punch_in_dt.replace(hour=LATE_THRESHOLD_HOUR, minute=LATE_THRESHOLD_MINUTE, second=0, microsecond=0)
-            from datetime import timedelta
-            if punch_in_dt > (threshold_dt + timedelta(minutes=GRACE_MINUTES)):
-                record["is_late"] = True
-                record["status"] = "Late"
+            # Note: Late threshold logic removed as it's not applicable to criminal database
+            record["is_late"] = False
             
             # Optional: Mark as absent if worked hours < MIN_HOURS_PRESENT
             if total_seconds / 3600 < MIN_HOURS_PRESENT:
@@ -1055,7 +1045,7 @@ async def export_dashboard_pdf(
     request: Request,
     target_date: Optional[str] = Query(None, description="Target date in YYYY-MM-DD format")
 ):
-    """Export dashboard summary (Stats + Charts + Attendance Table) as PDF."""
+    """Export dashboard summary (Stats + Charts + Recognition Table) as PDF."""
     try:
         dashboard_data = await get_dashboard_logic(request, target_date)
         stats = dashboard_data.get("stats", { })
@@ -1107,23 +1097,17 @@ async def export_dashboard_pdf(
         story.append(Spacer(1, 6*mm))
         
         # 3. Stats Cards
-        card_w = pw / 3.05
+        card_w = pw / 2.05
         cards_data = [
-            [rl_para("TOTAL EMPLOYEES", size=8, color=colors.grey, align=TA_CENTER), 
-             rl_para("PRESENT TODAY", size=8, color=colors.grey, align=TA_CENTER),
-             rl_para("LATE TODAY", size=8, color=colors.grey, align=TA_CENTER)],
-            [rl_para(str(stats.get("total_employees", 0)), bold=True, size=16, align=TA_CENTER),
-             rl_para(str(stats.get("present_today", 0)), bold=True, size=16, color=colors.HexColor("#2E7D32"), align=TA_CENTER),
-             rl_para(str(stats.get("late", 0)), bold=True, size=16, color=colors.HexColor("#F57C00"), align=TA_CENTER)]
+            [rl_para(str(stats.get("total_criminals", 0)), bold=True, size=16, align=TA_CENTER),
+             rl_para(str(stats.get("present_today", 0)), bold=True, size=16, color=colors.HexColor("#2E7D32"), align=TA_CENTER)]
         ]
-        stats_table = Table(cards_data, colWidths=[card_w]*3)
+        stats_table = Table(cards_data, colWidths=[card_w]*2)
         stats_table.setStyle(TableStyle([
             ("BACKGROUND", (0,0), (0,1), LIGHT_BLUE),
             ("BACKGROUND", (1,0), (1,1), colors.HexColor("#E8F5E9")),
-            ("BACKGROUND", (2,0), (2,1), colors.HexColor("#FFF3E0")),
             ("BOX", (0,0), (0,1), 2, colors.white),
             ("BOX", (1,0), (1,1), 2, colors.white),
-            ("BOX", (2,0), (2,1), 2, colors.white),
             ("TOPPADDING", (0,0), (-1,-1), 8),
             ("BOTTOMPADDING", (0,0), (-1,-1), 8),
             ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
@@ -1133,9 +1117,7 @@ async def export_dashboard_pdf(
         
         # 4. Chart
         chart_base64 = generate_summary_chart(
-            stats.get("present_today", 0), 
-            stats.get("absent", 0), 
-            stats.get("late", 0)
+             stats.get("present_today", 0), 0, 0
         )
         if chart_base64:
             chart_data = base64.b64decode(chart_base64)
@@ -1143,45 +1125,25 @@ async def export_dashboard_pdf(
             story.append(Table([[img]], colWidths=[pw], style=TableStyle([("ALIGN", (0,0), (-1,-1), "CENTER")])))
             story.append(Spacer(1, 8*mm))
         
-        # 2. Prepare headers and rows for attendance table
-        headers = ["Name", "Department", "Punch In", "Status"]
-        rows = []
-        for r in attendance[:15]: # Limit to top 15 for dashboard summary
-            rows.append([
-                r.get("name", ""),
-                r.get("department", ""),
-                r.get("punch_in", "-"),
-                r.get("status", "")
-            ])
-            
-        generated_on = datetime.now().strftime("%d %b %Y %I:%M %p")
-        title = f"Dashboard Summary Report - {target_date or datetime.now().strftime('%Y-%m-%d')}"
-        
-
-        # 5. Attendance Table
-        story.append(rl_para("RECENT ATTENDANCE HIGHLIGHTS", bold=True, size=11, color=DARK_BLUE))
+        # 5. Recognition Highlights Table
+        story.append(rl_para("RECENT RECOGNITION HIGHLIGHTS", bold=True, size=11, color=DARK_BLUE))
         story.append(Spacer(1, 3*mm))
         
-        headers = ["Name", "Department", "Punch In", "Status"]
+        headers = ["Name", "Category", "Recognition Time", "Status"]
         formatted_headers = [rl_para(h, bold=True, color=WHITE, size=9, align=TA_CENTER) for h in headers]
         rows = []
         for r in attendance[:15]:
             row = []
-            for h in headers:
-                key = h.lower().replace(" ", "_")
-                text = str(r.get(key, "-"))
-                color = colors.black
-                bold = False
-                align = TA_LEFT
-                
-                if h == "Status":
-                    l_text = text.lower()
-                    if l_text in ["present", "active"]: color = colors.HexColor("#2E7D32"); bold = True; align = TA_CENTER
-                    elif l_text in ["absent", "late", "inactive"]: color = colors.HexColor("#C62828"); bold = True; align = TA_CENTER
-                elif h == "Punch In": 
-                    align = TA_CENTER
-                
-                row.append(rl_para(text, bold=bold, color=color, size=8, align=align))
+            row.append(rl_para(str(r.get("name", "-")), size=8, align=TA_LEFT))
+            row.append(rl_para(str(r.get("category", "Criminal")), size=8, align=TA_CENTER))
+            row.append(rl_para(str(r.get("punch_in", r.get("timestamp", "-"))), size=8, align=TA_CENTER))
+            
+            status_text = r.get("status", "Recognized")
+            if status_text.lower() in ["present", "active"]:
+                status_text = "Recognized"
+            
+            status_color = colors.HexColor("#2E7D32")
+            row.append(rl_para(status_text, bold=True, color=status_color, size=8, align=TA_CENTER))
             rows.append(row)
             
         att_table = Table([formatted_headers] + rows, colWidths=[pw*0.3, pw*0.3, pw*0.2, pw*0.2], repeatRows=1)
@@ -1272,21 +1234,19 @@ async def get_dashboard_stats_logic(
         metadata = get_metadata()
         persons = metadata.get("persons", metadata)
         if company_id:
-            total_employees = sum(1 for p in persons.values() if p.get("company_id") == company_id)
+            total_criminals = sum(1 for p in persons.values() if p.get("company_id") == company_id)
         elif current_user.get("role") != "SuperAdmin":
             username = current_user.get("username")
-            total_employees = sum(1 for p in persons.values() if p.get("created_by") == username)
+            total_criminals = sum(1 for p in persons.values() if p.get("created_by") == username)
         else:
-            total_employees = len(persons)
+            total_criminals = len(persons)
 
-        # 2. Present, Absent, Late (from attendance)
+        # 2. Recognitions (Known faces present today)
         attendance_data = await get_attendance_logic(request, target_date)
         records = attendance_data.get("attendance", [])
-        
-        # CORRECT — count both Present and Late as "attended"
-        present = sum(1 for r in records if r["status"] in ["Present", "Late"])
-        absent = total_employees - present
-        late = sum(1 for r in records if r.get("is_late", False))
+        present = len(records)
+        absent = 0
+        late = 0
         
         assigned_cameras = current_user.get("assigned_cameras")
 
@@ -1320,9 +1280,9 @@ async def get_dashboard_stats_logic(
         return {
             "date": target_date,
             "present_today": present,
-            "absent": absent,
-            "late": late,
-            "total_employees": total_employees,
+            "absent": 0,
+            "late": 0,
+            "total_criminals": total_criminals,
             "cameras_active": cameras_active,
             "recognitions_today": recognitions_today
         }
@@ -1392,16 +1352,10 @@ async def get_attendance_aggregate(
         aggregate = {}
         for pid, pdata in persons.items():
             aggregate[pid] = {
-                "emp_id": pdata.get("emp_id", ""),
+                "emp_id": pdata.get("emp_id", pdata.get("criminal_id", "")),
                 "name": pdata.get("name", pid),
-                "department": pdata.get("department", ""),
-                "designation": pdata.get("designation", ""),
-                "email": pdata.get("email", ""),
                 "photo_path": pdata.get("photo_path", ""),
-                "total_present": 0,
-                "total_absent": 0,
-                "total_late": 0,
-                "total_working_hours": 0
+                "total_recognitions": 0
             }
         
         current_date = start
@@ -1418,21 +1372,9 @@ async def get_attendance_aggregate(
                     if not pid:
                         continue
                     
-                    if record["status"] == "Present":
-                        aggregate[pid]["total_present"] += 1
-                    else:
-                        aggregate[pid]["total_absent"] += 1
+                    # For criminal data, we just count recognitions
+                    aggregate[pid]["total_recognitions"] += 1
                         
-                    if record.get("is_late", False):
-                        aggregate[pid]["total_late"] += 1
-                        
-                    wh = record.get("working_hours", "-")
-                    if wh != "-":
-                        parts = wh.replace("h", "").replace("m", "").split()
-                        if len(parts) >= 2:
-                            secs = int(parts[0]) * 3600 + int(parts[1]) * 60
-                            aggregate[pid]["total_working_hours"] += secs
-                            
             except Exception as e:
                 logger.error(f"Error fetching {day_str}: {e}")
             
@@ -1441,11 +1383,6 @@ async def get_attendance_aggregate(
         result_list = []
         s_no = 1
         for pid, data in aggregate.items():
-            total_sec = data["total_working_hours"]
-            h = total_sec // 3600
-            m = (total_sec % 3600) // 60
-            data["avg_working_hours"] = f"{int(h/data['total_present'])}h {int(m/data['total_present'])}m" if data["total_present"] > 0 else "-"
-            data["total_working_hours"] = f"{h}h {m}m"
             data["s_no"] = s_no
             s_no += 1
             result_list.append(data)
@@ -1461,34 +1398,34 @@ async def get_attendance_aggregate(
         logger.error(f"Error in aggregate report: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/attendance/department-stats")
-async def get_department_stats(
+@router.get("/attendance/category-stats")
+async def get_category_stats(
     request: Request,
     target_date: Optional[str] = Query(None, description="Target date in YYYY-MM-DD format")
 ):
-    """Get attendance stats grouped by department."""
+    """Get attendance stats grouped by category."""
     if not target_date:
         target_date = datetime.now().strftime("%Y-%m-%d")
     
     data = await get_attendance_logic(request, target_date)
     records = data.get("attendance", [])
     
-    dept_map = {}
+    cat_map = {}
     for r in records:
-        dept = r.get("department", "Unknown") or "Unknown"
-        if dept not in dept_map:
-            dept_map[dept] = {"present": 0, "absent": 0, "total": 0}
-        dept_map[dept]["total"] += 1
+        cat = r.get("category", "Criminal") or "Criminal"
+        if cat not in cat_map:
+            cat_map[cat] = {"present": 0, "absent": 0, "total": 0}
+        cat_map[cat]["total"] += 1
         if r["status"] == "Present":
-            dept_map[dept]["present"] += 1
+            cat_map[cat]["present"] += 1
         else:
-            dept_map[dept]["absent"] += 1
+            cat_map[cat]["absent"] += 1
     
-    return {"date": target_date, "departments": dept_map}
+    return {"date": target_date, "categories": cat_map}
 
-@router.get("/employees/export")
-async def export_employees(request: Request):
-    """Export employee list as CSV."""
+@router.get("/criminals/export")
+async def export_criminals(request: Request):
+    """Export criminal list as CSV."""
     import csv
     from io import StringIO
     from fastapi.responses import StreamingResponse
@@ -1511,28 +1448,24 @@ async def export_employees(request: Request):
     
     output = StringIO()
     writer = csv.writer(output)
-    writer.writerow(["Emp ID", "Name", "Email", "Phone", "Department", "Designation", "Role", "Status", "Joining Date"])
+    writer.writerow(["Criminal ID", "Name", "Role", "Status", "Registration Date"])
     
     for pid, pdata in persons.items():
         if not isinstance(pdata, dict) or 'name' not in pdata:
             continue
         writer.writerow([
-            pdata.get("emp_id", ""),
+            pdata.get("emp_id", pdata.get("criminal_id", "")),
             pdata.get("name", ""),
-            pdata.get("email", ""),
-            pdata.get("phone", ""),
-            pdata.get("department", ""),
-            pdata.get("designation", ""),
             pdata.get("role", ""),
             pdata.get("status", "Active"),
-            pdata.get("joining_date", "")
+            pdata.get("registration_date", pdata.get("joining_date", ""))
         ])
     
     output.seek(0)
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=employees_export.csv"}
+        headers={"Content-Disposition": "attachment; filename=criminal_database_export.csv"}
     )
 
 @router.get("/attendance/export")
@@ -1540,7 +1473,7 @@ async def export_attendance(
     request: Request,
     target_date: Optional[str] = Query(None, description="Target date in YYYY-MM-DD format")
 ):
-    """Export attendance report for a specific date as CSV."""
+    """Export known face report for a specific date as CSV."""
     import csv
     from io import StringIO
     from fastapi.responses import StreamingResponse
@@ -1550,24 +1483,19 @@ async def export_attendance(
     
     output = StringIO()
     writer = csv.writer(output)
-    writer.writerow(["S.No", "Emp ID", "Name", "Department", "Designation", "Status", "Punch In", "Punch Out", "Working Hours", "Late"])
+    writer.writerow(["S.No", "Criminal ID", "Name", "Recognition Time", "Status"])
     
     for r in records:
         writer.writerow([
             r.get("s_no", ""),
-            r.get("emp_id", ""),
+            r.get("emp_id", r.get("criminal_id", "")),
             r.get("name", ""),
-            r.get("department", ""),
-            r.get("designation", ""),
-            r.get("status", ""),
-            r.get("punch_in", ""),
-            r.get("punch_out", ""),
-            r.get("working_hours", ""),
-            "Yes" if r.get("is_late") else "No"
+            r.get("punch_in", r.get("timestamp", "")),
+            r.get("status", "Present")
         ])
     
     output.seek(0)
-    filename = f"attendance_report_{target_date or datetime.now().strftime('%Y-%m-%d')}.csv"
+    filename = f"known_face_report_{target_date or datetime.now().strftime('%Y-%m-%d')}.csv"
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
@@ -1653,7 +1581,7 @@ def generate_reportlab_pdf(title: str, subtitle: str, headers: List[str], rows: 
                 align = TA_CENTER
             
             # Center certain columns
-            if i < len(headers) and headers[i] in ["Emp ID", "S.No", "Status", "Late"]:
+            if i < len(headers) and headers[i] in ["Criminal ID", "S.No", "Status"]:
                 align = TA_CENTER
                 
             formatted_row.append(rl_para(text, bold=bold, color=color, size=8, align=align))
@@ -1697,7 +1625,7 @@ def render_pdf(html_content: str) -> bytes:
     return None
 
 def generate_summary_chart(present, absent, late):
-    """Generate a pie chart for attendance summary and return as base64 string."""
+    """Generate a pie chart for recognition summary and return as base64 string."""
     try:
         plt.figure(figsize=(5, 3))
         labels = []
@@ -1705,17 +1633,13 @@ def generate_summary_chart(present, absent, late):
         colors = []
         
         if present > 0:
-            labels.append('Present')
+            labels.append('Recognized')
             sizes.append(present)
             colors.append('#10b981')
         if absent > 0:
-            labels.append('Absent')
+            labels.append('Unrecognized')
             sizes.append(absent)
             colors.append('#ef4444')
-        if late > 0:
-            labels.append('Late')
-            sizes.append(late)
-            colors.append('#f97316')
             
         if not sizes:
              # Default empty chart
@@ -1725,7 +1649,7 @@ def generate_summary_chart(present, absent, late):
 
         plt.pie(sizes, labels=labels, autopct='%1.1f%%', startangle=140, colors=colors)
         plt.axis('equal')
-        plt.title('Attendance Summary')
+        plt.title('Recognition Summary')
         
         buf = BytesIO()
         plt.savefig(buf, format='png', bbox_inches='tight', dpi=100)
@@ -1865,48 +1789,43 @@ async def export_attendance_pdf(
     request: Request,
     target_date: Optional[str] = Query(None, description="Target date in YYYY-MM-DD format")
 ):
-    """Export attendance report for a specific date as PDF."""
+    """Export known face report for a specific date as PDF."""
     data = await get_attendance_logic(request, target_date)
     records = data.get("attendance", [])
     
     pw = A4[0] - 36*mm
-    headers = ["S.No", "Emp ID", "Name", "Dept", "Desig", "Status", "In", "Out", "Hrs", "Late"]
-    col_widths = [pw*0.06, pw*0.10, pw*0.15, pw*0.12, pw*0.12, pw*0.12, pw*0.09, pw*0.09, pw*0.08, pw*0.07]
+    headers = ["S.No", "Criminal ID", "Name", "Category", "Recognition Time", "Status"]
+    col_widths = [pw*0.08, pw*0.17, pw*0.25, pw*0.15, pw*0.20, pw*0.15]
     rows = []
     for r in records:
         rows.append([
             r.get("s_no", ""),
             r.get("emp_id", ""),
             r.get("name", ""),
-            r.get("department", ""),
-            r.get("designation", ""),
-            r.get("status", ""),
-            r.get("punch_in", ""),
-            r.get("punch_out", ""),
-            r.get("working_hours", ""),
-            "Yes" if r.get("is_late") else "No"
+            r.get("category", "Criminal"),
+            r.get("punch_in", r.get("timestamp", "-")),
+            r.get("status", "Recognized")
         ])
     
-    subtitle = f"Report Date: {target_date or datetime.now().strftime('%Y-%m-%d')}"
     pdf_bytes = generate_reportlab_pdf(
-        "Daily Attendance Report",
-        subtitle,
+        "Known Face Daily Recognition Report",
+        f"Date: {target_date or datetime.now().strftime('%Y-%m-%d')}",
         headers,
         rows,
         col_widths,
-        total_label="Total Attendance Records"
+        total_label="Total Recognitions"
     )
     
-    filename = f"attendance_report_{target_date or datetime.now().strftime('%Y-%m-%d')}.pdf"
+    filename = f"known_face_report_{target_date or datetime.now().strftime('%Y-%m-%d')}.pdf"
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
 
-@router.get("/export/employees-pdf")
-async def export_employees_pdf(request: Request):
-    """Export employee list as PDF."""
+@router.get("/export/criminals-pdf")
+async def export_criminals_pdf(request: Request):
+    """Export criminal list as PDF."""
     current_user = request.scope.get("user", {})
     metadata = get_metadata()
     persons = metadata.get("persons", metadata)
@@ -1923,23 +1842,21 @@ async def export_employees_pdf(request: Request):
             persons = {pid: pdata for pid, pdata in persons.items() if pdata.get("created_by") == username or pdata.get("company_id") == "default"}
     
     pw = A4[0] - 36*mm
-    headers = ["Emp ID", "Name", "Department", "Designation", "Email", "Status"]
-    col_widths = [pw*0.12, pw*0.18, pw*0.15, pw*0.20, pw*0.25, pw*0.10]
+    headers = ["Criminal ID", "Name", "Category", "Status"]
+    col_widths = [pw*0.25, pw*0.40, pw*0.20, pw*0.15]
     rows = []
     for pid, pdata in persons.items():
         if not isinstance(pdata, dict) or 'name' not in pdata:
             continue
         rows.append([
-            pdata.get("emp_id", ""),
+            pdata.get("emp_id", pdata.get("criminal_id", "")),
             pdata.get("name", ""),
-            pdata.get("department", ""),
-            pdata.get("designation", ""),
-            pdata.get("email", ""),
+            pdata.get("category", "Criminal"),
             pdata.get("status", "Active")
         ])
     
     pdf_bytes = generate_reportlab_pdf(
-        "Employee Registration Report",
+        "Criminal Database Report",
         "",
         headers,
         rows,
@@ -1949,7 +1866,7 @@ async def export_employees_pdf(request: Request):
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": "attachment; filename=employees_report.pdf"}
+        headers={"Content-Disposition": "attachment; filename=criminal_database_report.pdf"}
     )
 
 @router.get("/export/users-pdf")
@@ -2002,40 +1919,35 @@ async def export_attendance_pdf_aggregate(
     start_date: str = Query(..., description="Start date in YYYY-MM-DD format"),
     end_date: str = Query(..., description="End date in YYYY-MM-DD format")
 ):
-    """Export aggregated attendance report for a date range as PDF."""
+    """Export aggregated known face report for a date range as PDF."""
     try:
         data = await get_attendance_aggregate(request, start_date, end_date)
         records = data.get("aggregate", [])
         
         pw = A4[0] - 36*mm
-        headers = ["S.No", "Emp ID", "Name", "Dept", "Desig", "Pres", "Abs", "Late", "Hrs", "Avg"]
-        col_widths = [pw*0.06, pw*0.10, pw*0.15, pw*0.12, pw*0.12, pw*0.09, pw*0.09, pw*0.07, pw*0.10, pw*0.10]
+        headers = ["S.No", "Criminal ID", "Name", "Category", "Total Recognitions"]
+        col_widths = [pw*0.10, pw*0.15, pw*0.35, pw*0.20, pw*0.20]
         rows = []
         for r in records:
             rows.append([
                 r.get("s_no", ""),
                 r.get("emp_id", ""),
                 r.get("name", ""),
-                r.get("department", ""),
-                r.get("designation", ""),
-                r.get("total_present", 0),
-                r.get("total_absent", 0),
-                r.get("total_late", 0),
-                r.get("total_working_hours", "-"),
-                r.get("avg_working_hours", "-")
+                r.get("category", "Criminal"),
+                r.get("total_recognitions", 0)
             ])
         
         subtitle = f"Period: {start_date} to {end_date}"
         pdf_bytes = generate_reportlab_pdf(
-            "Attendance Aggregate Report",
+            "Known Face Aggregate Report",
             subtitle,
             headers,
             rows,
             col_widths,
-            total_label="Total Employees"
+            total_label="Total Records"
         )
         
-        filename = f"attendance_aggregate_{start_date}_to_{end_date}.pdf"
+        filename = f"known_face_aggregate_{start_date}_to_{end_date}.pdf"
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",

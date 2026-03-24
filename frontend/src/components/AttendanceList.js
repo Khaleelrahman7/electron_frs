@@ -80,8 +80,8 @@ const AttendanceList = () => {
         <div className="attendance-container">
             <div className="attendance-header-card">
                 <div className="header-info">
-                    <h1>Employee Attendance</h1>
-                    <p>Track employee presence and punch times</p>
+                <h1>Criminal Recognition Log</h1>
+                <p>Track criminal recognition events and detection timestamps</p>
                 </div>
 
                 <div className="date-controls">
@@ -110,22 +110,22 @@ const AttendanceList = () => {
                 <div className="stat-card total">
                     <div className="stat-icon"><User size={24} /></div>
                     <div className="stat-value">{attendance.length}</div>
-                    <div className="stat-label">Total Employees</div>
+                    <div class="stat-label">Total Records</div>
                 </div>
-                <div className="stat-card present">
-                    <div className="stat-icon"><TrendingUp size={24} /></div>
-                    <div className="stat-value">{stats.present}</div>
-                    <div className="stat-label">Present</div>
+                <div class="stat-card present">
+                    <div class="stat-icon"><TrendingUp size={24} /></div>
+                    <div class="stat-value">{stats.present}</div>
+                    <div class="stat-label">Total Recognitions</div>
                 </div>
-                <div className="stat-card late">
-                    <div className="stat-icon"><Clock size={24} /></div>
-                    <div className="stat-value">{stats.late}</div>
-                    <div className="stat-label">Late Arrival</div>
+                <div class="stat-card late" style={{ opacity: 0.5, pointerEvents: 'none', display: 'none' }}>
+                    <div class="stat-icon"><Clock size={24} /></div>
+                    <div class="stat-value">0</div>
+                    <div class="stat-label">N/A</div>
                 </div>
-                <div className="stat-card absent">
-                    <div className="stat-icon"><AlertCircle size={24} /></div>
-                    <div className="stat-value">{stats.absent}</div>
-                    <div className="stat-label">Absent</div>
+                <div class="stat-card absent" style={{ opacity: 0.5, pointerEvents: 'none', display: 'none' }}>
+                    <div class="stat-icon"><AlertCircle size={24} /></div>
+                    <div class="stat-value">0</div>
+                    <div class="stat-label">N/A</div>
                 </div>
             </div>
 
@@ -135,7 +135,7 @@ const AttendanceList = () => {
                         <Search size={18} />
                         <input
                             type="text"
-                            placeholder="Search employee..."
+                            placeholder="Search criminal..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                         />
@@ -146,9 +146,8 @@ const AttendanceList = () => {
                             <Filter size={16} />
                             <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
                                 <option value="All">All Status</option>
-                                <option value="Present">Present</option>
-                                <option value="Late">Late</option>
-                                <option value="Absent">Absent</option>
+                                <option value="Present">Recognized</option>
+                                <option value="Not Recognized">Not Recognized</option>
                             </select>
                         </div>
                         <button className="export-btn">
@@ -178,11 +177,12 @@ const AttendanceList = () => {
                         <table className="attendance-table">
                             <thead>
                                 <tr>
-                                    <th>Employee</th>
+                                    <th>Criminal</th>
+                                    <th>Category</th>
                                     <th>Status</th>
-                                    <th>First In</th>
-                                    <th>Last Out</th>
-                                    <th>Total Punches</th>
+                                    <th>First Recognition</th>
+                                    <th>Last Recognition</th>
+                                    <th>Total Recognitions</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -202,8 +202,11 @@ const AttendanceList = () => {
                                             </div>
                                         </td>
                                         <td>
-                                            <span className={`status-badge ${record.status.toLowerCase()}`}>
-                                                {record.status}
+                                            <span className="category-badge">{record.category || 'Criminal'}</span>
+                                        </td>
+                                        <td>
+                                            <span className={`status-badge ${record.status === 'Present' ? 'present' : 'absent'}`}>
+                                                {record.status === 'Present' ? 'Recognized' : 'Not Recognized'}
                                             </span>
                                         </td>
                                         <td>

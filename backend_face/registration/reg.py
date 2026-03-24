@@ -93,15 +93,9 @@ async def options_handler(path: str):
 class PersonDetails(BaseModel):
     name: str  # Only name is required
     emp_id: str | None = None
-    email: str | None = None
-    phone: str | None = None
     role: str | None = "User"
-    department: str | None = None
-    designation: str | None = None
-    joining_date: str | None = None
     status: str | None = "Active"
-    age: str | None = None  # Optional
-    gender: str | None = None  # Optional
+    category: str | None = "Criminal"
     created_by: str | None = "system"
 
 class RegistrationResponse(BaseModel):
@@ -591,16 +585,15 @@ class FaceProcessor:
             df = df.dropna(subset=['name'])
             
             # Ensure required columns exist
-            df['age'] = df.get('age', '')
-            df['gender'] = df.get('gender', '')
-            df['category'] = df.get('category', 'unknown')
-            for col in ['emp_id', 'email', 'phone', 'role', 'department', 'designation', 'zone', 'status']:
+            df['Criminal ID'] = df.get('Criminal ID', df.get('emp_id', ''))
+            df['category'] = df.get('category', 'Criminal')
+            for col in ['role', 'status']:
                 df[col] = df.get(col, '')
 
             # Convert category to lowercase and validate
             df['category'] = df['category'].str.lower()
             df['category'] = df['category'].apply(
-                lambda x: x if x in VALID_CATEGORIES else 'unknown'
+                lambda x: x if x in VALID_CATEGORIES else 'criminal'
             )
 
             if len(df) == 0:
@@ -625,17 +618,10 @@ class FaceProcessor:
                     # Prepare person details
                     person_details = {
                         'name': person_name,
-                        'age': str(row['age']).strip() if pd.notna(row['age']) else '',
-                        'gender': str(row['gender']).strip() if pd.notna(row['gender']) else '',
-                        'category': str(row['category']).strip() if pd.notna(row['category']) else 'unknown',
-                        'emp_id': str(row['emp_id']).strip() if pd.notna(row['emp_id']) else '',
-                        'email': str(row['email']).strip() if pd.notna(row['email']) else '',
-                        'phone': str(row['phone']).strip() if pd.notna(row['phone']) else '',
-                        'role': str(row['role']).strip() if pd.notna(row['role']) else 'User',
-                        'department': str(row['department']).strip() if pd.notna(row['department']) else '',
-                        'designation': str(row['designation']).strip() if pd.notna(row['designation']) else '',
-                        'zone': str(row['zone']).strip() if pd.notna(row['zone']) else '',
-                        'status': str(row['status']).strip() if pd.notna(row['status']) else 'Active'
+                        'category': str(row['category']).strip() if pd.notna(row['category']) else 'criminal',
+                        'emp_id': str(row['Criminal ID']).strip() if pd.notna(row['Criminal ID']) else '',
+                        'role': 'User',
+                        'status': 'Active'
                     }
 
                     # Get all images from person's folder
@@ -716,16 +702,11 @@ async def register_single(
     image: UploadFile = File(...),
     name: str = Form(...),
     emp_id: str | None = Form(None),
-    email: str = Form(""),
-    phone: str = Form(""),
     role: str = Form("User"),
-    department: str = Form(""),
-    designation: str = Form(""),
-    joining_date: str = Form(""),
     status: str = Form("Active"),
     age: str = Form(""),
     gender: str = Form(""),
-    category: str = Form("Employee")
+    category: str = Form("Criminal")
 ):
     """Register a single person with an image"""
     print(f"--- Registration Request ---")
@@ -831,16 +812,11 @@ async def register_single(
         person_data[unique_name] = {
             "name": name,
             "emp_id": emp_id.strip() if emp_id else "",
-            "email": email.strip() if email else "",
-            "phone": phone.strip() if phone else "",
             "role": role.strip() if role else "User",
-            "department": department.strip() if department else "",
-            "designation": designation.strip() if designation else "",
-            "joining_date": joining_date.strip() if joining_date else "",
             "status": status.strip() if status else "Active",
             "age": str(final_age_val) if isinstance(final_age_val, int) else "N/A",
             "gender": final_gender,
-            "category": category.strip() if category else "Employee",
+            "category": category.strip() if category else "Criminal",
             "registration_date": registration_time,
             "gallery_path": os.path.relpath(gallery_dir, BASE_DIR).replace('\\', '/'),
             "photo_path": os.path.relpath(original_path, BASE_DIR).replace('\\', '/'),
@@ -907,8 +883,15 @@ async def register_bulk(
             raise ValueError("Excel file must have a 'name' column")
             
         # Validate mandatory fields
-        required_columns = ['Employee Full Name', 'Employee Details', 'Designation', 'Email', 'Phone Number', 'Roles', 'Status', 'Gender']
+        required_columns = ['Name', 'Criminal ID']
         missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            # Check for lowercase 'name' if 'Name' is missing
+            if 'name' in df.columns and 'Name' in missing_columns:
+                missing_columns.remove('Name')
+            if 'emp_id' in df.columns and 'Criminal ID' in missing_columns:
+                missing_columns.remove('Criminal ID')
+                
         if missing_columns:
             raise ValueError(f"Excel file is missing required columns: {', '.join(missing_columns)}")
         
@@ -1015,16 +998,11 @@ async def register_bulk(
                 metadata[safe_name] = {
                     'name': person_name,
                     'emp_id': result['details'].get('emp_id', ''),
-                    'email': result['details'].get('email', ''),
-                    'phone': result['details'].get('phone', ''),
-                    'role': result['details'].get('role', 'User'),
-                    'department': result['details'].get('department', ''),
-                    'designation': result['details'].get('designation', ''),
-                    'zone': result['details'].get('zone', ''),
-                    'status': result['details'].get('status', 'Active'),
-                    'age': str(final_age) if isinstance(final_age, int) else str(result['details'].get('age', '')) or "N/A",
+                    'role': 'User',
+                    'status': 'Active',
+                    'age': 'N/A',
                     'gender': final_gender,
-                    'category': result['details']['category'],
+                    'category': result['details'].get('category', 'Criminal'),
                     'registration_date': datetime.now().isoformat(),
                     'gallery_path': os.path.relpath(gallery_person_dir, BASE_DIR).replace('\\', '/'),
                     'photo_path': os.path.relpath(os.path.join(gallery_person_dir, "1.jpg"), BASE_DIR).replace('\\', '/'),

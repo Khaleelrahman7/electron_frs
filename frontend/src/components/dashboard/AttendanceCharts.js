@@ -50,15 +50,15 @@ const AttendanceCharts = () => {
 
     const fetchDeptData = async () => {
         try {
-            const res = await fetch(`${API_BASE_URL}/api/events/attendance/department-stats`, {
+            const res = await fetch(`${API_BASE_URL}/api/events/attendance/category-stats`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
                 const data = await res.json();
-                setDeptData(data.departments);
+                setDeptData(data.categories);
             }
         } catch (err) {
-            console.error("Error fetching department data:", err);
+            console.error("Error fetching category data:", err);
         }
     };
 
@@ -73,26 +73,10 @@ const AttendanceCharts = () => {
         labels: weeklyData.map(d => d.day),
         datasets: [
             {
-                label: 'Present',
+                label: 'Recognized',
                 data: weeklyData.map(d => d.present),
                 backgroundColor: 'rgba(16, 185, 129, 0.7)',
                 borderColor: '#10b981',
-                borderWidth: 1,
-                borderRadius: 6,
-            },
-            {
-                label: 'Absent',
-                data: weeklyData.map(d => d.absent),
-                backgroundColor: 'rgba(239, 68, 68, 0.7)',
-                borderColor: '#ef4444',
-                borderWidth: 1,
-                borderRadius: 6,
-            },
-            {
-                label: 'Late',
-                data: weeklyData.map(d => d.late),
-                backgroundColor: 'rgba(249, 115, 22, 0.7)',
-                borderColor: '#f97316',
                 borderWidth: 1,
                 borderRadius: 6,
             }
@@ -148,7 +132,7 @@ const AttendanceCharts = () => {
     return (
         <div className="attendance-charts-grid" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px', marginBottom: '24px' }}>
             <div style={{ background: 'var(--bg-panel)', borderRadius: '12px', padding: '20px', border: '1px solid var(--border-color)' }}>
-                <h3 style={{ margin: '0 0 16px 0', fontSize: '1rem', color: 'var(--text-primary)' }}>Weekly Attendance Overview</h3>
+                <h3 style={{ margin: '0 0 16px 0', fontSize: '1rem', color: 'var(--text-primary)' }}>Weekly Recognition Overview</h3>
                 <div style={{ height: '280px' }}>
                     {weeklyChartData ? (
                         <Bar data={weeklyChartData} options={weeklyOptions} />
@@ -158,7 +142,7 @@ const AttendanceCharts = () => {
                 </div>
             </div>
             <div style={{ background: 'var(--bg-panel)', borderRadius: '12px', padding: '20px', border: '1px solid var(--border-color)' }}>
-                <h3 style={{ margin: '0 0 16px 0', fontSize: '1rem', color: 'var(--text-primary)' }}>Department Attendance</h3>
+                <h3 style={{ margin: '0 0 16px 0', fontSize: '1rem', color: 'var(--text-primary)' }}>Department Recognition</h3>
                 <div style={{ height: '280px' }}>
                     {deptChartData ? (
                         <Doughnut data={deptChartData} options={deptOptions} />

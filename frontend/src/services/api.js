@@ -39,17 +39,17 @@ export const fetchWeeklyAttendance = async () => {
     return data.weekly || [];
 };
 
-export const fetchDepartments = async () => {
-    const res = await fetch(`${API_BASE_URL}/api/events/attendance/department-stats`, {
+export const fetchCategories = async () => {
+    const res = await fetch(`${API_BASE_URL}/api/events/attendance/category-stats`, {
         headers: getHeaders()
     });
-    if (!res.ok) throw new Error('Failed to fetch department stats');
+    if (!res.ok) throw new Error('Failed to fetch category stats');
     const data = await res.json();
     // Transform object to array format expected by the pie chart
-    // Example: { "IT": { "present": 5, "total": 10 } } -> [{ name: "IT", value: 50, color: "#..." }]
-    if (data.departments) {
+    // Example: { "Criminal": { "present": 5, "total": 10 } } -> [{ name: "Criminal", value: 50, color: "#..." }]
+    if (data.categories) {
         const colors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#0ea5e9', '#f97316', '#64748b'];
-        return Object.entries(data.departments).map(([name, stats], index) => ({
+        return Object.entries(data.categories).map(([name, stats], index) => ({
             name,
             value: stats.total > 0 ? Math.round((stats.present / stats.total) * 100) : 0,
             color: colors[index % colors.length]
@@ -58,11 +58,11 @@ export const fetchDepartments = async () => {
     return [];
 };
 
-export const fetchEmployees = async () => {
+export const fetchCriminals = async () => {
     const res = await fetch(`${API_BASE_URL}/api/events/attendance`, {
         headers: getHeaders()
     });
-    if (!res.ok) throw new Error('Failed to fetch employees');
+    if (!res.ok) throw new Error('Failed to fetch criminal data');
     const data = await res.json();
     return data.attendance || [];
 };
