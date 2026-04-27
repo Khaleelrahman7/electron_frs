@@ -328,20 +328,43 @@ async def get_gallery_image(request: Request, company_id: str, person_name: str,
                 raise HTTPException(status_code=403, detail="Unauthorized to access this company's gallery")
 
         # Sanitize the inputs to prevent directory traversal
-        person_name = person_name.replace('..', '').replace('/', '').replace('\\', '')
+        person_name_sanitized = person_name.replace('..', '').replace('/', '').replace('\\', '')
         # Extract just the filename from image_name (in case full path is passed)
-        image_name = os.path.basename(image_name)
-        image_name = image_name.replace('..', '').replace('/', '').replace('\\', '')
+        image_name_sanitized = os.path.basename(image_name)
+        image_name_sanitized = image_name_sanitized.replace('..', '').replace('/', '').replace('\\', '')
+
+        # Case-insensitive directory search for person_name
+        actual_person_dir = person_name_sanitized
+        company_dir = os.path.join(GALLERY_DIR, company_id)
+        if os.path.exists(company_dir):
+            try:
+                # Look for a directory that matches case-insensitively
+                for d in os.listdir(company_dir):
+                    if d.lower() == person_name_sanitized.lower() and os.path.isdir(os.path.join(company_dir, d)):
+                        actual_person_dir = d
+                        break
+            except Exception as list_err:
+                logger.warning(f"Failed to list directory {company_dir}: {list_err}")
 
         # Construct the image path
-        image_path = os.path.join(GALLERY_DIR, company_id, person_name, image_name)
+        image_path = os.path.join(GALLERY_DIR, company_id, actual_person_dir, image_name_sanitized)
 
         # Fallback: If company_id is "default" and folder doesn't exist, check gallery root
         if not os.path.exists(image_path) and company_id == "default":
-            root_fallback = os.path.join(GALLERY_DIR, person_name, image_name)
+            # Also try case-insensitive search in root gallery
+            actual_root_person_dir = person_name_sanitized
+            try:
+                for d in os.listdir(GALLERY_DIR):
+                    if d.lower() == person_name_sanitized.lower() and os.path.isdir(os.path.join(GALLERY_DIR, d)):
+                        actual_root_person_dir = d
+                        break
+            except Exception:
+                pass
+            
+            root_fallback = os.path.join(GALLERY_DIR, actual_root_person_dir, image_name_sanitized)
             if os.path.exists(root_fallback):
                 image_path = root_fallback
-                logger.info(f"Using root gallery fallback for {person_name}/{image_name}")
+                logger.info(f"Using root gallery fallback for {person_name_sanitized}/{image_name_sanitized}")
 
         # Check if file exists and is within the gallery directory
         if not os.path.exists(image_path):

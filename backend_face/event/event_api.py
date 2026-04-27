@@ -177,14 +177,26 @@ async def delete_event(
         # Convert URL path to filesystem path
         if clean_path.startswith('/api/captured/image/'):
             # URL pattern: /api/captured/image/{face_type}/{company_id}/{camera}/{person}/{image_name}
-            # Filesystem:   captured_faces/{face_type}/{company_id}/{camera}/{person}/{image_name}
+            # Note: For unknowns, 'person' is literally the string "unknown" but doesn't exist on disk
             relative = clean_path.replace('/api/captured/image/', '', 1)
             
             # Decode URL encoding (%20 -> space)
             import urllib.parse
             relative = urllib.parse.unquote(relative)
+            parts = relative.split('/')
             
-            clean_path = os.path.join('captured_faces', relative.replace('/', os.sep))
+            if len(parts) >= 5:
+                face_type, company_id, camera, person, image_name = parts[0:5]
+                if face_type == 'unknown':
+                    # Structure: captured_faces/unknown/{company_id}/{camera}/{image_name}
+                    clean_path = os.path.join('captured_faces', 'unknown', company_id, camera, image_name)
+                else:
+                    # Structure: captured_faces/known/{company_id}/{camera}/{person}/{image_name}
+                    clean_path = os.path.join('captured_faces', 'known', company_id, camera, person, image_name)
+            else:
+                # Fallback to direct mapping
+                clean_path = os.path.join('captured_faces', relative.replace('/', os.sep))
+                
             logger.info(f"[DELETE] URL '{image_path}' -> path '{clean_path}'")
         
         # Prevent path traversal attacks

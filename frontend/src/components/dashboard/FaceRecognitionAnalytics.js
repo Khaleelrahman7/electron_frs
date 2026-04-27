@@ -136,8 +136,9 @@ const FaceRecognitionAnalytics = () => {
                 if (!person || !person.name) return;
 
                 const imgFilename = person.image_filename || 'original.jpg';
-                // Allow fallback to generic API URL if profile image is not available directly, but handle multitenant paths if necessary
-                const imgUrl = getApiUrl(`/api/gallery/image/${currentUser?.company_id || 'default'}/${person.name}/${imgFilename}`);
+                // Use the backend-provided image_url if available
+                // Otherwise fallback to constructing it but use the correct identifier (from gallery keys or derived)
+                const imgUrl = person.image_url ? getApiUrl(person.image_url) : getApiUrl(`/api/gallery/image/${currentUser?.company_id || 'default'}/${person.name.toLowerCase()}/${imgFilename}`);
                 const cleanName = person.name.toLowerCase();
 
                 personMap.set(cleanName, {
