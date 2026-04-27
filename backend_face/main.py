@@ -279,11 +279,10 @@ def mount_services():
 # Mount all services
 mount_services()
 # Initialize face pipeline (non-disruptive; skips if unavailable)
-# Try GPU first (ctx=0), will auto-fallback to CPU if GPU unavailable
+# Auto-select GPU when CUDA is available; otherwise use the CPU-safe profile.
 try:
-    # Optimized for Tesla T4 GPU: Balance of speed and accuracy
-    # (640, 640) significantly reduces compute load while maintaining detection quality
-    init_face_pipeline(os.path.join(os.path.dirname(__file__), "data"), ctx=0, det_size=(640, 640))
+    # GPU keeps long-distance detection at 1280. CPU is auto-throttled inside face_pipeline.
+    init_face_pipeline(os.path.join(os.path.dirname(__file__), "data"), ctx=-1, det_size=(1280, 1280))
     FACE_PIPELINE_READY = True
     logger.info("? Face pipeline initialized")
 except Exception as e:
@@ -328,43 +327,20 @@ async def get_gallery_image(request: Request, company_id: str, person_name: str,
                 raise HTTPException(status_code=403, detail="Unauthorized to access this company's gallery")
 
         # Sanitize the inputs to prevent directory traversal
-        person_name_sanitized = person_name.replace('..', '').replace('/', '').replace('\\', '')
+        person_name = person_name.replace('..', '').replace('/', '').replace('\\', '')
         # Extract just the filename from image_name (in case full path is passed)
-        image_name_sanitized = os.path.basename(image_name)
-        image_name_sanitized = image_name_sanitized.replace('..', '').replace('/', '').replace('\\', '')
-
-        # Case-insensitive directory search for person_name
-        actual_person_dir = person_name_sanitized
-        company_dir = os.path.join(GALLERY_DIR, company_id)
-        if os.path.exists(company_dir):
-            try:
-                # Look for a directory that matches case-insensitively
-                for d in os.listdir(company_dir):
-                    if d.lower() == person_name_sanitized.lower() and os.path.isdir(os.path.join(company_dir, d)):
-                        actual_person_dir = d
-                        break
-            except Exception as list_err:
-                logger.warning(f"Failed to list directory {company_dir}: {list_err}")
+        image_name = os.path.basename(image_name)
+        image_name = image_name.replace('..', '').replace('/', '').replace('\\', '')
 
         # Construct the image path
-        image_path = os.path.join(GALLERY_DIR, company_id, actual_person_dir, image_name_sanitized)
+        image_path = os.path.join(GALLERY_DIR, company_id, person_name, image_name)
 
         # Fallback: If company_id is "default" and folder doesn't exist, check gallery root
         if not os.path.exists(image_path) and company_id == "default":
-            # Also try case-insensitive search in root gallery
-            actual_root_person_dir = person_name_sanitized
-            try:
-                for d in os.listdir(GALLERY_DIR):
-                    if d.lower() == person_name_sanitized.lower() and os.path.isdir(os.path.join(GALLERY_DIR, d)):
-                        actual_root_person_dir = d
-                        break
-            except Exception:
-                pass
-            
-            root_fallback = os.path.join(GALLERY_DIR, actual_root_person_dir, image_name_sanitized)
+            root_fallback = os.path.join(GALLERY_DIR, person_name, image_name)
             if os.path.exists(root_fallback):
                 image_path = root_fallback
-                logger.info(f"Using root gallery fallback for {person_name_sanitized}/{image_name_sanitized}")
+                logger.info(f"Using root gallery fallback for {person_name}/{image_name}")
 
         # Check if file exists and is within the gallery directory
         if not os.path.exists(image_path):
@@ -1161,6 +1137,15 @@ def generate_mjpeg_stream(stream_id: str):
 
     stream = active_streams[stream_id]['stream']
     logger.info(f"Starting MJPEG stream generation for {stream_id}")
+    frame_index = 0
+    last_detections = []
+    last_detection_time = 0.0
+    process_every_n = 4
+    try:
+        from face_pipeline import get_runtime_profile
+        process_every_n = int(get_runtime_profile().get("process_every_n", process_every_n))
+    except Exception:
+        pass
 
     try:
         while True:
@@ -1174,11 +1159,20 @@ def generate_mjpeg_stream(stream_id: str):
                     frame = None
 
             if frame is not None:
+                frame_index += 1
+                processed_frame = frame
                 try:
                     stream_company_id = active_streams.get(stream_id, {}).get('company_id')
-                    processed_frame, detections = process_frame(
-                        frame, stream_id=stream_id, company_id=stream_company_id
-                    )
+                    detections = last_detections
+                    if frame_index % process_every_n == 0:
+                        processed_frame, detections = process_frame(
+                            frame, stream_id=stream_id, company_id=stream_company_id
+                        )
+                        last_detections = detections or []
+                        last_detection_time = time.time()
+                    elif time.time() - last_detection_time > 0.9:
+                        detections = []
+                        last_detections = []
                     # Broad diagnostic: Are we detecting anything?
                     if detections:
                         logger.debug(f"[BBOX-MAIN-PRE] Detected {len(detections)} faces for {stream_id}")
