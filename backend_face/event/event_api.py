@@ -241,6 +241,152 @@ async def delete_event(
         logger.error(f"Error deleting event: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.delete("/delete-all")
+async def delete_all_events(
+    request: Request,
+    camera: str = Query("all_cameras", description="Camera filter"),
+    face_type: Optional[str] = Query(None, description="Face type filter: 'known' or 'unknown'"),
+    from_date: Optional[str] = Query(None, description="Start date in YYYY-MM-DD format"),
+    to_date: Optional[str] = Query(None, description="End date in YYYY-MM-DD format"),
+    name: Optional[str] = Query(None, description="Name filter for known faces")
+):
+    """Delete all events matching the given filters. SuperAdmin only."""
+    try:
+        current_user = request.scope.get("user", {})
+        role = current_user.get("role")
+        username = current_user.get("username", "unknown")
+        
+        # Explicit SuperAdmin-only check
+        if role != "SuperAdmin":
+            logger.warning(f"[DELETE-ALL-DENIED] User '{username}' (role={role}) attempted to delete all events")
+            raise HTTPException(status_code=403, detail="Only SuperAdmin can delete events")
+        
+        # Get the filtered list of events using existing filter logic
+        params = {
+            "camera": camera,
+        }
+        if face_type:
+            params["face_type"] = face_type
+        if from_date:
+            params["from_date"] = from_date
+        if to_date:
+            params["to_date"] = to_date
+        if name:
+            params["name"] = name
+            
+        # Call the filter endpoint to get matching events
+        from auth.middleware import get_current_user
+        
+        # Manually execute filter logic (simplified)
+        backend_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        captured_faces_root = os.path.abspath(os.path.join(backend_root, "captured_faces"))
+        
+        deleted_count = 0
+        error_count = 0
+        
+        # Build directory paths to scan based on filters
+        dirs_to_scan = []
+        
+        if face_type is None or face_type == "known":
+            dirs_to_scan.append(("known", os.path.join(captured_faces_root, "known")))
+        if face_type is None or face_type == "unknown":
+            dirs_to_scan.append(("unknown", os.path.join(captured_faces_root, "unknown")))
+        
+        deleted_files = []
+        
+        for f_type, base_path in dirs_to_scan:
+            if not os.path.exists(base_path):
+                continue
+                
+            # Walk through the directory structure
+            for root, dirs, files in os.walk(base_path):
+                for file in files:
+                    if not file.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.webp')):
+                        continue
+                        
+                    file_path = os.path.join(root, file)
+                    
+                    # Parse file path to check filters
+                    rel_path = os.path.relpath(file_path, captured_faces_root)
+                    path_parts = rel_path.split(os.sep)
+                    
+                    # Check camera filter
+                    if camera != "all_cameras":
+                        if f_type == "known":
+                            # Structure: known/company/camera/person/file
+                            if len(path_parts) >= 4:
+                                file_camera = path_parts[2]
+                                if file_camera != camera:
+                                    continue
+                        else:
+                            # Structure: unknown/company/camera/file
+                            if len(path_parts) >= 3:
+                                file_camera = path_parts[2]
+                                if file_camera != camera:
+                                    continue
+                    
+                    # Check name filter (for known faces)
+                    if name and f_type == "known":
+                        if len(path_parts) >= 4:
+                            person_name = path_parts[3]
+                            if person_name.lower() != name.lower():
+                                continue
+                    
+                    # Check date filter
+                    if from_date or to_date:
+                        mtime = os.path.getmtime(file_path)
+                        file_date = datetime.fromtimestamp(mtime).date()
+                        
+                        if from_date:
+                            from_date_obj = datetime.strptime(from_date, "%Y-%m-%d").date()
+                            if file_date < from_date_obj:
+                                continue
+                        
+                        if to_date:
+                            to_date_obj = datetime.strptime(to_date, "%Y-%m-%d").date()
+                            if file_date > to_date_obj:
+                                continue
+                    
+                    # Delete the file
+                    try:
+                        os.remove(file_path)
+                        deleted_count += 1
+                        deleted_files.append(file_path)
+                        logger.info(f"[DELETE-ALL] SuperAdmin '{username}' deleted: {file_path}")
+                    except Exception as e:
+                        error_count += 1
+                        logger.error(f"[DELETE-ALL-ERROR] Failed to delete {file_path}: {e}")
+        
+        # Clean up empty directories
+        for f_type, base_path in dirs_to_scan:
+            if os.path.exists(base_path):
+                for root, dirs, files in os.walk(base_path, topdown=False):
+                    for dir_name in dirs:
+                        dir_path = os.path.join(root, dir_name)
+                        try:
+                            if not os.listdir(dir_path):
+                                os.rmdir(dir_path)
+                                logger.info(f"[DELETE-ALL-CLEANUP] Removed empty directory: {dir_path}")
+                        except Exception as e:
+                            logger.debug(f"Could not remove directory {dir_path}: {e}")
+        
+        logger.info(f"[DELETE-ALL-SUMMARY] SuperAdmin '{username}' deleted {deleted_count} events (errors: {error_count})")
+        
+        return {
+            "status": "success",
+            "message": f"Deleted {deleted_count} events successfully",
+            "deleted_count": deleted_count,
+            "error_count": error_count
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting all events: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 class FaceEvent(BaseModel):
     name: str
     image_path: str

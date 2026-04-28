@@ -16,7 +16,8 @@ import {
   ChevronDown,
   Trash2,
   Clock as ClockIcon,
-  RotateCw
+  RotateCw,
+  Trash as TrashAll
 } from 'lucide-react';
 import FaceCard from './FaceCard';
 import "react-datepicker/dist/react-datepicker.css";
@@ -209,6 +210,40 @@ const FaceEvents = () => {
     }
   };
 
+  const handleDeleteAll = async () => {
+    const count = faces.length;
+    if (count === 0) {
+      alert('No events to delete');
+      return;
+    }
+
+    const confirmMessage = `Are you sure you want to delete ALL ${count} event(s) matching the current filters? This action cannot be undone.`;
+    if (!window.confirm(confirmMessage)) return;
+
+    setLoading(true);
+    try {
+      const params = buildParams({});
+      const response = await axios.delete(`${API_BASE_URL}/delete-all`, {
+        params,
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      const { deleted_count, error_count } = response.data;
+      alert(`Successfully deleted ${deleted_count} event(s)${error_count > 0 ? ` (${error_count} errors)` : ''}`);
+      
+      // Refresh list
+      handleFilter({}, activeTab);
+      if (selectedEvent) {
+        setSelectedEvent(null);
+      }
+    } catch (err) {
+      console.error("Delete all events failed", err);
+      alert("Failed to delete events: " + (err.response?.data?.detail || err.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadCameras();
     handleFilter({}, 'all');
@@ -373,6 +408,16 @@ const FaceEvents = () => {
             >
               <RotateCw size={18} />
             </button>
+            {user?.role?.toLowerCase() === 'superadmin' && faces.length > 0 && (
+              <button 
+                className="delete-all-btn"
+                onClick={handleDeleteAll}
+                disabled={loading}
+                title="Delete all events matching filters"
+              >
+                <TrashAll size={18} /> Delete All
+              </button>
+            )}
             <div className="view-toggle">
               <button
                 className={`toggle-btn ${viewMode === 'list' ? 'active' : ''}`}

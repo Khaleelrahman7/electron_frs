@@ -376,6 +376,34 @@
   animation: spin 1s linear infinite;
 }
 
+.delete-all-btn {
+  background: var(--bg-app);
+  border: 1px solid #ef4444;
+  color: #ef4444;
+  padding: 6px 16px;
+  border-radius: var(--border-radius-sm);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: var(--transition-normal);
+  outline: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.delete-all-btn:hover:not(:disabled) {
+  background-color: #ef4444;
+  color: white;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+  transform: translateY(-1px);
+}
+
+.delete-all-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
